@@ -384,6 +384,26 @@ internal static class VersionCommand
 
 internal static partial class UpdateCommand
 {
+    internal const string InstallDirNotWritableMessage =
+        "The install directory is not writable. Run the same command with sudo.";
+
+    /// <summary>True when this process can create a file in <paramref name="installDir"/>.</summary>
+    internal static bool InstallDirectoryIsWritable(string installDir)
+    {
+        try
+        {
+            Directory.CreateDirectory(installDir);
+            var probe = Path.Combine(installDir, ".plus-write-" + Guid.NewGuid().ToString("N"));
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            return false;
+        }
+    }
+
     private static readonly string CliIdentityPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TitaniumCli",
@@ -679,6 +699,12 @@ internal static partial class UpdateCommand
         string channelDisplay,
         bool installing)
     {
+        if (!InstallDirectoryIsWritable(installDir))
+        {
+            AsyncConsole.WriteError(InstallDirNotWritableMessage);
+            return 1;
+        }
+
         // Keep the download under the install directory (not Path.GetTempPath) — S5443.
         var workDir = Path.Combine(installDir, ".plus-download-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workDir);
@@ -890,7 +916,13 @@ internal static class CliUpdateApplyHelper
         }
 
         var sh = Path.Combine(workDir, "apply-cli-update.sh");
-        File.WriteAllText(sh, BuildUnixScript(pid, zipPath, installDir, relaunchPath, version, channel), new UTF8Encoding(false));
+        // Linux zips through 8.0.5 shipped libssl/libcrypto beside libmsquic. Overlaying a
+        // newer zip would leave those files, and the host OpenSSL crash would survive the update.
+        // macOS still bundles libssl.3.dylib / libcrypto.3.dylib, so those stay.
+        File.WriteAllText(
+            sh,
+            BuildUnixScript(pid, zipPath, installDir, relaunchPath, version, channel, OperatingSystem.IsLinux()),
+            new UTF8Encoding(false));
         Process.Start(new ProcessStartInfo
         {
             FileName = "/bin/bash",
@@ -943,7 +975,8 @@ internal static class CliUpdateApplyHelper
         string installDir,
         string relaunchPath,
         string version,
-        string channel)
+        string channel,
+        bool removeBundledOpenSsl = false)
     {
         var sb = new StringBuilder();
         sb.AppendLine("#!/usr/bin/env bash");
@@ -956,6 +989,11 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
         sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
+        if (removeBundledOpenSsl)
+        {
+            sb.AppendLine("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*");
+        }
+
         sb.AppendLine("cp -a \"$tmp\"/. \"$install_dir\"/");
         sb.AppendLine("rm -rf \"$tmp\"");
         sb.AppendLine("chmod +x \"$install_dir/titanium\" \"$install_dir/twp\" 2>/dev/null || true");

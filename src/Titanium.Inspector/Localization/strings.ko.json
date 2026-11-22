@@ -362,6 +362,8 @@
   "network.http3": "서버로 HTTP/3",
   "network.http3Help": "서버로만 사용합니다. HTTP/2를 꺼도 이것은 꺼지지 않습니다.",
   "network.http3Unavailable": "HTTP/3에는 QUIC이 필요하지만 이 컴퓨터에는 없습니다.",
+  "network.http3WrongArch": "이 빌드의 QUIC 라이브러리는 Mac 아키텍처가 맞지 않습니다.",
+  "network.http3WrongArchAppleSilicon": "이 빌드의 QUIC 라이브러리는 Mac 아키텍처가 맞지 않습니다. Apple silicon용 DMG를 사용하세요.",
   "network.newConnections": "변경은 새 연결에 적용됩니다.",
   "network.protocols": "프로토콜",
   "network.reuse": "서버 연결 재사용",

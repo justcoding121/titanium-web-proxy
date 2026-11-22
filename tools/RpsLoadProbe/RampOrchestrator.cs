@@ -2792,6 +2792,59 @@ internal static class RampOrchestrator
             await TlsParityProbe.ProbeAsync(arm.Name, stack.TargetUri, stack.RequestHttpVersion,
                 stack.VersionPolicy, stack.ExplicitProxyUrl, useBombardier, cancellationToken);
 
+            // A window that finishes with nothing completed and nothing counted is the measure
+            // token cancelling in-flight work, not an SLO miss. Re-measure that step once.
+            async Task<(LoadResult Result, ProcessResourceSample? Resources)> MeasureOnceAsync(int stepConcurrency)
+            {
+                ProbeLog.Info($"  measure c={stepConcurrency} for {options.StepDuration.TotalSeconds:F0}s...");
+                Task<LoadResult> measureTask;
+                if (useQuic)
+                {
+                    var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
+                    var authority = ResolveQuicAuthority(arm.Mode, stack);
+                    measureTask = QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
+                        stepConcurrency, options.StepDuration, cancellationToken, workload);
+                }
+                else if (useGrpc)
+                {
+                    measureTask = GrpcLoadGenerator.RunAsync(targetUri, stepConcurrency, options.StepDuration,
+                        cancellationToken);
+                }
+                else if (useBombardier)
+                {
+                    measureTask = BombardierLoadGenerator.RunAsync(targetUri, stepConcurrency, options.StepDuration,
+                        workload, cancellationToken);
+                }
+                else
+                {
+                    measureTask = EmbeddedLoadGenerator.RunAsync(loadOptions, stepConcurrency, options.StepDuration,
+                        cancellationToken);
+                }
+
+                // Handshake (new-connection TLS) is p99-tight on 4-core macOS. Concurrent
+                // Process.Refresh / pgrep sampling steals CPU from SslStream and tipped historical
+                // c=8 p99 over the 200 ms SLO. Measure first; snapshot RSS/CPU afterward.
+                var deferResourceSample = workload.IsHandshake;
+                Task<ProcessResourceSample?>? sampleTask = !deferResourceSample && samplePid is int pid
+                    ? ProcessResourceSampler.SampleDuringAsync(pid, options.StepDuration, cancellationToken)
+                    : null;
+
+                // Bound the measure even if the generator ignores CancellationToken (MsQuic/bombardier stalls).
+                var measureBudget = options.StepDuration + TimeSpan.FromSeconds(45);
+                var measured = await measureTask.WaitAsync(measureBudget, cancellationToken);
+                ProcessResourceSample? sampled = null;
+                if (sampleTask != null)
+                    sampled = await sampleTask.WaitAsync(measureBudget, cancellationToken);
+                else if (deferResourceSample && samplePid is int sampleAfterPid)
+                {
+                    sampled = await ProcessResourceSampler
+                        .SampleDuringAsync(sampleAfterPid, TimeSpan.FromSeconds(1), cancellationToken)
+                        .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                }
+
+                return (measured, sampled);
+            }
+
             foreach (var concurrency in options.ConcurrencySteps)
             {
                 if (arm.RewriteDiscoveryMidRamp && !discoveryRewritten &&
@@ -2834,49 +2887,14 @@ internal static class RampOrchestrator
                         await EmbeddedLoadGenerator.WarmupAsync(loadOptions, concurrency, options.Warmup, cancellationToken);
                     }
 
-                    ProbeLog.Info($"  measure c={concurrency} for {options.StepDuration.TotalSeconds:F0}s...");
-                    Task<LoadResult> measureTask;
-                    if (useQuic)
+                    (result, resources) = await MeasureOnceAsync(concurrency);
+                    // Generators report 100% errors when the window completed nothing. That row
+                    // would stop the ramp one step early and leave c=64 with no SLO pass.
+                    if (result.Ok == 0 && result.Errors == 0)
                     {
-                        var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
-                        var authority = ResolveQuicAuthority(arm.Mode, stack);
-                        measureTask = QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
-                            concurrency, options.StepDuration, cancellationToken, workload);
-                    }
-                    else if (useGrpc)
-                    {
-                        measureTask = GrpcLoadGenerator.RunAsync(targetUri, concurrency, options.StepDuration,
-                            cancellationToken);
-                    }
-                    else if (useBombardier)
-                    {
-                        measureTask = BombardierLoadGenerator.RunAsync(targetUri, concurrency, options.StepDuration,
-                            workload, cancellationToken);
-                    }
-                    else
-                    {
-                        measureTask = EmbeddedLoadGenerator.RunAsync(loadOptions, concurrency, options.StepDuration,
-                            cancellationToken);
-                    }
-
-                    // Handshake (new-connection TLS) is p99-tight on 4-core macOS. Concurrent
-                    // Process.Refresh / pgrep sampling steals CPU from SslStream and tipped historical
-                    // c=8 p99 over the 200 ms SLO. Measure first; snapshot RSS/CPU afterward.
-                    var deferResourceSample = workload.IsHandshake;
-                    Task<ProcessResourceSample?>? sampleTask = !deferResourceSample && samplePid is int pid
-                        ? ProcessResourceSampler.SampleDuringAsync(pid, options.StepDuration, cancellationToken)
-                        : null;
-
-                    // Bound the measure even if the generator ignores CancellationToken (MsQuic/bombardier stalls).
-                    var measureBudget = options.StepDuration + TimeSpan.FromSeconds(45);
-                    result = await measureTask.WaitAsync(measureBudget, cancellationToken);
-                    if (sampleTask != null)
-                        resources = await sampleTask.WaitAsync(measureBudget, cancellationToken);
-                    else if (deferResourceSample && samplePid is int sampleAfterPid)
-                    {
-                        resources = await ProcessResourceSampler
-                            .SampleDuringAsync(sampleAfterPid, TimeSpan.FromSeconds(1), cancellationToken)
-                            .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                        ProbeLog.Info(
+                            $"  inconclusive window c={concurrency} (0 completed, 0 errors); re-measure once");
+                        (result, resources) = await MeasureOnceAsync(concurrency);
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)

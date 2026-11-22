@@ -170,8 +170,11 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
         }
     }
 
-    private static bool IsTransientHeadlessFontRace(InvalidOperationException ex) =>
-        ex.Message.Contains("IFontManagerImpl", StringComparison.Ordinal);
+    // "Collection was modified" is Avalonia enumerating its loaded-control set during
+    // ResetForUnitTests while a control is still attaching. Same retry as the font locator.
+    internal static bool IsTransientHeadlessFontRace(InvalidOperationException ex) =>
+        ex.Message.Contains("IFontManagerImpl", StringComparison.Ordinal)
+        || ex.Message.Contains("Collection was modified", StringComparison.Ordinal);
 
     public async ValueTask DisposeAsync()
     {

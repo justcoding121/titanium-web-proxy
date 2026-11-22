@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 verso i server",
   "network.http3Help": "Solo verso i server. Disattivare HTTP/2 non disattiva questo.",
   "network.http3Unavailable": "HTTP/3 richiede QUIC, assente su questo computer.",
+  "network.http3WrongArch": "La libreria QUIC di questa build ha l'architettura Mac sbagliata.",
+  "network.http3WrongArchAppleSilicon": "La libreria QUIC di questa build ha l'architettura Mac sbagliata. Usare il DMG per Apple silicon.",
   "network.newConnections": "Le modifiche valgono per le nuove connessioni.",
   "network.protocols": "Protocolli",
   "network.reuse": "Riusa le connessioni al server",

@@ -62,8 +62,8 @@ Publish wiring lives in `tools/packaging/` (`http3-native.lock.json`, `bundle-ht
 | RID family | What is in the zip | Host packages (not in zip) |
 | --- | --- | --- |
 | Windows | No `msquic.dll` — OS component | — |
-| glibc Linux | `libmsquic.so*`, `libssl.so.3`, `libcrypto.so.3` with `patchelf` RPATH `$ORIGIN` | `libnuma1` via `http3-deps` / apt |
-| musl Linux (Alpine) | Same idea from Alpine `.apk` (musl-linked OpenSSL — never mix with glibc `.so`) | `numactl`, `lttng-ust` via `http3-deps` / apk |
+| glibc Linux | `libmsquic.so*` with `patchelf` RPATH `$ORIGIN`. OpenSSL is not bundled | `libnuma1` and `libssl3` via apt |
+| musl Linux (Alpine) | `libmsquic.so*` from the Alpine `.apk`. OpenSSL is not bundled (never mix a glibc `.so` into this zip) | `numactl`, `lttng-ust`, `libssl3`, `libcrypto3`, and `icu-libs` via apk. Without `icu-libs` the self-contained binary stops before it listens |
 | macOS | `libmsquic.dylib`, `libssl.3.dylib`, `libcrypto.3.dylib` with `@loader_path` via `install_name_tool` | — |
 
 LGPL/GPL natives (`libnuma`, `lttng-ust`, `liblttng-ust-ctl`, `libmsquic.lttng`) are **not** redistributed.

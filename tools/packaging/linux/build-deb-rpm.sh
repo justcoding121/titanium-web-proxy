@@ -158,6 +158,8 @@ if command -v fpm >/dev/null 2>&1; then
   fpm -s dir -t deb -n "${NAME}" -v "${VERSION}" -a "${DEB_ARCH}" \
     --description "${DESC}" --license "PolyForm-Noncommercial-1.0.0" \
     --url "https://github.com/justcoding121/titanium-web-proxy" \
+    --depends "libnuma1" \
+    --depends "libssl3t64 | libssl3" \
     "${fpm_post[@]}" \
     "${fpm_pre[@]}" \
     -C "${STAGE}" -p "${DEB_OUT}" \
@@ -165,6 +167,8 @@ if command -v fpm >/dev/null 2>&1; then
   fpm -s dir -t rpm -n "${NAME}" -v "${VERSION}" -a "${RPM_ARCH}" \
     --description "${DESC}" --license "PolyForm-Noncommercial-1.0.0" \
     --url "https://github.com/justcoding121/titanium-web-proxy" \
+    --depends "libssl.so.3()(64bit)" \
+    --depends "libnuma.so.1()(64bit)" \
     "${fpm_pre[@]}" \
     -C "${STAGE}" -p "${RPM_OUT}" \
     "${pkg_dirs[@]}"
@@ -181,7 +185,7 @@ Priority: optional
 Architecture: ${DEB_ARCH}
 Maintainer: Jehonathan Thomas <jehonathan@live.com>
 Description: ${DESC}
-Depends: libnuma1, zenity
+Depends: libnuma1, libssl3t64 | libssl3, zenity
 EOF
   if [[ -n "${POSTINST}" ]]; then
     cp "${POSTINST}" "${DEB_ROOT}/DEBIAN/postinst"

@@ -1,6 +1,6 @@
 # Titanium Web Proxy
 
-Embeddable .NET 10 HTTP(S) and man-in-the-middle (MITM) proxy library, standalone CLI and Kubernetes reverse proxy, and desktop MITM inspector — on Windows, Linux, and macOS.
+Embeddable .NET HTTP(S) and man-in-the-middle (MITM) proxy library, standalone CLI and Kubernetes reverse proxy, and desktop MITM inspector — on Windows, Linux, and macOS.
 
 [![Build](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml/badge.svg?branch=develop&event=push)](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml?query=branch%3Adevelop+event%3Apush)
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)

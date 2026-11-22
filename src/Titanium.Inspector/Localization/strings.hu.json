@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 a kiszolgálók felé",
   "network.http3Help": "Csak kiszolgálók felé. A HTTP/2 kikapcsolása ezt nem kapcsolja ki.",
   "network.http3Unavailable": "A HTTP/3-hoz QUIC kell, ami ezen a gépen nincs.",
+  "network.http3WrongArch": "Ennek a buildnek a QUIC-könyvtára nem a megfelelő Mac-architektúrához készült.",
+  "network.http3WrongArchAppleSilicon": "Ennek a buildnek a QUIC-könyvtára nem a megfelelő Mac-architektúrához készült. Használja az Apple silicon DMG-t.",
   "network.newConnections": "A változások az új kapcsolatokra vonatkoznak.",
   "network.protocols": "Protokollok",
   "network.reuse": "Kiszolgálókapcsolatok újrahasználata",

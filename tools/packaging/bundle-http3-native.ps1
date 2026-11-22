@@ -214,10 +214,11 @@ function Expand-Apk([string] $apkPath, [string] $outDir) {
     }
 }
 
-function Copy-SharedLibs([string] $extractRoot, [string] $dest) {
-    # MIT-clean zip: MsQuic + OpenSSL only. Never ship LGPL/GPL natives
-    # (libnuma, liblttng-ust*, libmsquic.lttng) — those stay host packages via http3-deps.
-    $patterns = @("libmsquic*.so*", "libssl.so*", "libcrypto.so*")
+function Copy-SharedLibs([string] $extractRoot, [string] $dest, [string[]] $patterns) {
+    # Linux publishes ship MsQuic only. OpenSSL stays a host package: a bundled
+    # libcrypto loaded via RUNPATH=$ORIGIN then clashes with a newer host libssl
+    # ("No usable version of libssl was found"). Never ship LGPL/GPL natives
+    # (libnuma, liblttng-ust*, libmsquic.lttng).
     $copied = @()
     foreach ($pat in $patterns) {
         Get-ChildItem -Path $extractRoot -Recurse -File -Filter $pat -ErrorAction SilentlyContinue | ForEach-Object {
@@ -265,10 +266,9 @@ function Set-LinuxRpath([string] $dir) {
     foreach ($soFile in $soFiles) {
         # Skip pure symlinks
         if ($soFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
-        # These shims dlopen("libssl.so.3"). $ORIGIN makes them load the bundled
-        # Ubuntu 22.04 OpenSSL, which then aborts the process on a newer host
-        # ("No usable version of libssl was found"). libmsquic keeps $ORIGIN so
-        # its own libssl/libcrypto still resolve beside the binary.
+        # .NET OpenSSL shims dlopen("libssl.so.3") and must use the host library.
+        # libmsquic keeps $ORIGIN for its own soname links; with no bundled
+        # libcrypto beside the app, that resolves to the host as well.
         if ($soFile.Name -match 'System\.Security\.Cryptography\.Native|System\.Net\.Security\.Native') {
             continue
         }
@@ -294,6 +294,62 @@ function Assert-RequiredFiles([string[]] $globs) {
     }
 }
 
+function Assert-AbsentFiles([string[]] $globs) {
+    foreach ($g in $globs) {
+        $hits = @(Get-ChildItem -Path $PublishDir -File -Filter $g -ErrorAction SilentlyContinue)
+        if ($hits.Count -gt 0) {
+            $names = ($hits | ForEach-Object { $_.Name }) -join ", "
+            throw "OpenSSL must not be bundled beside the app (RID=$Rid): $names"
+        }
+    }
+}
+
+function Get-MachOCpuType([string] $path) {
+    $bytes = [IO.File]::ReadAllBytes($path)
+    if ($bytes.Length -lt 8) {
+        throw "Mach-O too short for CPU type: $path"
+    }
+    # A hex literal above 0x7FFFFFFF is a signed int, so it never equals the
+    # UInt32 BitConverter returns. Compare the unsigned values.
+    $magic = [BitConverter]::ToUInt32($bytes, 0)
+    $mhMagic64 = [uint32]4277009103 # 0xFEEDFACF
+    $mhMagic = [uint32]4277009102   # 0xFEEDFACE
+    $mhCigam64 = [uint32]3489328638 # 0xCFFAEDFE
+    $mhCigam = [uint32]3472551422   # 0xCEFAEDFE
+    $fatBe = [uint32]3405691582     # 0xCAFEBABE
+    $fatLe = [uint32]3199925962     # 0xBEBAFECA
+    if ($magic -eq $fatBe -or $magic -eq $fatLe) {
+        throw "Fat Mach-O is not accepted for HTTP/3 bundling: $path"
+    }
+    $little = ($magic -eq $mhMagic64) -or ($magic -eq $mhMagic)
+    $big = ($magic -eq $mhCigam64) -or ($magic -eq $mhCigam)
+    if (-not $little -and -not $big) {
+        throw "Unrecognized Mach-O magic 0x$($magic.ToString('X8')) in $path"
+    }
+    if ($little) {
+        return [BitConverter]::ToInt32($bytes, 4)
+    }
+    return [BitConverter]::ToInt32(@($bytes[7], $bytes[6], $bytes[5], $bytes[4]), 0)
+}
+
+function Assert-MachOCpuMatchesRid([string[]] $names) {
+    $expected = switch ($Rid) {
+        'osx-x64' { 0x01000007 }   # CPU_TYPE_X86_64
+        'osx-arm64' { 0x0100000C } # CPU_TYPE_ARM64
+        default { return }
+    }
+    foreach ($name in $names) {
+        $path = Join-Path $PublishDir $name
+        if (-not (Test-Path $path)) {
+            throw "Required native file missing for CPU assert: $name (RID=$Rid)"
+        }
+        $cpu = Get-MachOCpuType $path
+        if ($cpu -ne $expected) {
+            throw ("HTTP/3 native $name CPU 0x{0:X8} does not match RID $Rid (expected 0x{1:X8})" -f $cpu, $expected)
+        }
+    }
+}
+
 function Bundle-Deb {
     $cache = Ensure-CacheDir $Rid
     $extractRoot = Join-Path $cache "extract"
@@ -308,11 +364,12 @@ function Bundle-Deb {
         Expand-Deb $dest $pkgExtract
     }
 
-    $copied = Copy-SharedLibs $extractRoot $PublishDir
+    $copied = Copy-SharedLibs $extractRoot $PublishDir @("libmsquic*.so*")
     Write-Info "copied: $($copied -join ', ')"
     Ensure-SonameLinks $PublishDir
     Set-LinuxRpath $PublishDir
-    Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3")
+    Assert-RequiredFiles @("libmsquic.so*")
+    Assert-AbsentFiles @("libssl.so*", "libcrypto.so*")
 }
 
 function Bundle-Apk {
@@ -332,11 +389,12 @@ function Bundle-Apk {
             Expand-Apk $dest $pkgExtract
         }
 
-        $copied = Copy-SharedLibs $extractRoot $PublishDir
+        $copied = Copy-SharedLibs $extractRoot $PublishDir @("libmsquic*.so*")
         Write-Info "copied: $($copied -join ', ')"
         Ensure-SonameLinks $PublishDir
         Set-LinuxRpath $PublishDir
-        Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3")
+        Assert-RequiredFiles @("libmsquic.so*")
+        Assert-AbsentFiles @("libssl.so*", "libcrypto.so*")
     }
     finally {
         if (Test-Path $extractRoot) {
@@ -431,6 +489,7 @@ function Bundle-Homebrew {
     }
 
     Assert-RequiredFiles @("libmsquic.dylib", "libssl.3.dylib", "libcrypto.3.dylib")
+    Assert-MachOCpuMatchesRid @("libmsquic.dylib", "libssl.3.dylib", "libcrypto.3.dylib")
 }
 
 function Bundle-WindowsOsComponent {
