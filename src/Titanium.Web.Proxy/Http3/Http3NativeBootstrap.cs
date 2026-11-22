@@ -147,18 +147,9 @@ public static class Http3NativeBootstrap
         return removed;
     }
 
-    private static bool HasBundledMsQuic(string directory)
-    {
-        foreach (var path in Directory.EnumerateFiles(directory))
-        {
-            if (Path.GetFileName(path).StartsWith("libmsquic.so", StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasBundledMsQuic(string directory) =>
+        Directory.EnumerateFiles(directory)
+            .Any(path => Path.GetFileName(path).StartsWith("libmsquic.so", StringComparison.Ordinal));
 
     private static bool IsQuicAssemblyBesideApp(string baseDir)
     {

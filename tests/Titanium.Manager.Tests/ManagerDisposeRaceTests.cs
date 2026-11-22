@@ -25,9 +25,14 @@ public class ManagerDisposeRaceTests
                 pending.Add(admin.GetAsync("/v1/fleets"));
             }
 
+            Exception? disposeEx = null;
             try
             {
                 await host.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                disposeEx = ex;
             }
             finally
             {
@@ -45,6 +50,9 @@ public class ManagerDisposeRaceTests
                     }
                 }
             }
+
+            Assert.IsNull(disposeEx, "dispose must finish without throwing while store requests are in flight: "
+                + disposeEx);
         }
     }
 
