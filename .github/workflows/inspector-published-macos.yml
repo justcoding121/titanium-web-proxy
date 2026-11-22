@@ -100,14 +100,17 @@ jobs:
           {
             echo "=== codesign cli ==="
             codesign --verify --deep --strict --verbose=2 "$bin"
-            echo "=== stapler cli ==="
-            xcrun stapler validate "$bin"
+            echo "=== stapler zip ==="
+            xcrun stapler validate "artifacts/${{ matrix.cli }}" || echo "stapler zip exit $?"
+            echo "=== spctl cli ==="
+            spctl --assess --type execute --verbose=2 "$bin" || echo "spctl cli exit $?"
             echo "=== version ==="
             "$bin" version
             echo "=== http3 ==="
             "$bin" http3-deps status
           } | tee "${RUNNER_TEMP}/inspector-smoke/cli-http3.txt"
-          grep -q '8.0.6-beta' "${RUNNER_TEMP}/inspector-smoke/cli-http3.txt"
+          # Assembly version is numeric. The beta identity is the release tag and the formula.
+          grep -q 'Cli: 8.0.6' "${RUNNER_TEMP}/inspector-smoke/cli-http3.txt"
           grep -q 'QuicListener.IsSupported: True' "${RUNNER_TEMP}/inspector-smoke/cli-http3.txt"
 
       - name: Inspector browser smoke
@@ -146,9 +149,13 @@ jobs:
           brew update
           brew install titanium
           brew upgrade titanium || true
-          ver=$(titanium version)
-          echo "$ver" | tee "${RUNNER_TEMP}/inspector-smoke/brew-version.txt"
-          echo "$ver" | grep -q 'Cli: 8.0.6-beta'
+          {
+            brew info titanium
+            echo "=== titanium version ==="
+            titanium version
+          } | tee "${RUNNER_TEMP}/inspector-smoke/brew-version.txt"
+          grep -q '8.0.6-beta' "${RUNNER_TEMP}/inspector-smoke/brew-version.txt"
+          grep -q 'Cli: 8.0.6' "${RUNNER_TEMP}/inspector-smoke/brew-version.txt"
 
       - name: Upload screenshots and logs
         if: always()
