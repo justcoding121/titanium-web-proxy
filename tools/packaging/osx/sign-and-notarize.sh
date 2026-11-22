@@ -39,6 +39,10 @@ if [[ -d "${TARGET}" && "${TARGET}" == *.app ]]; then
       done
   codesign "${SIGN_ARGS[@]}" --deep "${TARGET}"
   codesign --verify --verbose=2 "${TARGET}"
+elif [[ -f "${TARGET}" && "${TARGET}" == *.zip ]]; then
+  # The binaries inside are already signed. Codesigning the zip does not
+  # notarize those Mach-O signatures, and stapler cannot staple a zip.
+  echo "submitting signed zip without codesigning the container: ${TARGET}"
 elif [[ -f "${TARGET}" ]]; then
   codesign "${SIGN_ARGS[@]}" "${TARGET}"
   codesign --verify --verbose=2 "${TARGET}" || true
