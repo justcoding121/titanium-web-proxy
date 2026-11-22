@@ -195,8 +195,14 @@ public class RunCommandProcessMetricsPoolingAndReloadFailBehaviorTests
                 TimeSpan.FromSeconds(30),
                 () => stdout + Environment.NewLine + stderr);
 
+            var readyText = stdout.ToString();
+            var handlerAt = readyText.IndexOf("windows-reload-handler-registered", StringComparison.Ordinal);
+            var readyAt = readyText.IndexOf("awaiting-shutdown-or-reload", StringComparison.Ordinal);
+            Assert.IsTrue(handlerAt >= 0 && readyAt > handlerAt, readyText);
+            // The ready line is printed only after the pid file and the Windows reload event exist.
+            Assert.AreEqual(Environment.ProcessId, ConfigReloadGate.TryReadPid(path));
+
             await File.WriteAllTextAsync(path, "listeners: [this is not valid yaml");
-            // The ready line is printed only after the Windows reload event exists.
             Assert.AreEqual(0, await ReloadCommand.ExecuteAsync(["reload", "-c", path]));
             await WaitForAsync(
                 () => stderr.ToString().Contains("Config reload failed", StringComparison.Ordinal)
