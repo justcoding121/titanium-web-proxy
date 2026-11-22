@@ -16,7 +16,19 @@ for name in titanium twp; do
   fi
   cat > "$src" <<EOF
 #!/bin/sh
-dir=\$(CDPATH= cd -- "\$(dirname "\$0")" && pwd)
+target=\$0
+while [ -L "\$target" ]; do
+  link=\$(readlink "\$target") || exit 1
+  case \$link in
+    /*) target=\$link ;;
+    *) target=\$(dirname "\$target")/\$link ;;
+  esac
+done
+dir=\$(CDPATH= cd -- "\$(dirname "\$target")" && pwd)
+invariant=\$(printf '%s' "\${DOTNET_SYSTEM_GLOBALIZATION_INVARIANT:-}" | tr '[:upper:]' '[:lower:]')
+if [ "\$invariant" = 1 ] || [ "\$invariant" = true ]; then
+  exec "\$dir/$name.bin" "\$@"
+fi
 icu_present() {
   for p in /usr/lib/libicuuc.so* /lib/libicuuc.so* /usr/lib/*/libicuuc.so*; do
     if [ -e "\$p" ]; then

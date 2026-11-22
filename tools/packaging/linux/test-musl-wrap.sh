@@ -14,4 +14,16 @@ if TITANIUM_ICU_PROBE=missing "$root/titanium" >"$root/out" 2>"$root/err"; then
 fi
 grep -q "apk add icu-libs" "$root/err"
 TITANIUM_ICU_PROBE=present "$root/titanium" | grep -q RAN
+DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 TITANIUM_ICU_PROBE=missing "$root/titanium" | grep -q RAN
+DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=TRUE TITANIUM_ICU_PROBE=missing "$root/titanium" | grep -q RAN
+mkdir -p "$root/bin"
+MSYS="${MSYS:-winsymlinks:nativestrict}"
+export MSYS
+ln -s ../titanium "$root/bin/titanium"
+if [ -L "$root/bin/titanium" ]; then
+  TITANIUM_ICU_PROBE=present "$root/bin/titanium" | grep -q RAN
+else
+  # This host copied the file instead of linking. The resolver is still in the launcher.
+  grep -q 'readlink' "$root/titanium"
+fi
 echo PASS
