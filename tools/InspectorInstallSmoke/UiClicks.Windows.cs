@@ -7,6 +7,14 @@ namespace Titanium.Inspector.InstallSmoke;
 /// <summary>Windows toolbar click, scoped to the Inspector process. No settings-file fallback.</summary>
 internal static class UiClicks
 {
+    public static Task DismissAppImageInstallAsync() => Task.CompletedTask;
+
+    public static void ClickAppImageNotNow()
+    {
+    }
+
+    public static bool ClickLinuxPoint(int x, int y) => false;
+
     public static async Task<ClickResult> ClickDecryptHttpsAsync(int pid, TimeSpan timeout)
     {
         using var automation = new UIA3Automation();

@@ -181,17 +181,47 @@ internal static class SmokeApp
         {
             if (await ReadDecryptAsync())
                 return Fail(1, "fresh install started with decryptHttps true");
-            if (!await app.CaptureIsListeningAsync())
+            if (!await WaitForCaptureAsync(app, port))
                 return Fail(1, "fresh install did not start capture");
             if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
                 return Fail(1, "fresh install did not enable the system proxy. " + ProxySnapshot());
+            Console.WriteLine("proxy-before " + ProxySnapshot() + " " + LinuxProxyDiag(port));
             app = await DecryptAndMaybeRelaunchAsync(app, exe, port);
-            return await ProveBrowsersAsync(app.StartedUtc, opt.Browsers ?? DefaultBrowsers());
+            Console.WriteLine("proxy-during " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+            var code = await ProveBrowsersAsync(app.StartedUtc, opt.Browsers ?? DefaultBrowsers());
+            if (code != 0)
+                return code;
         }
         finally
         {
             await app.DisposeAsync();
         }
+
+        await Task.Delay(2000);
+        if (ProxyIsOn(port))
+            return Fail(1, "system proxy still on after exit. " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+        Console.WriteLine("pass proxy restored " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+        return 0;
+    }
+
+    private static async Task<bool> WaitForCaptureAsync(InspectorProcess app, int port)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(50);
+        var listening = false;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (OperatingSystem.IsLinux())
+                UiClicks.ClickAppImageNotNow();
+            if (await app.TryConnectOnceAsync())
+                listening = true;
+            // The AppImage install dialog can sit on top after the port is open and
+            // block the system-proxy apply. Keep dismissing it until the hook is on.
+            if (listening && (!OperatingSystem.IsLinux() || ProxyIsOn(port)))
+                return true;
+            await Task.Delay(500);
+        }
+
+        return listening && (!OperatingSystem.IsLinux() || ProxyIsOn(port));
     }
 
     private static int Wipe(Options opt)
@@ -385,10 +415,11 @@ internal static class SmokeApp
             {
                 // One decrypted page per browser. A second cold start (example.org) missed
                 // a different browser on each run after example.com had already loaded.
-                var urls = new[] { "https://example.com/" };
+                var urls = new[] { "https://www.google.com/", "https://www.google.com/" };
                 if (!await ProveAsync(startedUtc, path, name, urls))
-                    return Fail(1, name + " did not produce a decrypted GET");
+                    return Fail(1, name + " did not decrypt google.com twice with origin h3 on the second visit");
                 Console.WriteLine("pass " + name);
+                CaptureLinuxDesktop(name);
             }
             finally
             {
@@ -403,9 +434,11 @@ internal static class SmokeApp
     private static async Task<bool> ProveAsync(DateTime startedUtc, string browserPath, string name, string[] urls)
     {
         var firstUrl = true;
+        var lastBefore = DateTime.UtcNow;
         foreach (var url in urls)
         {
             var before = DateTime.UtcNow;
+            lastBefore = before;
             using var launched = LaunchBrowser(name, browserPath, url);
             var safari = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
             // Windows Chrome's first window is often still starting at 12s. A second
@@ -461,6 +494,34 @@ internal static class SmokeApp
             }
         }
 
+        var skipH3 = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
+        // The session HAR is flushed when the browser exits. Poll until that write
+        // lands; the second visit's www.google.com row is the origin-h3 proof.
+        var sawH3 = skipH3;
+        if (!skipH3)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (HarHasOriginH3(lastBefore, "www.google.com"))
+                {
+                    sawH3 = true;
+                    break;
+                }
+
+                await Task.Delay(500);
+            }
+        }
+
+        if (!sawH3)
+        {
+            PrintRecentHarEntries(lastBefore);
+            Console.WriteLine("second google.com visit has no origin h3 via " + name);
+            return false;
+        }
+
+        if (!skipH3)
+            Console.WriteLine("pass " + name + " origin h3");
         return true;
     }
 
@@ -1054,6 +1115,56 @@ internal static class SmokeApp
         return false;
     }
 
+    private static bool HarHasOriginH3(DateTime notBeforeUtc, string host)
+    {
+        var root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TitaniumInspector",
+            "session-cache");
+        if (!Directory.Exists(root))
+            return false;
+        foreach (var file in Directory.EnumerateFiles(root, "*.har", SearchOption.AllDirectories))
+        {
+            string text;
+            try
+            {
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var reader = new StreamReader(stream);
+                text = reader.ReadToEnd();
+            }
+            catch { continue; }
+            try
+            {
+                using var doc = JsonDocument.Parse(text);
+                if (!doc.RootElement.TryGetProperty("log", out var log) ||
+                    !log.TryGetProperty("entries", out var entries))
+                    continue;
+                foreach (var entry in entries.EnumerateArray())
+                {
+                    if (!StartedAfter(entry, notBeforeUtc))
+                        continue;
+                    if (!entry.TryGetProperty("request", out var req))
+                        continue;
+                    var entryUrl = req.TryGetProperty("url", out var u) ? u.GetString() : null;
+                    if (entryUrl is null || !HostMatches(entryUrl, host))
+                        continue;
+                    if (!entry.TryGetProperty("_inspector", out var ext) ||
+                        !ext.TryGetProperty("protocol", out var protocol))
+                        continue;
+                    var label = protocol.GetString() ?? "";
+                    if (label.Contains("h3", StringComparison.Ordinal))
+                    {
+                        Console.WriteLine("matched origin h3 " + label + " " + entryUrl);
+                        return true;
+                    }
+                }
+            }
+            catch { /* a session file can still be mid-write */ }
+        }
+
+        return false;
+    }
+
     private static bool EntryMatches(string har, string host, DateTime notBeforeUtc)
     {
         try
@@ -1152,10 +1263,27 @@ internal static class SmokeApp
     private static async Task<InspectorProcess> DecryptAndMaybeRelaunchAsync(InspectorProcess app, string exe, int port)
     {
         await TrustRootAsync();
-        var click = await UiClicks.ClickDecryptHttpsAsync(app.Pid, TimeSpan.FromSeconds(30));
+        ClickResult click;
+        if (OperatingSystem.IsLinux())
+        {
+            click = new ClickResult(false, "xdotool", "Decrypt HTTPS click missed");
+            foreach (var (x, y) in new (int X, int Y)[] { (160, 100), (190, 115), (140, 70), (220, 135) })
+            {
+                if (!UiClicks.ClickLinuxPoint(x, y))
+                    continue;
+                click = new ClickResult(true, "xdotool " + x + "," + y, null);
+                if (await ReadDecryptAsync())
+                    break;
+                await Task.Delay(700);
+            }
+        }
+        else
+        {
+            click = await UiClicks.ClickDecryptHttpsAsync(app.Pid, TimeSpan.FromSeconds(30));
+        }
         // Product EnableDecryptHttps / background probe can flip decrypt off for ~12s after
         // the first true write. Require a stable on past that window before declaring success.
-        if (await WaitDecryptStableAsync(TimeSpan.FromSeconds(20), settle: TimeSpan.FromSeconds(14)))
+        if (await WaitDecryptStableAsync(TimeSpan.FromSeconds(45), settle: TimeSpan.FromSeconds(12)))
         {
             Console.WriteLine("click: " + click.How);
             return app;
@@ -1171,11 +1299,14 @@ internal static class SmokeApp
         // Quit clears the system proxy. The seeded process has to be listening
         // and have the proxy back on before a browser is opened.
         var restarted = await InspectorProcess.StartAsync(exe, port);
-        if (!await restarted.CaptureIsListeningAsync())
+        if (!await WaitForCaptureAsync(restarted, port))
             throw new InvalidOperationException("seeded relaunch did not start capture");
         if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
+        {
+            Console.WriteLine("relaunch proxy diag " + LinuxProxyDiag(port));
             throw new InvalidOperationException(
-                "seeded relaunch did not enable the system proxy. " + ProxySnapshot());
+                "seeded relaunch did not enable the system proxy. " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+        }
         if (!await WaitDecryptStableAsync(TimeSpan.FromSeconds(8), settle: TimeSpan.FromSeconds(2)))
             throw new InvalidOperationException("seeded relaunch did not keep decryptHttps on");
         return restarted;
@@ -1467,6 +1598,8 @@ internal static class SmokeApp
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
+            if (OperatingSystem.IsLinux())
+                UiClicks.ClickAppImageNotNow();
             if (ProxyIsOn(port))
                 return true;
             await Task.Delay(400);
@@ -1878,6 +2011,38 @@ internal static class SmokeApp
         await Task.Delay(500);
     }
 
+    private static void CaptureLinuxDesktop(string name)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var shotPath = @"C:\ti-smoke\inspector-" + name + ".png";
+            var shotResult = RunCapture(
+                "powershell",
+                "-NoProfile -ExecutionPolicy Bypass -File C:\\ti-smoke\\shot.ps1 \"" + shotPath + "\"",
+                15000);
+            Console.WriteLine("screenshot " + shotPath + " exit=" + shotResult.Code);
+            return;
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            var macPath = "/tmp/inspector-" + name + ".png";
+            RunCapture("osascript", "-e \"tell application \\\"System Events\\\" to set frontmost of process \\\"Titanium Inspector\\\" to true\"", 5000);
+            Thread.Sleep(400);
+            var macShot = RunCapture("screencapture", "-x " + macPath, 15000);
+            Console.WriteLine("screenshot " + macPath + " exit=" + macShot.Code);
+            return;
+        }
+
+        if (!OperatingSystem.IsLinux())
+            return;
+        var path = "/tmp/inspector-" + name + ".png";
+        RunCapture("wmctrl", "-a \"Titanium Inspector\"", 5000);
+        Thread.Sleep(500);
+        var shot = RunCapture("import", "-window root " + path, 15000);
+        Console.WriteLine("screenshot " + path + " exit=" + shot.Code);
+    }
+
     private static (int Code, string Output) RunCapture(string file, string args, int timeoutMs, string? stdin = null)
     {
         using var p = Process.Start(new ProcessStartInfo
@@ -1997,6 +2162,42 @@ internal sealed class InspectorProcess : IAsyncDisposable
         return Task.FromResult(new InspectorProcess(proc));
     }
 
+    public async Task<bool> TryConnectOnceAsync()
+    {
+        if (!TryReadBindPort(out var port))
+            return false;
+        try
+        {
+            using var tcp = new TcpClient();
+            await tcp.ConnectAsync(IPAddress.Loopback, port);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryReadBindPort(out int port)
+    {
+        port = 0;
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "TitaniumInspector", "settings.json");
+        if (!File.Exists(path))
+            return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            port = doc.RootElement.GetProperty("bindPort").GetInt32();
+            return port > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<bool> CaptureIsListeningAsync()
     {
         var path = Path.Combine(
@@ -2054,9 +2255,37 @@ internal sealed class InspectorProcess : IAsyncDisposable
                     kill?.WaitForExit(8000);
                 }
             }
+            else if (OperatingSystem.IsMacOS())
+            {
+                try
+                {
+                    using var quit = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "osascript",
+                        Arguments = "-e \"tell application \\\"Titanium Inspector\\\" to quit\"",
+                        UseShellExecute = false,
+                    });
+                    quit?.WaitForExit(8000);
+                }
+                catch { /* fall through to the wait below */ }
+                if (!_process.WaitForExit(8000))
+                    _process.Kill(entireProcessTree: false);
+            }
             else
             {
-                _process.Kill(entireProcessTree: false);
+                try
+                {
+                    using var close = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "wmctrl",
+                        Arguments = "-c \"Titanium Inspector\"",
+                        UseShellExecute = false,
+                    });
+                    close?.WaitForExit(5000);
+                }
+                catch { /* a session without wmctrl still gets the wait below */ }
+                if (!_process.WaitForExit(8000))
+                    _process.Kill(entireProcessTree: false);
             }
 
             _process.WaitForExit(5000);

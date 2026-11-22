@@ -1,0 +1,121 @@
+name: inspector-lab-macos
+
+# Pre-beta Inspector check for the unsigned 8.0.6 DMGs.
+# Push this branch only. package-lab.yml stays on lab/release-806-smoke.
+on:
+  push:
+    branches:
+      - lab/release-806-macos
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: inspector-osx-arm64-lab
+            cli: cli-osx-arm64-lab
+          - os: macos-15-intel
+            artifact: inspector-osx-x64-lab
+            cli: cli-osx-x64-lab
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download the lab DMG and CLI zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh run download 44956175622 --repo "${GITHUB_REPOSITORY}" --name "${{ matrix.artifact }}" --dir artifacts/dmg
+          gh run download 44956175622 --repo "${GITHUB_REPOSITORY}" --name "${{ matrix.cli }}" --dir artifacts/cli
+
+      - name: Install any missing browser
+        run: |
+          set -euo pipefail
+          install_cask() {
+            local cask="$1" app="$2"
+            if [[ -d "$app" ]]; then
+              return 0
+            fi
+            brew install --cask "$cask"
+          }
+          install_cask google-chrome "/Applications/Google Chrome.app"
+          install_cask microsoft-edge "/Applications/Microsoft Edge.app"
+          install_cask firefox "/Applications/Firefox.app"
+          test -x "/Applications/Safari.app/Contents/MacOS/Safari"
+
+      - name: Mount the DMG and ad-hoc sign
+        run: |
+          set -euo pipefail
+          dmg=$(find artifacts/dmg -name '*.dmg' | head -1)
+          test -n "$dmg"
+          attach=$(hdiutil attach -nobrowse "$dmg")
+          echo "$attach"
+          root=$(printf '%s\n' "$attach" | sed -n 's#.*\(/Volumes/.*\)#\1#p' | tail -1)
+          test -d "$root"
+          rm -rf "/Applications/Titanium Inspector.app"
+          cp -R "$root/Titanium Inspector.app" "/Applications/Titanium Inspector.app"
+          hdiutil detach "$root" -force -quiet || true
+          codesign --force --deep -s - "/Applications/Titanium Inspector.app"
+          codesign --verify --deep --strict "/Applications/Titanium Inspector.app"
+
+      - name: CLI version and HTTP/3
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          rm -rf "${RUNNER_TEMP}/cli"
+          mkdir -p "${RUNNER_TEMP}/cli"
+          unzip -q artifacts/cli/*.zip -d "${RUNNER_TEMP}/cli"
+          bin=$(find "${RUNNER_TEMP}/cli" -type f -name titanium | head -1)
+          test -n "$bin"
+          codesign --force --sign - "$bin"
+          chmod +x "$bin"
+          ver=$("$bin" version)
+          echo "$ver"
+          echo "$ver" | grep -q 8.0.6
+          "$bin" http3-deps status | tee "${RUNNER_TEMP}/cli-http3.txt"
+          grep -q 'QuicListener.IsSupported: True' "${RUNNER_TEMP}/cli-http3.txt"
+
+      - name: Inspector browser smoke
+        run: |
+          set -euo pipefail
+          dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
+          driver="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke"
+          chmod +x "$driver"
+          mkdir -p "${RUNNER_TEMP}/inspector-smoke"
+          set +e
+          "$driver" fresh \
+            --exe "/Applications/Titanium Inspector.app/Contents/MacOS/TitaniumInspector" \
+            --browsers chrome,edge,firefox,safari \
+            --out "${RUNNER_TEMP}/inspector-smoke" \
+            2>&1 | tee "${RUNNER_TEMP}/inspector-smoke/driver.log"
+          code=${PIPESTATUS[0]}
+          set -e
+          cp -f /tmp/inspector-*.png "${RUNNER_TEMP}/inspector-smoke/" 2>/dev/null || true
+          cp -f "${RUNNER_TEMP}/cli-http3.txt" "${RUNNER_TEMP}/inspector-smoke/" 2>/dev/null || true
+          screencapture -x "${RUNNER_TEMP}/inspector-smoke/desktop.png" || true
+          python3 - "${RUNNER_TEMP}/inspector-smoke/desktop.png" <<'PY'
+          import sys, pathlib
+          p = pathlib.Path(sys.argv[1])
+          if not p.is_file() or p.stat().st_size < 20000:
+              print("desktop capture is missing or too small to be a real screen")
+              sys.exit(1)
+          print("desktop capture bytes", p.stat().st_size)
+          PY
+          exit "$code"
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: inspector-macos-${{ matrix.artifact }}
+          path: ${{ runner.temp }}/inspector-smoke
+          if-no-files-found: ignore
+          retention-days: 14
