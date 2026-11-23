@@ -66,9 +66,12 @@ install_oci() {
 }
 
 if [[ "$which" == "titanium" ]]; then
-  kubectl create namespace "$ns" >/dev/null
-  kubectl -n "$ns" create deployment backend --image=nginx:1.27-alpine --port=80
-  kubectl -n "$ns" expose deployment backend --port=80
+  kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  helm uninstall "$rel" -n "$ns" --ignore-not-found >/dev/null 2>&1 || true
+  if ! kubectl -n "$ns" get deployment backend >/dev/null 2>&1; then
+    kubectl -n "$ns" create deployment backend --image=nginx:1.27-alpine --port=80
+    kubectl -n "$ns" expose deployment backend --port=80
+  fi
   kubectl -n "$ns" rollout status deployment/backend --timeout=120s
   args=(-n "$ns" -f "$root/deploy/helm/titanium/ci/smoke-values.yaml" --set serviceMonitor.enabled=false --set admin.service.enabled=true --wait --timeout 180s)
   if [[ "$source_mode" == "release-tag" ]]; then
@@ -97,11 +100,14 @@ fi
 
 if [[ "$which" == "gateway" ]]; then
   app_ns=gw-smoke
-  kubectl create namespace "$app_ns" >/dev/null
-  kubectl -n "$app_ns" create deployment backend --image=nginx:1.27-alpine --port=80
-  kubectl -n "$app_ns" expose deployment backend --port=80
+  kubectl create namespace "$app_ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  helm uninstall "$rel" --namespace "$ns" --ignore-not-found >/dev/null 2>&1 || true
+  if ! kubectl -n "$app_ns" get deployment backend >/dev/null 2>&1; then
+    kubectl -n "$app_ns" create deployment backend --image=nginx:1.27-alpine --port=80
+    kubectl -n "$app_ns" expose deployment backend --port=80
+  fi
   kubectl -n "$app_ns" rollout status deployment/backend --timeout=120s
-  args=(--namespace "$ns" --create-namespace -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" --wait --timeout 5m)
+  args=(--namespace "$ns" --create-namespace -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" --wait --timeout 8m)
   if [[ "$source_mode" == "release-tag" ]]; then
     helm install "$rel" "oci://ghcr.io/justcoding121/charts/titanium-gateway" --version "$chart_version" "${args[@]}" \
       --set controller.image.repository=ghcr.io/justcoding121/titanium-gateway \
@@ -178,7 +184,8 @@ YAML
 fi
 
 if [[ "$which" == "manager" ]]; then
-  kubectl create namespace "$ns" >/dev/null
+  kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  helm uninstall "$rel" -n "$ns" --ignore-not-found >/dev/null 2>&1 || true
   args=(-n "$ns" -f "$root/deploy/helm/titanium-manager/ci/smoke-values.yaml" --wait --timeout 5m)
   if [[ "$source_mode" == "release-tag" ]]; then
     helm install "$rel" "oci://ghcr.io/justcoding121/charts/titanium-manager" --version "$chart_version" "${args[@]}" \

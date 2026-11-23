@@ -23,7 +23,7 @@ run_case() {
   fi
 }
 
-run_case infra-recovers 0 "$here/retry.sh" --leg assert -- bash -c '
+run_case infra-recovers 0 bash "$here/retry.sh" --leg assert -- bash -c '
   n="${TMPDIR:-/tmp}/smoke-retry-infra-count"
   c=0
   [[ -f "$n" ]] && c=$(cat "$n")
@@ -36,12 +36,12 @@ run_case infra-recovers 0 "$here/retry.sh" --leg assert -- bash -c '
   exit 0
 '
 
-run_case assertion-no-retry 7 "$here/retry.sh" --leg assert -- bash -c '
+run_case assertion-no-retry 7 bash "$here/retry.sh" --leg assert -- bash -c '
   echo "ASSERT: version mismatch" >&2
   exit 7
 '
 
-run_case gui-retry-passes 0 "$here/retry.sh" --leg gui -- bash -c '
+run_case gui-retry-passes 0 bash "$here/retry.sh" --leg gui -- bash -c '
   n="${TMPDIR:-/tmp}/smoke-retry-gui-count"
   c=0
   [[ -f "$n" ]] && c=$(cat "$n")
