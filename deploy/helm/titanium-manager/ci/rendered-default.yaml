@@ -5,7 +5,7 @@ kind: ServiceAccount
 metadata:
   name: rel-titanium-manager
   labels:
-    helm.sh/chart: titanium-manager-1.0.7
+    helm.sh/chart: titanium-manager-1.0.8
     app.kubernetes.io/name: titanium-manager
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -18,7 +18,7 @@ kind: Secret
 metadata:
   name: rel-titanium-manager-admin
   labels:
-    helm.sh/chart: titanium-manager-1.0.7
+    helm.sh/chart: titanium-manager-1.0.8
     app.kubernetes.io/name: titanium-manager
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -33,7 +33,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: rel-titanium-manager
   labels:
-    helm.sh/chart: titanium-manager-1.0.7
+    helm.sh/chart: titanium-manager-1.0.8
     app.kubernetes.io/name: titanium-manager
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -51,7 +51,7 @@ kind: Service
 metadata:
   name: rel-titanium-manager
   labels:
-    helm.sh/chart: titanium-manager-1.0.7
+    helm.sh/chart: titanium-manager-1.0.8
     app.kubernetes.io/name: titanium-manager
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -74,7 +74,7 @@ kind: Deployment
 metadata:
   name: rel-titanium-manager
   labels:
-    helm.sh/chart: titanium-manager-1.0.7
+    helm.sh/chart: titanium-manager-1.0.8
     app.kubernetes.io/name: titanium-manager
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -90,7 +90,7 @@ spec:
   template:
     metadata:
       labels:
-        helm.sh/chart: titanium-manager-1.0.7
+        helm.sh/chart: titanium-manager-1.0.8
         app.kubernetes.io/name: titanium-manager
         app.kubernetes.io/instance: rel
         app.kubernetes.io/version: "8.0.8"

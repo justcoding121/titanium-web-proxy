@@ -3,13 +3,14 @@
 # registry digest is not the digest of that layout.
 # Usage: publish-oci.sh <image.oci.tar> <tags-file>
 # tags-file is one image reference per line (ghcr.io/org/name:tag).
+# Set SKOPEO_INSECURE=1 for a local HTTP registry (publish-rehearsal).
 set -euo pipefail
 oci="${1:?oci tar}"
 tags="${2:?tags file}"
 
 index_digest() {
   python3 - "$1" <<'PY'
-import hashlib, json, sys, tarfile
+import json, sys, tarfile
 path = sys.argv[1]
 with tarfile.open(path) as tar:
     index = None
@@ -27,11 +28,21 @@ with tarfile.open(path) as tar:
 PY
 }
 
+skopeo_args=(--all)
+inspect_tls=()
+if [[ "${SKOPEO_INSECURE:-}" == "1" ]]; then
+  skopeo_args+=(--dest-tls-verify=false --src-tls-verify=false)
+  inspect_tls=(--tls-verify=false)
+fi
+
 remote_digest() {
-  python3 - "$1" <<'PY'
+  local ref="$1"
+  python3 - "$ref" "${inspect_tls[*]-}" <<'PY'
 import hashlib, subprocess, sys
 ref = sys.argv[1]
-raw = subprocess.check_output(["skopeo", "inspect", "--raw", f"docker://{ref}"])
+extra = [a for a in sys.argv[2].split() if a] if len(sys.argv) > 2 and sys.argv[2] else []
+cmd = ["skopeo", "inspect", "--raw", *extra, f"docker://{ref}"]
+raw = subprocess.check_output(cmd)
 if raw.endswith(b"\n"):
     raw = raw[:-1]
 print("sha256:" + hashlib.sha256(raw).hexdigest())
@@ -44,7 +55,7 @@ first=""
 while IFS= read -r tag || [[ -n "$tag" ]]; do
   [[ -z "$tag" ]] && continue
   if [[ -z "$first" ]]; then
-    skopeo copy --all "oci-archive:$oci" "docker://$tag"
+    skopeo copy "${skopeo_args[@]}" "oci-archive:$oci" "docker://$tag"
     first="$tag"
     pushed="$(remote_digest "$tag")"
     echo "pushed $tag $pushed"
@@ -53,7 +64,7 @@ while IFS= read -r tag || [[ -n "$tag" ]]; do
       exit 1
     fi
   else
-    skopeo copy --all "docker://$first" "docker://$tag"
+    skopeo copy "${skopeo_args[@]}" "docker://$first" "docker://$tag"
   fi
 done < "$tags"
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then

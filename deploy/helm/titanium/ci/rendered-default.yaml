@@ -5,7 +5,7 @@ kind: PodDisruptionBudget
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.7
+    helm.sh/chart: titanium-1.0.8
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -23,7 +23,7 @@ kind: ServiceAccount
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.7
+    helm.sh/chart: titanium-1.0.8
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -36,7 +36,7 @@ kind: Secret
 metadata:
   name: rel-titanium-admin
   labels:
-    helm.sh/chart: titanium-1.0.7
+    helm.sh/chart: titanium-1.0.8
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -51,7 +51,7 @@ kind: ConfigMap
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.7
+    helm.sh/chart: titanium-1.0.8
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -81,7 +81,7 @@ kind: Service
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.7
+    helm.sh/chart: titanium-1.0.8
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -104,7 +104,7 @@ kind: Deployment
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.7
+    helm.sh/chart: titanium-1.0.8
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
     app.kubernetes.io/version: "8.0.8"
@@ -124,7 +124,7 @@ spec:
     metadata:
       annotations:
       labels:
-        helm.sh/chart: titanium-1.0.7
+        helm.sh/chart: titanium-1.0.8
         app.kubernetes.io/name: titanium
         app.kubernetes.io/instance: rel
         app.kubernetes.io/version: "8.0.8"
