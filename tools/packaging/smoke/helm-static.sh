@@ -27,6 +27,30 @@ lint_one deploy/helm/titanium deploy/helm/titanium/ci/smoke-values.yaml
 lint_one deploy/helm/titanium-gateway deploy/helm/titanium-gateway/ci/kind-values.yaml
 lint_one deploy/helm/titanium-manager deploy/helm/titanium-manager/ci/smoke-values.yaml
 
+# 8.0.N ships chart 1.0.N so a missed bump cannot overwrite the previous OCI chart.
+expected_chart="1.0.${prefix##*.}"
+for chart_yaml in deploy/helm/titanium/Chart.yaml \
+  deploy/helm/titanium-gateway/Chart.yaml \
+  deploy/helm/titanium-manager/Chart.yaml; do
+  chart_ver="$(awk '/^version:/ { print $2; exit }' "$chart_yaml")"
+  if [[ "$chart_ver" != "$expected_chart" ]]; then
+    echo "ASSERT: $chart_yaml version '$chart_ver' should be $expected_chart for product $prefix" >&2
+    exit 1
+  fi
+done
+if [[ -n "${GH_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+  published="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=20" \
+    --jq '[.[] | select(.draft==false) | .assets[].name | select(test("^titanium-[0-9]+\\.[0-9]+\\.[0-9]+\\.tgz$"))][0]' 2>/dev/null || true)"
+  if [[ -n "$published" ]]; then
+    published_ver="${published#titanium-}"
+    published_ver="${published_ver%.tgz}"
+    if [[ "$published_ver" == "$expected_chart" ]]; then
+      echo "ASSERT: chart $expected_chart is already on a published GitHub Release ($published)" >&2
+      exit 1
+    fi
+  fi
+fi
+
 rm -f "$out"/*.tgz
 helm package deploy/helm/titanium -d "$out"
 helm package deploy/helm/titanium-gateway -d "$out"

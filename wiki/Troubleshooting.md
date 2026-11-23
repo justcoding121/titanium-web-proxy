@@ -45,6 +45,6 @@ On Windows, "access denied" on bind usually means the port is privileged or insi
 
 ## Linux: No usable version of libssl was found
 
-Inspector and CLI packages before the host-OpenSSL change ship Ubuntu 22.04 `libssl.so.3` and `libcrypto.so.3` beside the binary. On a host whose OpenSSL is 3.3 or newer (Ubuntu 26.04, Debian 13, current Fedora), startup aborts with `No usable version of libssl was found` before the window opens. The published 8.0.5 zip, deb, and AppImage do this. The next release does not bundle those two files.
+Packages through 8.0.5 shipped Ubuntu 22.04 `libssl.so.3` and `libcrypto.so.3` beside the binary. On a host whose OpenSSL is 3.3 or newer (Ubuntu 26.04, Debian 13, current Fedora), MsQuic loads those copies and aborts with `No usable version of libssl was found` before the window opens. Current builds do not ship those two files and use the host OpenSSL.
 
-Until that release, delete `libssl.so.3` and `libcrypto.so.3` from the install directory (`/opt/titanium-inspector` for the deb) and start again. Leave `libmsquic` in place. The host OpenSSL is already installed on those distributions.
+On first start, the CLI and Inspector delete leftover `libssl.so*` / `libcrypto.so*` next to `libmsquic` when the install directory is writable. A zip extracted in a home directory cleans up on its own. When the leftovers are root-owned (for example a previous `sudo` zip install under `/opt` or `/usr/local`), the app stops before MsQuic loads: the CLI prints the exact `sudo rm -f …` command, and Inspector shows the same text in a dialog. Delete those files, leave `libmsquic` in place, and start again. A `.deb` / `.rpm` upgrade that runs as root does not need this step.

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http3;
@@ -35,17 +36,20 @@ public class Http3NativeBootstrapTests
             File.WriteAllText(Path.Combine(dir, "libmsquic.so.2"), "keep");
             File.WriteAllText(Path.Combine(dir, "titanium"), "keep");
 
-            var removed = Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir);
+            var result = Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir);
 
-            Assert.AreEqual(2, removed);
+            Assert.AreEqual(2, result.RemovedCount);
+            Assert.AreEqual(0, result.BlockedPaths.Count);
             Assert.IsFalse(File.Exists(Path.Combine(dir, "libssl.so.3")));
             Assert.IsFalse(File.Exists(Path.Combine(dir, "libcrypto.so.3")));
             Assert.IsTrue(File.Exists(Path.Combine(dir, "libmsquic.so.2")));
             Assert.IsTrue(File.Exists(Path.Combine(dir, "titanium")));
-            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir));
-            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(null));
-            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl("  "));
-            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(Path.Combine(dir, "missing")));
+            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir).RemovedCount);
+            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(null).RemovedCount);
+            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl("  ").RemovedCount);
+            Assert.AreEqual(
+                0,
+                Http3NativeBootstrap.RemoveStaleBundledOpenSsl(Path.Combine(dir, "missing")).RemovedCount);
         }
         finally
         {
@@ -58,8 +62,6 @@ public class Http3NativeBootstrapTests
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-stale-ssl-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(dir);
-        var previous = Console.Error;
-        var error = new StringWriter();
         try
         {
             var locked = Path.Combine(dir, "libssl.so.3");
@@ -67,9 +69,8 @@ public class Http3NativeBootstrapTests
             File.WriteAllText(locked, "stale");
             File.WriteAllText(removable, "stale");
             File.WriteAllText(Path.Combine(dir, "libmsquic.so.2"), "keep");
-            Console.SetError(error);
 
-            var removed = Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir, path =>
+            var result = Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir, path =>
             {
                 if (path.EndsWith("libssl.so.3", StringComparison.Ordinal))
                 {
@@ -84,20 +85,30 @@ public class Http3NativeBootstrapTests
                 File.Delete(path);
             });
 
-            Assert.AreEqual(0, removed);
+            Assert.AreEqual(0, result.RemovedCount);
+            Assert.AreEqual(2, result.BlockedPaths.Count);
             Assert.IsTrue(File.Exists(locked));
             Assert.IsTrue(File.Exists(removable));
-            var text = error.ToString();
-            StringAssert.Contains(text, "libssl.so.3");
-            StringAssert.Contains(text, "libcrypto.so");
-            StringAssert.Contains(text, "busy");
-            StringAssert.Contains(text, "denied");
+            Assert.IsTrue(result.BlockedPaths.Contains(locked));
+            Assert.IsTrue(result.BlockedPaths.Contains(removable));
+
+            var message = Http3NativeBootstrap.FormatBlockedOpenSslMessage(result.BlockedPaths);
+            StringAssert.Contains(message, "sudo rm -f");
+            StringAssert.Contains(message, "libssl.so.3");
+            StringAssert.Contains(message, "libcrypto.so");
+            StringAssert.Contains(message, dir);
         }
         finally
         {
-            Console.SetError(previous);
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    [TestMethod]
+    public void FormatBlockedOpenSslMessage_IsEmptyWhenNothingIsBlocked()
+    {
+        Assert.AreEqual(string.Empty, Http3NativeBootstrap.FormatBlockedOpenSslMessage([]));
+        Assert.AreEqual(string.Empty, Http3NativeBootstrap.FormatBlockedOpenSslMessage(null!));
     }
 
     [TestMethod]
@@ -112,7 +123,9 @@ public class Http3NativeBootstrapTests
             File.WriteAllText(ssl, "theirs");
             File.WriteAllText(crypto, "theirs");
 
-            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir));
+            var result = Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir);
+            Assert.AreEqual(0, result.RemovedCount);
+            Assert.AreEqual(0, result.BlockedPaths.Count);
             Assert.IsTrue(File.Exists(ssl));
             Assert.IsTrue(File.Exists(crypto));
         }

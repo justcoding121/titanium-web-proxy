@@ -329,14 +329,42 @@ jobs:
           SIGNING_REF_NAME: ${{ github.head_ref || github.ref_name }}
         run: bash tools/ci/assert-signing-environment.sh
 
+  publish-preflight:
+    needs: resolve-version
+    if: needs.resolve-version.outputs.dry_run == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Catalog secrets and publish script self-tests
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CHOCOLATEY_API_KEY:-}" ]]; then
+            echo "::error::CHOCOLATEY_API_KEY must be set before a dry-run cut"
+            exit 1
+          fi
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "::error::HOMEBREW_TAP_TOKEN must be set before a dry-run cut"
+            exit 1
+          fi
+          GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh api repos/justcoding121/homebrew-titanium --jq .full_name
+          python3 tools/ci/reflow-release-notes.py --self-test
+          chmod +x tools/packaging/homebrew/bump-formula-from-sums.sh
+          bash tools/packaging/homebrew/bump-formula-from-sums.sh --self-test
+
   build-cli:
-    needs: [resolve-version, release-gate, signing-environment]
+    needs: [resolve-version, release-gate, signing-environment, publish-preflight]
     # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
-    # signing-environment runs only for workflow_call; a tag push skips it.
+    # signing-environment and publish-preflight run only for dry_run; a tag push skips them.
     if: |
       always() &&
       needs.release-gate.result == 'success' &&
-      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped') &&
+      (needs.publish-preflight.result == 'success' || needs.publish-preflight.result == 'skipped')
     runs-on: ${{ matrix.os }}
     # win-x64 uses environment "signing" for Azure OIDC (federated cred).
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
@@ -580,12 +608,13 @@ jobs:
           path: staged-cli-${{ matrix.rid }}/
           if-no-files-found: error
   build-plus:
-    needs: [resolve-version, release-gate, signing-environment]
+    needs: [resolve-version, release-gate, signing-environment, publish-preflight]
     # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
     if: |
       always() &&
       needs.release-gate.result == 'success' &&
-      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped') &&
+      (needs.publish-preflight.result == 'success' || needs.publish-preflight.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -611,12 +640,13 @@ jobs:
             Titanium.Plus-*.dll
 
   build-inspector:
-    needs: [resolve-version, release-gate, signing-environment]
+    needs: [resolve-version, release-gate, signing-environment, publish-preflight]
     # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
     if: |
       always() &&
       needs.release-gate.result == 'success' &&
-      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped') &&
+      (needs.publish-preflight.result == 'success' || needs.publish-preflight.result == 'skipped')
     runs-on: ${{ matrix.os }}
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
     permissions:
@@ -865,11 +895,12 @@ jobs:
 
   # Build the images once. product-smoke loads this OCI layout; publish copies it.
   build-images:
-    needs: [resolve-version, release-gate, signing-environment]
+    needs: [resolve-version, release-gate, signing-environment, publish-preflight]
     if: |
       always() &&
       needs.release-gate.result == 'success' &&
-      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped') &&
+      (needs.publish-preflight.result == 'success' || needs.publish-preflight.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -907,11 +938,12 @@ jobs:
           if-no-files-found: error
 
   build-charts:
-    needs: [resolve-version, release-gate, signing-environment]
+    needs: [resolve-version, release-gate, signing-environment, publish-preflight]
     if: |
       always() &&
       needs.release-gate.result == 'success' &&
-      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped') &&
+      (needs.publish-preflight.result == 'success' || needs.publish-preflight.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -1225,9 +1257,9 @@ jobs:
             --generate-notes \
             --target "$GITHUB_SHA" \
             $PRE
-          # A flattened "What's Changed" is one paragraph, so the bullets never render
-          # and a line-based count would throw the highlights away. Reflow first.
-          python3 tools/ci/reflow-release-notes.py "$TAG"
+          # Highlights (tools/packaging/release-highlights/<version>.md) are prepended and
+          # flattened What's Changed bullets are reflowed by reflow-release-notes.py after
+          # any commit-subject fallback below, not during it.
           # --generate-notes only lists merged PRs. Develop→beta cuts often have a single
           # "Release …" PR while product work was direct-pushed to develop — that still
           # produces a "What's Changed" heading with almost nothing useful. Fall back to
@@ -1268,6 +1300,7 @@ jobs:
             fi
             rm -f "$NOTES_FILE"
           fi
+          python3 tools/ci/reflow-release-notes.py "$TAG"
 
       - name: Refresh website download links
         env:
@@ -1281,8 +1314,6 @@ jobs:
           # blocked by environment protection rules).
           echo "Dispatching deploy-website.yml --ref develop (channel=$RELEASE_CHANNEL)"
           gh workflow run deploy-website.yml --ref develop
-          echo "Dispatching packaging-catalog-smoke.yml for $TAG"
-          gh workflow run packaging-catalog-smoke.yml --ref develop -f release_tag="$TAG" -f run_homebrew=true
 
   # Multi-arch container image on GHCR with an SBOM, provenance, and a keyless cosign signature.
   # Pull-request builds (no push) live in kubernetes-ci.yml.
@@ -1489,35 +1520,22 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Skip when CHOCOLATEY_API_KEY unset
-        id: gate
-        env:
-          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:CHOCOLATEY_API_KEY)) {
-            Write-Host "CHOCOLATEY_API_KEY not set; skipping chocolatey push."
-            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          } else {
-            "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          }
-
       - uses: actions/checkout@v7
-        if: steps.gate.outputs.skip != 'true'
 
       # Runs on every product release cut from beta/stable (via cut-product-tag → this workflow).
       - name: Pack and push chocolatey packages
-        if: steps.gate.outputs.skip != 'true'
         env:
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
           RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:CHOCOLATEY_API_KEY)) {
+            Write-Error 'CHOCOLATEY_API_KEY is required for catalog publish'
+          }
           $tag = $env:RELEASE_TAG
           if (-not (Test-Path ./tools/packaging/chocolatey/bump-packages.ps1)) {
-            Write-Host "Chocolatey stubs not on this ref; skipping push."
-            exit 0
+            Write-Error 'Chocolatey packaging stubs missing on this ref'
           }
           $cliAsset = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/Titanium.Cli-win-x64.zip"
           $msiAsset = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/TitaniumInspector-win-x64.msi"
@@ -1534,18 +1552,20 @@ jobs:
             }
           }
           if (-not $ready) {
-            Write-Host "Win-x64 CLI zip or Inspector MSI missing for $tag; skipping chocolatey push."
-            exit 0
+            Write-Error "Win-x64 CLI zip or Inspector MSI not ready for $tag after wait"
           }
           pwsh ./tools/packaging/chocolatey/bump-packages.ps1 -Tag $tag
           Push-Location tools/packaging/chocolatey/titanium-cli
           choco pack --output-directory .
+          if ($LASTEXITCODE -ne 0) { throw "choco pack titanium-cli failed ($LASTEXITCODE)" }
           Pop-Location
           Push-Location tools/packaging/chocolatey/titanium-inspector
           choco pack --output-directory .
+          if ($LASTEXITCODE -ne 0) { throw "choco pack titanium-inspector failed ($LASTEXITCODE)" }
           Pop-Location
           Get-ChildItem tools/packaging/chocolatey -Recurse -Filter *.nupkg | ForEach-Object {
             choco push $_.FullName --source https://push.chocolatey.org/ --api-key $env:CHOCOLATEY_API_KEY
+            if ($LASTEXITCODE -ne 0) { throw "choco push $($_.Name) failed ($LASTEXITCODE)" }
           }
 
   publish-charts:
@@ -1600,11 +1620,154 @@ jobs:
           gpg "${args[@]}"
           rm -rf "$GNUPGHOME"
           gh release upload "$TAG" charts/*.tgz sums/SHA256SUMS sums/SHA256SUMS.asc --clobber
-          # OCI registry: oci://ghcr.io/justcoding121/charts/<chart-name>
-          for tgz in charts/*.tgz; do
-            helm push "$tgz" oci://ghcr.io/justcoding121/charts
-          done
+          chmod +x tools/packaging/smoke/push-charts.sh
+          bash tools/packaging/smoke/push-charts.sh charts oci://ghcr.io/justcoding121/charts
           echo "Published Helm charts to GitHub release $TAG and oci://ghcr.io/justcoding121/charts (channel=$CHANNEL version=$VERSION)"
+
+  publish-homebrew:
+    needs: [resolve-version, publish-release]
+    if: |
+      always() &&
+      needs.publish-release.result == 'success' &&
+      vars.SKIP_CATALOG_PUBLISH != 'true' &&
+      (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_catalog_publish != 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: develop
+          fetch-depth: 0
+      - name: Point Homebrew formula at this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is required for Homebrew publish"
+            exit 1
+          fi
+          TAG="$RELEASE_TAG"
+          mkdir -p sums
+          gh release download "$TAG" -p SHA256SUMS -D sums
+          chmod +x tools/packaging/homebrew/bump-formula-from-sums.sh
+          bash tools/packaging/homebrew/bump-formula-from-sums.sh "$VERSION" "sums/SHA256SUMS"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- tools/packaging/homebrew/titanium.rb; then
+            git add tools/packaging/homebrew/titanium.rb
+            git commit -m "chore(packaging): point the Homebrew formula at ${VERSION}"
+            git push origin HEAD:develop
+          fi
+          tap="$(mktemp -d)"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/justcoding121/homebrew-titanium.git" "$tap"
+          cp tools/packaging/homebrew/titanium.rb "$tap/Formula/titanium.rb"
+          pushd "$tap"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- Formula/titanium.rb; then
+            git add Formula/titanium.rb
+            git commit -m "chore(packaging): point the Homebrew formula at ${VERSION}"
+            git push origin HEAD
+          fi
+          popd
+          gh workflow run packaging-catalog-smoke.yml --ref develop \
+            -f release_tag="$TAG" -f run_homebrew=true
+
+  publish-rehearsal:
+    needs: [resolve-version, product-smoke, build-images, build-charts]
+    if: |
+      needs.resolve-version.outputs.dry_run == 'true' &&
+      needs.product-smoke.result == 'success' &&
+      needs.build-images.result == 'success' &&
+      needs.build-charts.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-oci-proxy
+          path: oci/proxy
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-oci-gateway
+          path: oci/gateway
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-oci-manager
+          path: oci/manager
+      - uses: actions/download-artifact@v8
+        with:
+          name: charts
+          path: charts
+      - name: Start local OCI registry
+        run: docker run -d --name publish-rehearsal-registry -p 5000:5000 registry:2
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.17.3
+      - name: Install skopeo
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq skopeo gpg
+      - name: Rehearse OCI image publish
+        env:
+          SKOPEO_INSECURE: "1"
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          ver="$VERSION"
+          printf 'localhost:5000/titanium-web-proxy:%s\n' "$ver" > tags-proxy.txt
+          printf 'localhost:5000/titanium-gateway:%s\n' "$ver" > tags-gateway.txt
+          printf 'localhost:5000/titanium-manager:%s\n' "$ver" > tags-manager.txt
+          chmod +x tools/packaging/smoke/publish-oci.sh
+          bash tools/packaging/smoke/publish-oci.sh oci/proxy/image.oci.tar tags-proxy.txt
+          bash tools/packaging/smoke/publish-oci.sh oci/gateway/image.oci.tar tags-gateway.txt
+          bash tools/packaging/smoke/publish-oci.sh oci/manager/image.oci.tar tags-manager.txt
+      - name: Rehearse Helm chart publish
+        env:
+          HELM_PLAIN_HTTP: "1"
+          PULL_BACK: "1"
+        run: |
+          set -euo pipefail
+          chmod +x tools/packaging/smoke/push-charts.sh
+          bash tools/packaging/smoke/push-charts.sh charts oci://localhost:5000/charts
+      - name: Rehearse checksum signing
+        run: |
+          set -euo pipefail
+          dist="$(mktemp -d)"
+          cp charts/*.tgz "$dist/"
+          key_home="$(mktemp -d)"
+          export GNUPGHOME="$key_home"
+          chmod 700 "$GNUPGHOME"
+          cat >"$GNUPGHOME/batch" <<'BATCH'
+          %no-protection
+          Key-Type: RSA
+          Key-Length: 2048
+          Subkey-Type: RSA
+          Subkey-Length: 2048
+          Name-Real: Release Rehearsal
+          Name-Email: rehearsal@ci.local
+          Expire-Date: 1d
+          %commit
+          BATCH
+          gpg --batch --generate-key "$GNUPGHOME/batch"
+          fingerprint="$(gpg --list-secret-keys --with-colons rehearsal@ci.local | awk -F: '/^fpr:/ { print $10; exit }')"
+          export GPG_PRIVATE_KEY
+          GPG_PRIVATE_KEY="$(gpg --armor --export-secret-keys "$fingerprint")"
+          chmod +x tools/packaging/sign-checksums.sh
+          ./tools/packaging/sign-checksums.sh "$dist"
+          verify_home="$(mktemp -d)"
+          export GNUPGHOME="$verify_home"
+          chmod 700 "$GNUPGHOME"
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --verify "$dist/SHA256SUMS.asc" "$dist/SHA256SUMS"
+          rm -rf "$key_home" "$verify_home"
 
   image-scan:
     needs: [resolve-version, publish-image, publish-gateway-image, publish-manager-image]
@@ -1636,7 +1799,7 @@ jobs:
   # workflow file). Do not publish from this workflow or OIDC token exchange fails.
 
   yank-failed-release:
-    needs: [resolve-version, publish-release, publish-image, publish-gateway-image, publish-manager-image, publish-chocolatey, publish-charts, image-scan]
+    needs: [resolve-version, publish-release, publish-image, publish-gateway-image, publish-manager-image, publish-chocolatey, publish-charts, publish-homebrew, image-scan]
     if: failure() && needs.publish-release.result == 'success'
     runs-on: ubuntu-latest
     permissions:

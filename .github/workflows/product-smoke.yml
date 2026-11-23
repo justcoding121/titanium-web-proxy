@@ -89,6 +89,12 @@ jobs:
       - name: Tree evidence replay
         shell: pwsh
         run: ./tools/ci/assert-tree-evidence.ps1 -SelfTest
+      - name: Release notes reflow and highlights
+        run: python3 tools/ci/reflow-release-notes.py --self-test
+      - name: Homebrew formula bump
+        run: |
+          chmod +x tools/packaging/homebrew/bump-formula-from-sums.sh
+          bash tools/packaging/homebrew/bump-formula-from-sums.sh --self-test
 
   packages-windows:
     name: packages (windows-2025)
