@@ -418,7 +418,7 @@ jobs:
           tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '.[] | select(.draft==false and .prerelease==false) | .tag_name' | grep -v "^v${ver}$" | head -1)
           echo "previous release ${tag}"
           mkdir -p artifacts/prev artifacts/candidate
-          gh release download "$tag" --pattern 'TitaniumInspector-${RID}.dmg' --dir artifacts/prev --clobber
+          gh release download "$tag" --pattern "TitaniumInspector-${RID}.dmg" --dir artifacts/prev --clobber
           out=artifacts/inspector/${RID}
           dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r ${RID} --self-contained true -o "$out" -p:Version="$ver"
           cp -f src/Titanium.Inspector/Assets/app.ico tools/packaging/icons/AppIcon.icns "$out/"
