@@ -42,7 +42,7 @@ if cli_rpm="$(first "${rpms[@]}")"; then
   stage="$(mktemp -d)"
   cp -f "$cli_rpm" "$stage/"
   docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
-    bash -c "dnf install -y '/pkg/$(basename "$cli_rpm")' && titanium version"
+    bash -c "dnf install -y libicu '/pkg/$(basename "$cli_rpm")' && titanium version"
 fi
 if ins_deb="$(first "${idebs[@]}")"; then
   if [[ "$rid" == "linux-x64" ]]; then
