@@ -140,13 +140,16 @@ jobs:
           $zip = Get-ChildItem -Recurse dist -Filter 'Titanium.Cli-win-x64.zip' | Select-Object -First 1
           $plus = Get-ChildItem -Recurse dist -Filter 'Titanium.Plus-*.zip' | Select-Object -First 1
           if (-not $msi -or -not $zip -or -not $plus) { throw 'ASSERT: windows artifacts missing' }
+          Write-Host "windows-smoke: install inspector"
           $log = Join-Path $env:RUNNER_TEMP 'product-smoke'
           $exe = ./tools/packaging/smoke/install-inspector.ps1 -Msi $msi.FullName -LogDir $log
+          Write-Host "windows-smoke: prove inspector $exe"
           $env:SMOKE_EXE = "$exe"
           $env:SMOKE_BROWSERS = 'chrome,firefox,edge'
           if ($env:BROWSERS -eq 'extended') { $env:SMOKE_BROWSERS = 'chrome,edge,brave,firefox,opera' }
           $env:SMOKE_OUT = Join-Path $log 'gui'
           ./tools/packaging/smoke/retry.ps1 -Leg gui -Command { ./tools/packaging/smoke/prove-inspector.ps1 -Exe $env:SMOKE_EXE -Browsers $env:SMOKE_BROWSERS -Out $env:SMOKE_OUT }
+          Write-Host "windows-smoke: cli, plus, chocolatey"
           $cli = Join-Path $env:RUNNER_TEMP 'cli'
           Expand-Archive $zip.FullName $cli -Force
           ./tools/packaging/smoke/trust-authenticode.ps1 -Paths @(
