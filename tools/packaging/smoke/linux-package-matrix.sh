@@ -34,8 +34,10 @@ if ins_img="$(first "${iimages[@]}")"; then
 fi
 if cli_zip="$(first "${zips[@]}")"; then
   if [[ "$rid" == linux-musl-* ]]; then
-    docker run --rm -v "$root:/src" -v "$(dirname "$cli_zip"):/pkg" -w /src "alpine:3.24" \
-      sh -c "apk add --no-cache bash && bash tools/packaging/smoke/alpine-deps.sh && unzip -q /pkg/$(basename "$cli_zip") -d /cli && chmod +x /cli/titanium && /cli/titanium version && bash tools/packaging/smoke/openssl-leftover.sh /cli /cli/titanium"
+    stage="$(mktemp -d)"
+    cp -f "$cli_zip" "$stage/"
+    docker run --rm -v "$root:/src" -v "$stage:/pkg:ro" -w /src "alpine:3.24" \
+      sh -c "apk add --no-cache bash && bash tools/packaging/smoke/alpine-deps.sh && unzip -q '/pkg/$(basename "$cli_zip")' -d /cli && chmod +x /cli/titanium && /cli/titanium version && bash tools/packaging/smoke/openssl-leftover.sh /cli /cli/titanium"
   fi
 fi
 if cli_rpm="$(first "${rpms[@]}")"; then
@@ -65,8 +67,10 @@ if ins_rpm="$(first "${irpms[@]}")"; then
 fi
 if ins_zip="$(first "${izips[@]}")"; then
   if [[ "$rid" == linux-musl-* ]]; then
-    docker run --rm -v "$(dirname "$ins_zip"):/pkg" "alpine:3.24" \
-      sh -c "apk add --no-cache unzip && unzip -q /pkg/$(basename "$ins_zip") -d /opt/inspector && test -f /opt/inspector/TitaniumInspector"
+    stage="$(mktemp -d)"
+    cp -f "$ins_zip" "$stage/"
+    docker run --rm -v "$stage:/pkg:ro" "alpine:3.24" \
+      sh -c "apk add --no-cache unzip && unzip -q '/pkg/$(basename "$ins_zip")' -d /opt/inspector && test -f /opt/inspector/TitaniumInspector"
   fi
 fi
 echo "linux packages $rid ok"
