@@ -58,13 +58,8 @@ internal static class Program
         Environment.SetEnvironmentVariable("TITANIUM_INSPECTOR_SKIP_AUTO_MAINWINDOW", "1");
         try
         {
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, () =>
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, desktop =>
             {
-                if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
-                {
-                    return;
-                }
-
                 var text = new TextBlock
                 {
                     Text = message,
