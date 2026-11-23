@@ -43,6 +43,7 @@ git -C "$tap" init -q
 git -C "$tap" add Formula
 git -C "$tap" -c user.email=smoke@localhost -c user.name=smoke commit -qm smoke
 brew tap --force local/smoke "$tap"
+brew trust local/smoke
 brew audit --strict --formula local/smoke/titanium
 brew install --formula local/smoke/titanium-smoke
 brew untap local/smoke

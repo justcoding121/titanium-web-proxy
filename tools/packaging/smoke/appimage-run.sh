@@ -12,16 +12,21 @@ rm -rf "$work"
 mkdir -p "$work"
 (cd "$work" && "$img" --appimage-extract >/dev/null)
 root="$work/squashfs-root"
-if [[ -f "$root/titanium" ]]; then
+if [[ -f "$root/usr/bin/titanium" ]]; then
+  chmod +x "$root/usr/bin/titanium"
+  "$root/usr/bin/titanium" version
+elif [[ -f "$root/titanium" ]]; then
   chmod +x "$root/titanium"
   "$root/titanium" version
-elif [[ -f "$root/TitaniumInspector" ]]; then
-  chmod +x "$root/TitaniumInspector"
+elif [[ -f "$root/usr/bin/TitaniumInspector" || -f "$root/TitaniumInspector" ]]; then
+  exe="$root/usr/bin/TitaniumInspector"
+  [[ -f "$exe" ]] || exe="$root/TitaniumInspector"
+  chmod +x "$exe"
   # Headless start: the GUI must stay up long enough to be a real process, then we stop it.
   if command -v xvfb-run >/dev/null 2>&1; then
-    xvfb-run -a "$root/TitaniumInspector" >/tmp/inspector-appimage.log 2>&1 &
+    xvfb-run -a "$exe" >/tmp/inspector-appimage.log 2>&1 &
   else
-    "$root/TitaniumInspector" >/tmp/inspector-appimage.log 2>&1 &
+    "$exe" >/tmp/inspector-appimage.log 2>&1 &
   fi
   pid=$!
   sleep 3

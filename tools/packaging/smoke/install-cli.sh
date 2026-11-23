@@ -43,7 +43,8 @@ case "$base" in
     mkdir -p "$work"
     pkg="$(cd "$(dirname "$pkg")" && pwd)/$(basename "$pkg")"
     (cd "$work" && "$pkg" --appimage-extract >/dev/null)
-    bin="$work/squashfs-root/titanium"
+    bin="$work/squashfs-root/usr/bin/titanium"
+    if [[ ! -f "$bin" ]]; then bin="$work/squashfs-root/titanium"; fi
     test -x "$bin" || chmod +x "$bin"
     "$bin" version
     echo "$bin" >&3

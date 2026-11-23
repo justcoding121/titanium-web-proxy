@@ -11,7 +11,7 @@ smoke_classify() {
     echo assertion
     return 0
   fi
-  local infra_re='hdiutil: .*busy|resource temporarily unavailable|could not resolve host|temporary failure in name resolution|connection reset|connection timed out|tls handshake timeout|failed to download|failed to pull|kind:.*node image|econnreset|dial tcp|curl: \(56\)|http 429|apt-get update.*failed|no space left on device|brew: .*download'
+  local infra_re='hdiutil: .*busy|resource temporarily unavailable|could not resolve host|temporary failure in name resolution|connection reset|connection timed out|tls handshake timeout|failed to download|failed to pull|kind:.*node image|econnreset|dial tcp|curl: \(56\)|http 429|apt-get update.*failed|no space left on device|brew: .*download|context deadline exceeded'
   if grep -Eq "$infra_re" <<< "$text"; then
     echo infra
     return 0

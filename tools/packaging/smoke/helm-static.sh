@@ -33,7 +33,8 @@ helm package deploy/helm/titanium-gateway -d "$out"
 helm package deploy/helm/titanium-manager -d "$out"
 
 for tgz in "$out"/*.tgz; do
-  member="$(tar -tf "$tgz" | awk '/\/Chart.yaml$/ { print; exit }')"
+  listing="$(tar -tf "$tgz")"
+  member="$(printf '%s\n' "$listing" | awk '/\/Chart.yaml$/ { print; exit }')"
   if [[ -z "$member" ]]; then
     echo "ASSERT: $tgz has no Chart.yaml" >&2
     exit 1
