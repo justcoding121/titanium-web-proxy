@@ -35,6 +35,12 @@ load_local() {
   skopeo copy --override-os linux --override-arch amd64 "oci-archive:$tar" "docker-daemon:${tag}"
 }
 
+preload_published() {
+  local ref="$1"
+  docker pull "$ref"
+  kind load docker-image "$ref" --name "$cluster"
+}
+
 case "$which" in
   titanium)
     cluster=twp
@@ -109,6 +115,8 @@ if [[ "$which" == "gateway" ]]; then
   kubectl -n "$app_ns" rollout status deployment/backend --timeout=120s
   args=(--namespace "$ns" --create-namespace -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" --wait --timeout 8m)
   if [[ "$source_mode" == "release-tag" ]]; then
+    preload_published "ghcr.io/justcoding121/titanium-gateway:${version}"
+    preload_published "ghcr.io/justcoding121/titanium-web-proxy:${version}"
     helm install "$rel" "oci://ghcr.io/justcoding121/charts/titanium-gateway" --version "$chart_version" "${args[@]}" \
       --set controller.image.repository=ghcr.io/justcoding121/titanium-gateway \
       --set controller.image.tag="$version" \
