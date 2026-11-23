@@ -32,7 +32,23 @@ cp -R "${APP_PATH}" "${STAGE}/${STAGE_APP_NAME}"
 ln -s /Applications "${STAGE}/Applications"
 
 # RW image so Finder can persist .DS_Store / icon positions, then compress to UDZO.
-hdiutil create -volname "${VOLUME_NAME}" -srcfolder "${STAGE}" -ov -format UDRW "${RW_DMG}"
+# Shared macOS runners return "Resource busy" from the disk-image service. The
+# convert step below already retries; the first create has to as well.
+created=0
+for attempt in 1 2 3 4 5 6; do
+  if hdiutil create -volname "${VOLUME_NAME}" -srcfolder "${STAGE}" -ov -format UDRW "${RW_DMG}"; then
+    created=1
+    break
+  fi
+  echo "hdiutil create RW failed (attempt ${attempt})" >&2
+  rm -f "${RW_DMG}"
+  sync
+  sleep $((attempt * 5))
+done
+if [[ "${created}" != "1" ]]; then
+  echo "error: hdiutil create failed" >&2
+  exit 1
+fi
 
 ATTACH_OUT="$(hdiutil attach -readwrite -noverify -noautoopen "${RW_DMG}")"
 MOUNT_ROOT="$(echo "${ATTACH_OUT}" | awk -F'\t' '/\/Volumes\//{print $NF; exit}')"
