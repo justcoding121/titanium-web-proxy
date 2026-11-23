@@ -1,0 +1,528 @@
+name: product-smoke
+
+# One implementation of the five product surfaces. Callers pass source=run-artifacts
+# (the bits just built) or source=release-tag (already published assets).
+# Nightly runs the extended browser set and is not a required check.
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: 'run-artifacts or release-tag'
+        type: string
+        default: run-artifacts
+      tag:
+        description: 'Release tag when source is release-tag'
+        type: string
+        default: ''
+      version:
+        description: 'Product version under test'
+        type: string
+        default: ''
+      advisory:
+        description: 'Report failures without failing the caller'
+        type: boolean
+        default: false
+      browsers:
+        description: 'required or extended'
+        type: string
+        default: required
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Where the packages come from'
+        type: choice
+        default: release-tag
+        options:
+          - release-tag
+          - run-artifacts
+      tag:
+        description: 'Release tag for source=release-tag'
+        type: string
+        default: v8.0.7-beta
+      version:
+        description: 'Product version (blank derives it from the tag)'
+        type: string
+        default: ''
+      advisory:
+        description: 'Keep going after a leg fails'
+        type: boolean
+        default: false
+      browsers:
+        description: 'Browser set'
+        type: choice
+        default: required
+        options:
+          - required
+          - extended
+  schedule:
+    - cron: '41 5 * * *'
+
+permissions:
+  contents: read
+  packages: read
+  issues: write
+
+concurrency:
+  group: product-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SOURCE: ${{ github.event_name == 'schedule' && 'release-tag' || inputs.source }}
+  RELEASE_TAG: ${{ github.event_name == 'schedule' && '' || inputs.tag }}
+  RELEASE_VERSION: ${{ github.event_name == 'schedule' && '' || inputs.version }}
+  BROWSERS: ${{ github.event_name == 'schedule' && 'extended' || inputs.browsers }}
+
+jobs:
+  self-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Retry classifier
+        run: bash tools/packaging/smoke/retry.sh --self-test
+      - name: Signing policy parser
+        run: bash tools/ci/assert-signing-environment.sh --self-test
+      - name: Tree evidence replay
+        shell: pwsh
+        run: ./tools/ci/assert-tree-evidence.ps1 -SelfTest
+
+  packages-windows:
+    name: packages (windows-2025)
+    runs-on: windows-2025
+    timeout-minutes: 50
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: inspector-win-x64
+          path: dist/inspector-win-x64
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: cli-win-x64
+          path: dist/cli-win-x64
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: plus
+          path: dist/plus
+      - name: Published assets
+        if: github.event_name == 'schedule' || inputs.source == 'release-tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          bash tools/packaging/smoke/fetch-release.sh \
+            'TitaniumInspector-win-x64.msi' 'Titanium.Cli-win-x64.zip' 'Titanium.Plus-*.zip' 'SHA256SUMS'
+      - name: Browsers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Command firefox -ErrorAction SilentlyContinue)) { choco install firefox -y --no-progress }
+          if (-not (Test-Path "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe")) { choco install googlechrome -y --no-progress }
+          if ('${{ env.BROWSERS }}' -eq 'extended') { choco install brave opera -y --no-progress }
+      - name: Inspector MSI, CLI, Plus, Chocolatey
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Get-ChildItem -Recurse dist -Filter 'TitaniumInspector-win-x64.msi' | Select-Object -First 1
+          $zip = Get-ChildItem -Recurse dist -Filter 'Titanium.Cli-win-x64.zip' | Select-Object -First 1
+          $plus = Get-ChildItem -Recurse dist -Filter 'Titanium.Plus-*.zip' | Select-Object -First 1
+          if (-not $msi -or -not $zip -or -not $plus) { throw 'ASSERT: windows artifacts missing' }
+          $log = Join-Path $env:RUNNER_TEMP 'product-smoke'
+          $exe = ./tools/packaging/smoke/install-inspector.ps1 -Msi $msi.FullName -LogDir $log
+          $env:SMOKE_EXE = "$exe"
+          $env:SMOKE_BROWSERS = 'chrome,firefox,edge'
+          if ($env:BROWSERS -eq 'extended') { $env:SMOKE_BROWSERS = 'chrome,edge,brave,firefox,opera' }
+          $env:SMOKE_OUT = Join-Path $log 'gui'
+          ./tools/packaging/smoke/retry.ps1 -Leg gui -Command { ./tools/packaging/smoke/prove-inspector.ps1 -Exe $env:SMOKE_EXE -Browsers $env:SMOKE_BROWSERS -Out $env:SMOKE_OUT }
+          $cli = Join-Path $env:RUNNER_TEMP 'cli'
+          Expand-Archive $zip.FullName $cli -Force
+          ./tools/packaging/smoke/trust-authenticode.ps1 -Paths @(
+            $msi.FullName,
+            (Join-Path $cli 'titanium.exe'),
+            "$exe"
+          )
+          ./tools/packaging/winget/test-links-symlink.ps1 -Zip $zip.FullName
+          ./tools/packaging/smoke/cli-mitm.ps1 -Titanium (Join-Path $cli 'titanium.exe') -Out (Join-Path $log 'cli')
+          ./tools/packaging/smoke/apply-plus.ps1 -CliDir $cli -PlusZip $plus.FullName -Titanium (Join-Path $cli 'titanium.exe')
+          $tag = $env:RELEASE_TAG
+          if (-not $tag) { $tag = 'v8.0.7-beta' }
+          ./tools/packaging/smoke/pre-immutable-choco.ps1 -CliZip $zip.FullName -InspectorMsi $msi.FullName -Tag $tag
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: product-smoke-windows
+          path: ${{ runner.temp }}/product-smoke
+          if-no-files-found: ignore
+
+  packages-macos:
+    name: packages (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 50
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    concurrency:
+      group: product-smoke-macos-15-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: inspector-osx-arm64
+          path: dist/inspector-osx-arm64
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: cli-osx-arm64
+          path: dist/cli-osx-arm64
+      - name: Published assets
+        if: github.event_name == 'schedule' || inputs.source == 'release-tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/packaging/smoke/fetch-release.sh 'TitaniumInspector-osx-arm64.dmg' 'Titanium.Cli-osx-arm64.zip' 'SHA256SUMS'
+      - name: Inspector DMG, CLI, Homebrew
+        run: |
+          set -euo pipefail
+          bash tools/packaging/smoke/install-required-browsers.sh
+          dmg="$(find dist -name 'TitaniumInspector-osx-arm64.dmg' | head -1)"
+          zip="$(find dist -name 'Titanium.Cli-osx-arm64.zip' | head -1)"
+          test -n "$dmg" && test -n "$zip"
+          log="${RUNNER_TEMP}/product-smoke"
+          exe="$(bash tools/packaging/smoke/install-inspector.sh "$dmg" "$log")"
+          browsers=chrome,firefox,safari
+          [[ "${BROWSERS}" == "extended" ]] && browsers=chrome,firefox,safari,edge
+          bash tools/packaging/smoke/retry.sh --leg gui -- bash tools/packaging/smoke/prove-inspector.sh "$exe" "$browsers" "$log/gui"
+          cli="${RUNNER_TEMP}/cli"
+          bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
+          codesign --verify --verbose "$bin" || { echo "ASSERT: CLI codesign verify failed" >&2; exit 1; }
+          bash tools/packaging/smoke/cli-mitm.sh "$bin" "$log/cli"
+          bash tools/packaging/smoke/pre-immutable-brew.sh "$zip"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: product-smoke-macos-15
+          path: ${{ runner.temp }}/product-smoke
+          if-no-files-found: ignore
+
+  packages-macos-intel:
+    name: packages (macos-15-intel)
+    runs-on: macos-15-intel
+    timeout-minutes: 50
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    concurrency:
+      group: product-smoke-macos-15-intel-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: inspector-osx-x64
+          path: dist/inspector-osx-x64
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: cli-osx-x64
+          path: dist/cli-osx-x64
+      - name: Published assets
+        if: github.event_name == 'schedule' || inputs.source == 'release-tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/packaging/smoke/fetch-release.sh 'TitaniumInspector-osx-x64.dmg' 'Titanium.Cli-osx-x64.zip' 'SHA256SUMS'
+      - name: Inspector DMG and CLI
+        run: |
+          set -euo pipefail
+          bash tools/packaging/smoke/install-required-browsers.sh
+          dmg="$(find dist -name 'TitaniumInspector-osx-x64.dmg' | head -1)"
+          zip="$(find dist -name 'Titanium.Cli-osx-x64.zip' | head -1)"
+          test -n "$dmg" && test -n "$zip"
+          log="${RUNNER_TEMP}/product-smoke"
+          exe="$(bash tools/packaging/smoke/install-inspector.sh "$dmg" "$log")"
+          bash tools/packaging/smoke/retry.sh --leg gui -- bash tools/packaging/smoke/prove-inspector.sh "$exe" "chrome,firefox,safari" "$log/gui"
+          cli="${RUNNER_TEMP}/cli"
+          bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
+          bash tools/packaging/smoke/cli-mitm.sh "$bin" "$log/cli"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: product-smoke-macos-15-intel
+          path: ${{ runner.temp }}/product-smoke
+          if-no-files-found: ignore
+
+  packages-ubuntu:
+    name: packages (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          pattern: inspector-linux-*64
+          path: dist/inspector
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          pattern: cli-linux-*64
+          path: dist/cli
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: plus
+          path: dist/plus
+      - name: Published assets
+        if: github.event_name == 'schedule' || inputs.source == 'release-tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash tools/packaging/smoke/fetch-release.sh \
+            'Titanium*-linux-x64.*' 'Titanium*-linux-musl-x64.zip' 'Titanium.Plus-*.zip' 'SHA256SUMS'
+      - name: deb, AppImage, rpm, musl, Plus
+        run: |
+          set -euo pipefail
+          chmod +x tools/packaging/smoke/*.sh
+          bash tools/packaging/smoke/linux-package-matrix.sh dist linux-x64
+          bash tools/packaging/smoke/linux-package-matrix.sh dist linux-musl-x64
+          zip="$(find dist -name 'Titanium.Cli-linux-x64.zip' | head -1)"
+          plus="$(find dist -name 'Titanium.Plus-*.zip' | head -1)"
+          test -n "$zip" && test -n "$plus"
+          cli="${RUNNER_TEMP}/plus-cli"
+          bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
+          bash tools/packaging/smoke/apply-plus.sh "$cli" "$plus" "$bin"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: product-smoke-ubuntu-24.04
+          path: ${{ runner.temp }}/product-smoke
+          if-no-files-found: ignore
+
+  packages-ubuntu-arm:
+    name: packages (ubuntu-24.04-arm)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 50
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          pattern: inspector-linux-*arm64
+          path: dist/inspector
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          pattern: cli-linux-*arm64
+          path: dist/cli
+      - name: Published assets
+        if: github.event_name == 'schedule' || inputs.source == 'release-tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/packaging/smoke/fetch-release.sh 'Titanium*-linux-arm64.*' 'Titanium*-linux-musl-arm64.zip' 'SHA256SUMS'
+      - name: deb, AppImage, rpm, musl
+        run: |
+          set -euo pipefail
+          chmod +x tools/packaging/smoke/*.sh
+          bash tools/packaging/smoke/linux-package-matrix.sh dist linux-arm64
+          bash tools/packaging/smoke/linux-package-matrix.sh dist linux-musl-arm64
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: product-smoke-ubuntu-24.04-arm
+          path: ${{ runner.temp }}/product-smoke
+          if-no-files-found: ignore
+
+  pre-nuget:
+    name: pre-immutable nuget
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Local feed
+        run: bash tools/packaging/smoke/pre-immutable-nuget.sh
+
+  pre-brew-linux:
+    name: pre-immutable brew (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: cli-linux-x64
+          path: dist
+      - name: Published zip
+        if: github.event_name == 'schedule' || inputs.source == 'release-tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/packaging/smoke/fetch-release.sh 'Titanium.Cli-linux-x64.zip'
+      - name: audit and local install
+        run: |
+          set -euo pipefail
+          zip="$(find dist -name 'Titanium.Cli-linux-x64.zip' | head -1)"
+          test -n "$zip"
+          bash tools/packaging/smoke/pre-immutable-brew.sh "$zip"
+
+  images:
+    name: control-plane images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: proxy
+            tag: titanium-web-proxy:ci
+            kind: proxy
+          - name: gateway
+            tag: titanium-gateway:ci
+            kind: gateway
+          - name: manager
+            tag: titanium-manager:ci
+            kind: manager
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: image-oci-${{ matrix.name }}
+          path: oci
+      - name: Pull the published tag
+        if: github.event_name == 'schedule' || inputs.source == 'release-tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_VERSION:-}"
+          if [[ -z "$version" ]]; then
+            tag="${RELEASE_TAG:-}"
+            if [[ -z "$tag" ]]; then
+              tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.prerelease==true)][0].tag_name')"
+            fi
+            version="${tag#v}"
+          fi
+          case "${{ matrix.kind }}" in
+            proxy) image=titanium-web-proxy ;;
+            gateway) image=titanium-gateway ;;
+            manager) image=titanium-manager ;;
+          esac
+          ref="ghcr.io/justcoding121/${image}:${version}"
+          docker pull "$ref"
+          docker tag "$ref" "${{ matrix.tag }}"
+      - name: Health
+        run: |
+          set -euo pipefail
+          if [[ "$SOURCE" == "run-artifacts" ]]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
+            bash tools/packaging/smoke/image-health.sh oci/image.oci.tar "${{ matrix.tag }}" "${{ matrix.kind }}"
+          else
+            bash tools/packaging/smoke/image-health.sh - "${{ matrix.tag }}" "${{ matrix.kind }}"
+          fi
+
+  chart-static:
+    name: helm package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.17.3
+      - name: Lint, template, package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_VERSION:-}"
+          if [[ -z "$version" ]]; then
+            tag="${RELEASE_TAG:-}"
+            if [[ -z "$tag" ]]; then
+              tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.prerelease==true)][0].tag_name')"
+            fi
+            version="${tag#v}"
+          fi
+          RELEASE_VERSION="$version" bash tools/packaging/smoke/helm-static.sh "$PWD/charts-out"
+      - uses: actions/upload-artifact@v7
+        if: github.event_name != 'schedule' && inputs.source != 'run-artifacts'
+        with:
+          name: product-smoke-charts
+          path: charts-out/
+
+  charts-kind:
+    name: chart (${{ matrix.chart }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: [titanium, gateway, manager]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.17.3
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: charts
+          path: charts
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'titanium'
+        with:
+          name: image-oci-proxy
+          path: artifacts/images/image-oci-proxy
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'gateway'
+        with:
+          pattern: 'image-oci-*'
+          path: artifacts/images
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'manager'
+        with:
+          name: image-oci-manager
+          path: artifacts/images/image-oci-manager
+      - name: kind
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: ${{ matrix.chart == 'gateway' && 'twp-gateway' || matrix.chart == 'manager' && 'twp-manager' || 'twp' }}
+      - name: Install the packaged chart
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
+          chmod +x tools/packaging/smoke/*.sh
+          bash tools/packaging/smoke/retry.sh --leg kind -- bash tools/packaging/smoke/kind-chart.sh "${{ matrix.chart }}"
