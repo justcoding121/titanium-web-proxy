@@ -61,12 +61,16 @@ try {
     }
     $ver = & $Titanium version
     if ($LASTEXITCODE -ne 0) { throw "ASSERT: titanium version failed" }
-    Write-Host $ver
-    if ($ver -notmatch 'Plus:') { throw "ASSERT: titanium version did not report Plus" }
+    # Native output is a line array. -notmatch on an array is the lines that missed,
+    # so a version line without the word Plus makes the check fail even when another line has it.
+    $verText = (@($ver) | ForEach-Object { "$_" }) -join "`n"
+    Write-Host $verText
+    if ($verText -notmatch 'Plus:') { throw "ASSERT: titanium version did not report Plus" }
     $hashOut = & $Titanium plus hash-password --user alice --role operator smoke-secret
     if ($LASTEXITCODE -ne 0) { throw "ASSERT: plus hash-password failed" }
-    Write-Host $hashOut
-    if ($hashOut -notmatch '(?m)^alice:operator:') { throw "ASSERT: plus hash-password did not print a user line" }
+    $hashText = (@($hashOut) | ForEach-Object { "$_" }) -join "`n"
+    Write-Host $hashText
+    if ($hashText -notmatch '(?m)^alice:operator:') { throw "ASSERT: plus hash-password did not print a user line" }
     Write-Host 'plus apply ok'
 }
 finally {
