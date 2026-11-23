@@ -8,7 +8,7 @@
 # (kept here as the source of truth for CI bump scripts).
 
 class Titanium < Formula
-  desc "MITM and reverse proxy command line"
+  desc "MITM and reverse proxy command-line"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
   version "8.0.7-beta"
   license "MIT"
