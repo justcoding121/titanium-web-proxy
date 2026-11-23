@@ -46,5 +46,6 @@ brew tap --force local/smoke "$tap"
 brew trust local/smoke
 brew audit --strict --formula local/smoke/titanium
 brew install --formula local/smoke/titanium-smoke
-brew untap local/smoke
 echo "homebrew local install ok"
+brew uninstall --formula local/smoke/titanium-smoke || true
+brew untap --force local/smoke || true
