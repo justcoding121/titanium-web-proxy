@@ -1227,31 +1227,7 @@ jobs:
             $PRE
           # A flattened "What's Changed" is one paragraph, so the bullets never render
           # and a line-based count would throw the highlights away. Reflow first.
-          python3 - "$TAG" <<'PY'
-import pathlib, re, subprocess, sys
-tag = sys.argv[1]
-body = subprocess.check_output(
-    ["gh", "release", "view", tag, "--json", "body", "-q", ".body"],
-    text=True,
-)
-marker = "## What's Changed"
-idx = body.find(marker)
-if idx < 0:
-    sys.exit(0)
-head, tail = body[:idx], body[idx:]
-if "\n* " in tail or "\n- " in tail:
-    sys.exit(0)
-fixed = re.sub(r"[ \t]+\*[ \t]+", "\n* ", tail)
-fixed = re.sub(r"## What's Changed\n\*", "## What's Changed\n\n*", fixed, count=1)
-fixed = re.sub(r"[ \t]+\*\*Full Changelog\*\*", "\n\n**Full Changelog**", fixed)
-if not fixed.endswith("\n"):
-    fixed += "\n"
-new = head.rstrip() + "\n\n" + fixed
-path = pathlib.Path("/tmp/release-notes.md")
-path.write_text(new, encoding="utf-8")
-subprocess.check_call(["gh", "release", "edit", tag, "--notes-file", str(path)])
-print("reflowed What's Changed onto separate lines")
-PY
+          python3 tools/ci/reflow-release-notes.py "$TAG"
           # --generate-notes only lists merged PRs. Develop→beta cuts often have a single
           # "Release …" PR while product work was direct-pushed to develop — that still
           # produces a "What's Changed" heading with almost nothing useful. Fall back to
