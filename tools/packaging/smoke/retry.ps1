@@ -41,23 +41,24 @@ function Get-SmokeClass([string] $Text) {
 
 $attempt = 1
 while ($true) {
-    $logFile = Join-Path ([System.IO.Path]::GetTempPath()) ("smoke-retry-" + [guid]::NewGuid().ToString('n') + ".log")
+    $lines = New-Object System.Collections.Generic.List[string]
     try {
-        # A pipe (`*>&1 | Out-String`) leaves Inspector holding the driver's stdout.
-        # The reader waits for that handle to close, so the job sits until it is cancelled.
-        # A file does not. Same pattern as retry.sh.
-        & $Command *> $logFile
+        # Stream each line. Out-String holds the whole proof until the driver exits, so a
+        # hang looks like fifty minutes of silence. Inspector's own stdout is redirected
+        # in the driver and does not keep this pipeline open.
+        & $Command *>&1 | ForEach-Object {
+            $text = "$_"
+            Write-Host $text
+            $lines.Add($text)
+        }
         $code = $LASTEXITCODE
         if (-not $code) { $code = 0 }
-        $log = if (Test-Path -LiteralPath $logFile) { Get-Content -LiteralPath $logFile -Raw } else { '' }
-        if (-not $log) { $log = '' }
+        $log = ($lines -join "`n")
     } catch {
         $log = "$_"
+        Write-Host $log
         $code = 1
-    } finally {
-        Remove-Item -LiteralPath $logFile -Force -ErrorAction SilentlyContinue
     }
-    Write-Host $log
     if ($code -eq 0) {
         if ($attempt -gt 1) {
             Write-Host "flaky: $Leg passed on attempt $attempt"
