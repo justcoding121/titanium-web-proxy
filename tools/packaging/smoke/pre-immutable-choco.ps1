@@ -46,7 +46,13 @@ try {
     Pop-Location
     $nupkgs = Get-ChildItem $work -Filter *.nupkg
     if ($nupkgs.Count -lt 2) { throw "ASSERT: choco pack did not produce both packages" }
-    choco install titanium-cli titanium-inspector -y --no-progress --accept-license --source $work
+    # The Inspector proof installed this MSI already. The package install is the check,
+    # and msiexec fails that second install. Remove the earlier copy first.
+    $removed = Start-Process -FilePath "$env:SystemRoot\System32\msiexec.exe" -ArgumentList @('/x', $InspectorMsi, '/qn', '/norestart') -PassThru -Wait
+    Write-Host "pre-choco msiexec /x exit $($removed.ExitCode)"
+    # 8.0.7-beta is a prerelease. Without --pre, Chocolatey ignores the nupkg it just packed
+    # and reports that the package was not found.
+    choco install titanium-cli titanium-inspector -y --pre --no-progress --accept-license --source $work
     if ($LASTEXITCODE -ne 0) { throw "ASSERT: local choco install failed $LASTEXITCODE" }
     Write-Host 'chocolatey local install ok'
 }
