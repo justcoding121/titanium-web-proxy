@@ -1,6 +1,17 @@
 name: release
 
 on:
+  workflow_call:
+    inputs:
+      channel:
+        description: 'stable or beta. dry_run is forced for a called workflow.'
+        required: true
+        type: string
+      dry_run:
+        description: 'Called workflows never publish. Callers pass true.'
+        required: false
+        type: boolean
+        default: true
   push:
     tags:
       - 'v*.*.*'
@@ -33,19 +44,30 @@ jobs:
       release_tag: ${{ steps.v.outputs.tag }}
       version: ${{ steps.v.outputs.version }}
       channel: ${{ steps.v.outputs.channel }}
+      dry_run: ${{ steps.v.outputs.dry_run }}
     steps:
       - uses: actions/checkout@v7
       - id: v
         name: Resolve release tag / channel
+        env:
+          # A tag push has no inputs context. Read it only for dispatch and for a caller.
+          # Inside a called workflow github.event_name is the caller's event, and inputs
+          # are the workflow_call values (dry_run is passed true).
+          INPUT_DRY_RUN: ${{ github.event_name != 'push' && inputs.dry_run && 'true' || '' }}
+          INPUT_CHANNEL: ${{ github.event_name != 'push' && inputs.channel || '' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
+          DRY=false
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG="${GITHUB_REF_NAME}"
             VERSION="${TAG#v}"
             CHANNEL=stable
             if [[ "$VERSION" == *beta* || "$VERSION" == *-* ]]; then CHANNEL=beta; fi
           else
-            CHANNEL="${{ github.event.inputs.channel || 'stable' }}"
+            CHANNEL="${INPUT_CHANNEL:-stable}"
+            # Called workflows pass dry_run: true. A pull_request caller cannot publish.
+            if [[ "$INPUT_DRY_RUN" == "true" || "$EVENT_NAME" == "pull_request" ]]; then DRY=true; fi
             PREFIX=$(grep -oP '(?<=<VersionPrefix>)[^<]+' src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj | head -n1)
             if [[ -z "$PREFIX" ]]; then echo "VersionPrefix not found"; exit 1; fi
             if [[ "$CHANNEL" == "beta" ]]; then
@@ -58,7 +80,8 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
-          echo "Resolved tag=$TAG version=$VERSION channel=$CHANNEL"
+          echo "dry_run=$DRY" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=$TAG version=$VERSION channel=$CHANNEL dry_run=$DRY"
 
   release-readiness:
     needs: resolve-version
@@ -70,10 +93,10 @@ jobs:
       issues: read
     steps:
       - name: Dry-run skips same-SHA readiness wait
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        if: needs.resolve-version.outputs.dry_run == 'true'
         run: echo 'dry_run skipping release-readiness wait so lab artifacts can build from this tip'
       - name: Same-SHA readiness workflows are green
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
+        if: needs.resolve-version.outputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
@@ -290,10 +313,30 @@ jobs:
             exit 1
           done
 
+  # PR dry-runs use environment "signing". Fail here when the branch policy
+  # is readable and rejects the ref, before the matrix spends a runner.
+  signing-environment:
+    needs: resolve-version
+    if: needs.resolve-version.outputs.dry_run == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Deployment branch policy admits this ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNING_REF_NAME: ${{ github.head_ref || github.ref_name }}
+        run: bash tools/ci/assert-signing-environment.sh
+
   build-cli:
-    needs: [resolve-version, release-gate]
+    needs: [resolve-version, release-gate, signing-environment]
     # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
-    if: always() && needs.release-gate.result == 'success'
+    # signing-environment runs only for workflow_call; a tag push skips it.
+    if: |
+      always() &&
+      needs.release-gate.result == 'success' &&
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
     runs-on: ${{ matrix.os }}
     # win-x64 uses environment "signing" for Azure OIDC (federated cred).
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
@@ -529,6 +572,7 @@ jobs:
             f="Titanium.Cli-$rid.$ext"
             [[ -f "$f" ]] && cp "$f" "staged-cli-$rid/" || true
           done
+          bash tools/packaging/smoke/write-checksums.sh "staged-cli-$rid"
           ls -la "staged-cli-$rid"
       - uses: actions/upload-artifact@v7
         with:
@@ -536,9 +580,12 @@ jobs:
           path: staged-cli-${{ matrix.rid }}/
           if-no-files-found: error
   build-plus:
-    needs: [resolve-version, release-gate]
+    needs: [resolve-version, release-gate, signing-environment]
     # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
-    if: always() && needs.release-gate.result == 'success'
+    if: |
+      always() &&
+      needs.release-gate.result == 'success' &&
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -564,9 +611,12 @@ jobs:
             Titanium.Plus-*.dll
 
   build-inspector:
-    needs: [resolve-version, release-gate]
+    needs: [resolve-version, release-gate, signing-environment]
     # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
-    if: always() && needs.release-gate.result == 'success'
+    if: |
+      always() &&
+      needs.release-gate.result == 'success' &&
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
     runs-on: ${{ matrix.os }}
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
     permissions:
@@ -805,12 +855,79 @@ jobs:
             f="TitaniumInspector-$rid.$ext"
             [[ -f "$f" ]] && cp "$f" "staged-inspector-$rid/" || true
           done
+          bash tools/packaging/smoke/write-checksums.sh "staged-inspector-$rid"
           ls -la "staged-inspector-$rid"
       - uses: actions/upload-artifact@v7
         with:
           name: inspector-${{ matrix.rid }}
           if-no-files-found: error
           path: staged-inspector-${{ matrix.rid }}/
+
+  # Build the images once. product-smoke loads this OCI layout; publish copies it.
+  build-images:
+    needs: [resolve-version, release-gate, signing-environment]
+    if: |
+      always() &&
+      needs.release-gate.result == 'success' &&
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: proxy
+            file: tools/packaging/docker/Dockerfile
+          - name: gateway
+            file: tools/packaging/docker/Dockerfile.gateway
+          - name: manager
+            file: tools/packaging/docker/Dockerfile.manager
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: OCI layout, no push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: false
+          outputs: type=oci,dest=${{ runner.temp }}/image.oci.tar
+          sbom: true
+          provenance: mode=max
+          build-args: |
+            VERSION=${{ needs.resolve-version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: actions/upload-artifact@v7
+        with:
+          name: image-oci-${{ matrix.name }}
+          path: ${{ runner.temp }}/image.oci.tar
+          if-no-files-found: error
+
+  build-charts:
+    needs: [resolve-version, release-gate, signing-environment]
+    if: |
+      always() &&
+      needs.release-gate.result == 'success' &&
+      (needs.signing-environment.result == 'success' || needs.signing-environment.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.17.3
+      - name: Lint, template, and package once
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: bash tools/packaging/smoke/helm-static.sh "$PWD/charts"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: charts
+          path: charts/
+          if-no-files-found: error
 
   smoke-http3:
     needs: build-cli
@@ -944,8 +1061,30 @@ jobs:
           path: tools/RpsLoadProbe/results/rps-ramp-*.csv
           if-no-files-found: ignore
 
+  product-smoke:
+    needs: [resolve-version, build-cli, build-plus, build-inspector, build-images, build-charts]
+    if: |
+      always() &&
+      needs.build-cli.result == 'success' &&
+      needs.build-plus.result == 'success' &&
+      needs.build-inspector.result == 'success' &&
+      needs.build-images.result == 'success' &&
+      needs.build-charts.result == 'success'
+    permissions:
+      contents: read
+      packages: read
+      issues: write
+    uses: ./.github/workflows/product-smoke.yml
+    with:
+      source: run-artifacts
+      tag: ${{ needs.resolve-version.outputs.release_tag }}
+      version: ${{ needs.resolve-version.outputs.version }}
+      advisory: false
+      browsers: required
+    secrets: inherit
+
   publish-release:
-    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3, smoke-scripting, rps-product-smoke]
+    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3, smoke-scripting, rps-product-smoke, product-smoke]
     if: |
       always() &&
       (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
@@ -956,6 +1095,8 @@ jobs:
       needs.build-inspector.result == 'success' &&
       needs.smoke-http3.result == 'success' &&
       needs.smoke-scripting.result == 'success' &&
+      needs.product-smoke.result == 'success' &&
+      needs.resolve-version.outputs.dry_run != 'true' &&
       (needs.rps-product-smoke.result == 'success' || needs.rps-product-smoke.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
@@ -1136,15 +1277,19 @@ jobs:
           # blocked by environment protection rules).
           echo "Dispatching deploy-website.yml --ref develop (channel=$RELEASE_CHANNEL)"
           gh workflow run deploy-website.yml --ref develop
+          echo "Dispatching packaging-catalog-smoke.yml for $TAG"
+          gh workflow run packaging-catalog-smoke.yml --ref develop -f release_tag="$TAG" -f run_homebrew=true
 
   # Multi-arch container image on GHCR with an SBOM, provenance, and a keyless cosign signature.
   # Pull-request builds (no push) live in kubernetes-ci.yml.
   publish-image:
-    needs: [resolve-version, release-gate]
+    needs: [resolve-version, release-gate, product-smoke]
     # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
     if: |
       always() &&
       needs.release-gate.result == 'success' &&
+      needs.product-smoke.result == 'success' &&
+      needs.resolve-version.outputs.dry_run != 'true' &&
       (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true')
     runs-on: ubuntu-latest
@@ -1157,8 +1302,10 @@ jobs:
       IMAGE: ghcr.io/justcoding121/titanium-web-proxy
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-oci-proxy
+          path: oci
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -1174,33 +1321,25 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
-      - id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: tools/packaging/docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ needs.resolve-version.outputs.version }}
-            COMMIT=${{ github.sha }}
-          # SPDX SBOM and SLSA provenance attestations are stored beside the image in the registry.
-          sbom: true
-          provenance: mode=max
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Install skopeo
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
+      - id: publish
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$TAGS" > tags.txt
+          bash tools/packaging/smoke/publish-oci.sh oci/image.oci.tar tags.txt
       - uses: sigstore/cosign-installer@v3
       - name: Sign the image by digest (keyless)
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
           cosign sign --yes "${IMAGE}@${DIGEST}"
       - name: Verify the signature
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
           cosign verify "${IMAGE}@${DIGEST}" \
@@ -1208,11 +1347,13 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   # The Gateway API controller image, published the same way (SBOM, provenance, keyless signature).
   publish-gateway-image:
-    needs: [resolve-version, release-gate]
+    needs: [resolve-version, release-gate, product-smoke]
     # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
     if: |
       always() &&
       needs.release-gate.result == 'success' &&
+      needs.product-smoke.result == 'success' &&
+      needs.resolve-version.outputs.dry_run != 'true' &&
       (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true')
     runs-on: ubuntu-latest
@@ -1225,8 +1366,10 @@ jobs:
       IMAGE: ghcr.io/justcoding121/titanium-gateway
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-oci-gateway
+          path: oci
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -1242,33 +1385,25 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
-      - id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: tools/packaging/docker/Dockerfile.gateway
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ needs.resolve-version.outputs.version }}
-            COMMIT=${{ github.sha }}
-          # SPDX SBOM and SLSA provenance attestations are stored beside the image in the registry.
-          sbom: true
-          provenance: mode=max
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Install skopeo
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
+      - id: publish
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$TAGS" > tags.txt
+          bash tools/packaging/smoke/publish-oci.sh oci/image.oci.tar tags.txt
       - uses: sigstore/cosign-installer@v3
       - name: Sign the image by digest (keyless)
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
           cosign sign --yes "${IMAGE}@${DIGEST}"
       - name: Verify the signature
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
           cosign verify "${IMAGE}@${DIGEST}" \
@@ -1276,11 +1411,13 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   # The Manager control-plane image, published the same way (SBOM, provenance, keyless signature).
   publish-manager-image:
-    needs: [resolve-version, release-gate]
+    needs: [resolve-version, release-gate, product-smoke]
     # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
     if: |
       always() &&
       needs.release-gate.result == 'success' &&
+      needs.product-smoke.result == 'success' &&
+      needs.resolve-version.outputs.dry_run != 'true' &&
       (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true')
     runs-on: ubuntu-latest
@@ -1293,8 +1430,10 @@ jobs:
       IMAGE: ghcr.io/justcoding121/titanium-manager
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-oci-manager
+          path: oci
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -1310,33 +1449,25 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
-      - id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: tools/packaging/docker/Dockerfile.manager
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ needs.resolve-version.outputs.version }}
-            COMMIT=${{ github.sha }}
-          # SPDX SBOM and SLSA provenance attestations are stored beside the image in the registry.
-          sbom: true
-          provenance: mode=max
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Install skopeo
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
+      - id: publish
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$TAGS" > tags.txt
+          bash tools/packaging/smoke/publish-oci.sh oci/image.oci.tar tags.txt
       - uses: sigstore/cosign-installer@v3
       - name: Sign the image by digest (keyless)
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
           cosign sign --yes "${IMAGE}@${DIGEST}"
       - name: Verify the signature
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
           cosign verify "${IMAGE}@${DIGEST}" \
@@ -1414,15 +1545,19 @@ jobs:
           }
 
   publish-charts:
-    needs: [resolve-version, publish-release]
+    needs: [resolve-version, publish-release, product-smoke]
     # always(): a skipped ancestor (beta skips rps-product-smoke) skips this job without it.
-    if: always() && needs.publish-release.result == 'success'
+    if: always() && needs.publish-release.result == 'success' && needs.product-smoke.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: charts
+          path: charts
       - uses: azure/setup-helm@v5
         with:
           version: v3.17.3
@@ -1431,7 +1566,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Package charts onto the GitHub release and push OCI
+      - name: Push the smoked chart archives to the GitHub release and OCI
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve-version.outputs.release_tag }}
@@ -1441,10 +1576,8 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          mkdir -p charts sums
-          helm package deploy/helm/titanium -d charts
-          helm package deploy/helm/titanium-gateway -d charts
-          helm package deploy/helm/titanium-manager -d charts
+          mkdir -p sums
+          test -n "$(ls charts/*.tgz)"
           gh release download "$TAG" -p SHA256SUMS -D sums
           chmod +x tools/packaging/append-chart-checksums.sh
           ./tools/packaging/append-chart-checksums.sh sums/SHA256SUMS charts

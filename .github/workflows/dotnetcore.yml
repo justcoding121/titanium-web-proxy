@@ -27,6 +27,16 @@ on:
         options:
           - beta
           - stable
+      evidence_override:
+        description: 'Break-glass: skip the release-dry-run tree guard. Requires a reason and opens an escaped-defect issue.'
+        required: false
+        type: boolean
+        default: false
+      evidence_override_reason:
+        description: 'Why the tree guard is being overridden'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -1115,10 +1125,19 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      issues: write
     steps:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0
+
+    - name: Require a green release-dry-run for this tree
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        EVIDENCE_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.evidence_override && 'true' || 'false' }}
+        EVIDENCE_OVERRIDE_REASON: ${{ github.event_name == 'workflow_dispatch' && inputs.evidence_override_reason || '' }}
+      run: ./tools/ci/assert-tree-evidence.ps1 -Commit $env:GITHUB_SHA -Live -EvidenceOverride $env:EVIDENCE_OVERRIDE -EvidenceOverrideReason $env:EVIDENCE_OVERRIDE_REASON
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
@@ -1187,16 +1206,34 @@ jobs:
           }
 
   cut-product-tag:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
+    if: |
+      always() && (
+        (
+          github.event_name == 'push' &&
+          (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable') &&
+          needs.merge-gate.result == 'success' &&
+          needs.rps-publish-gate.result == 'success' &&
+          needs.rps-peer-gate.result == 'success'
+        ) ||
+        (github.event_name == 'workflow_dispatch' && inputs.evidence_override == true)
+      )
     needs: [merge-gate, rps-publish-gate, rps-peer-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
       actions: write
+      issues: write
     steps:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0
+    - name: Require a green release-dry-run for this tree
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        EVIDENCE_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.evidence_override && 'true' || 'false' }}
+        EVIDENCE_OVERRIDE_REASON: ${{ github.event_name == 'workflow_dispatch' && inputs.evidence_override_reason || '' }}
+      run: ./tools/ci/assert-tree-evidence.ps1 -Commit $env:GITHUB_SHA -Live -EvidenceOverride $env:EVIDENCE_OVERRIDE -EvidenceOverrideReason $env:EVIDENCE_OVERRIDE_REASON
     - name: Create/move product tag and dispatch release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
