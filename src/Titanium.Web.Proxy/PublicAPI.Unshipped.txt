@@ -251,7 +251,8 @@ static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? win
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? winInetProxyOverride, bool proxyLoopback) -> string!
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(string? winInetProxyOverride) -> System.Collections.Generic.IReadOnlyList<string!>!
 Titanium.Web.Proxy.Http3.Http3NativeBootstrap
-static Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(string![]? args = null) -> void
+static Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(string![]? args = null) -> System.Collections.Generic.IReadOnlyList<string!>!
+static Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList<string!>! blockedPaths) -> string!
 Titanium.Web.Proxy.Http3.MacHttp3NativeArch
 const Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeArm64 = 16777228 -> int
 const Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeX64 = 16777223 -> int

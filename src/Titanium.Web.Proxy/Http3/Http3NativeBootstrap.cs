@@ -188,7 +188,7 @@ public static class Http3NativeBootstrap
     }
 
     /// <summary>Result of deleting leftover bundled OpenSSL next to MsQuic.</summary>
-    public readonly struct StaleOpenSslCleanupResult
+    internal readonly struct StaleOpenSslCleanupResult
     {
         public static StaleOpenSslCleanupResult Empty { get; } =
             new(0, Array.Empty<string>());
