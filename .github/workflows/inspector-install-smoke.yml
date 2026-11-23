@@ -383,6 +383,14 @@ jobs:
           sudo -n true
           networksetup -listallnetworkservices | tee /tmp/net-services.txt
           grep -v 'An asterisk' /tmp/net-services.txt | grep -q '[A-Za-z]'
+          # macos-15-intel is x86_64; macos-latest runners are arm64. Hardcoding
+          # osx-arm64 made the Intel dispatch leg fail with Bad CPU type.
+          if [[ "$(uname -m)" == "x86_64" ]]; then
+            RID=osx-x64
+          else
+            RID=osx-arm64
+          fi
+          echo "macOS install-smoke RID=${RID} arch=$(uname -m) matrix.os=${{ matrix.os }}"
           install_cask() {
             local cask="$1" i
             for i in 1 2 3; do
@@ -405,23 +413,23 @@ jobs:
           tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '.[] | select(.draft==false and .prerelease==false) | .tag_name' | grep -v "^v${ver}$" | head -1)
           echo "previous release ${tag}"
           mkdir -p artifacts/prev artifacts/candidate
-          gh release download "$tag" --pattern 'TitaniumInspector-osx-arm64.dmg' --dir artifacts/prev --clobber
-          out=artifacts/inspector/osx-arm64
-          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r osx-arm64 --self-contained true -o "$out" -p:Version="$ver"
+          gh release download "$tag" --pattern "TitaniumInspector-${RID}.dmg" --dir artifacts/prev --clobber
+          out="artifacts/inspector/${RID}"
+          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r "$RID" --self-contained true -o "$out" -p:Version="$ver"
           cp -f src/Titanium.Inspector/Assets/app.ico tools/packaging/icons/AppIcon.icns "$out/"
           chmod +x tools/packaging/osx/build-app-bundle.sh tools/packaging/osx/build-dmg.sh
           ./tools/packaging/osx/build-app-bundle.sh "$out" "TitaniumInspector.app" "$ver"
           echo "ad-hoc codesign applied so Gatekeeper can launch the unsigned bundle"
           codesign --force --deep -s - "TitaniumInspector.app"
-          ./tools/packaging/osx/build-dmg.sh "TitaniumInspector.app" "artifacts/candidate/TitaniumInspector-osx-arm64.dmg" "Titanium Inspector"
+          ./tools/packaging/osx/build-dmg.sh "TitaniumInspector.app" "artifacts/candidate/TitaniumInspector-${RID}.dmg" "Titanium Inspector"
           dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
           driver="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke"
           chmod +x "$driver"
           # Publish the CLI before any system proxy is turned on. A later publish
           # goes through the Inspector listener and NuGet gets "connection refused".
-          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r osx-arm64 --self-contained true -o artifacts/cli/osx-arm64
-          rm -f artifacts/Titanium.Cli-osx-arm64.zip
-          (cd artifacts/cli/osx-arm64 && zip -qr ../../Titanium.Cli-osx-arm64.zip .)
+          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r "$RID" --self-contained true -o "artifacts/cli/${RID}"
+          rm -f "artifacts/Titanium.Cli-${RID}.zip"
+          (cd "artifacts/cli/${RID}" && zip -qr "../../Titanium.Cli-${RID}.zip" .)
           installed="/Applications/Titanium Inspector.app/Contents/MacOS/TitaniumInspector"
           log="${RUNNER_TEMP}/install-smoke"
           mkdir -p "$log" "$log/screenshots"
@@ -472,13 +480,13 @@ jobs:
             echo "driver-exit ${code} $*" | tee -a "$log/driver.log"
             return "${code}"
           }
-          attach artifacts/prev/TitaniumInspector-osx-arm64.dmg
+          attach "artifacts/prev/TitaniumInspector-${RID}.dmg"
           prev_app="$(app_bundle)"
           ditto "${prev_app}" "/Applications/Titanium Inspector.app"
           detach
           trap - EXIT
           run_driver upgrade-seed --exe "$installed" --browsers firefox --out "$log"
-          attach artifacts/candidate/TitaniumInspector-osx-arm64.dmg
+          attach "artifacts/candidate/TitaniumInspector-${RID}.dmg"
           trap detach EXIT
           cand_app="$(app_bundle)"
           ditto "${cand_app}" "/Applications/Titanium Inspector.app"
@@ -580,9 +588,9 @@ jobs:
             echo "cli-layout begin"
             rm -rf "${RUNNER_TEMP}/cli-install"
             mkdir -p "${RUNNER_TEMP}/cli-install"
-            unzip -q artifacts/Titanium.Cli-osx-arm64.zip -d "${RUNNER_TEMP}/cli-install"
+            unzip -q "artifacts/Titanium.Cli-${RID}.zip" -d "${RUNNER_TEMP}/cli-install"
             ls -la "${RUNNER_TEMP}/cli-install"
-            # Unsigned arm64 binaries are killed. Ad-hoc sign, same as the app bundle.
+            # Unsigned binaries are killed on Apple Silicon. Ad-hoc sign, same as the app bundle.
             codesign --force --sign - "${RUNNER_TEMP}/cli-install/titanium"
             chmod +x "${RUNNER_TEMP}/cli-install/titanium"
             echo "cli-layout done"
