@@ -19,15 +19,15 @@ case "$base" in
     fi
     ;;
   *.deb)
-    sudo dpkg -i "$pkg" || sudo apt-get install -y -f
+    sudo dpkg -i "$pkg" >&2 || sudo apt-get install -y -f >&2
     test -x /opt/titanium-cli/titanium
     echo /opt/titanium-cli/titanium
     ;;
   *.rpm)
     if command -v dnf >/dev/null 2>&1; then
-      sudo dnf install -y "$pkg"
+      sudo dnf install -y "$pkg" >&2
     else
-      sudo rpm -Uvh "$pkg"
+      sudo rpm -Uvh "$pkg" >&2
     fi
     test -x /opt/titanium-cli/titanium
     echo /opt/titanium-cli/titanium

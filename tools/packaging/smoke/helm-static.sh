@@ -33,7 +33,12 @@ helm package deploy/helm/titanium-gateway -d "$out"
 helm package deploy/helm/titanium-manager -d "$out"
 
 for tgz in "$out"/*.tgz; do
-  app="$(tar -xOf "$tgz" "*/Chart.yaml" | awk '/^appVersion:/ { gsub(/"/, "", $2); print $2; exit }')"
+  member="$(tar -tf "$tgz" | awk '/\/Chart.yaml$/ { print; exit }')"
+  if [[ -z "$member" ]]; then
+    echo "ASSERT: $tgz has no Chart.yaml" >&2
+    exit 1
+  fi
+  app="$(tar -xOf "$tgz" "$member" | awk '/^appVersion:/ { gsub(/"/, "", $2); print $2; exit }')"
   if [[ "$app" != "$prefix" && "$app" != "$version" ]]; then
     echo "ASSERT: $(basename "$tgz") appVersion '$app' != release $version" >&2
     exit 1
