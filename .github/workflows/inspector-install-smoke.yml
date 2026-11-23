@@ -36,6 +36,7 @@ jobs:
         # macos-15-intel and ubuntu-24.04-arm are not required checks until five
         # consecutive greens. The three original legs stay required.
         os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest","macos-15-intel","ubuntu-24.04-arm"]') }}
+    continue-on-error: ${{ matrix.os == 'macos-15-intel' || matrix.os == 'ubuntu-24.04-arm' }}
     steps:
       - name: Screenshot folder
         shell: bash
