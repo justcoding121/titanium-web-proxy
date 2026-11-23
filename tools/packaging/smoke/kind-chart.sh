@@ -41,6 +41,13 @@ preload_published() {
   kind load docker-image "$ref" --name "$cluster"
 }
 
+dump_failed_install() {
+  echo "helm install failed; cluster snapshot:" >&2
+  kubectl get pods -A -o wide >&2 || true
+  kubectl get svc -A >&2 || true
+  kubectl get events -A --sort-by=.lastTimestamp >&2 | tail -n 40 || true
+}
+
 case "$which" in
   titanium)
     cluster=twp
@@ -113,23 +120,32 @@ if [[ "$which" == "gateway" ]]; then
     kubectl -n "$app_ns" expose deployment backend --port=80
   fi
   kubectl -n "$app_ns" rollout status deployment/backend --timeout=120s
-  args=(--namespace "$ns" --create-namespace -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" --wait --timeout 8m)
+  # kind-values.yaml is the conformance file: LoadBalancer plus MetalLB. This cluster has no
+  # load balancer, and helm --wait blocks until a LoadBalancer address exists. The proof below
+  # port-forwards the data-plane Service, which ClusterIP satisfies. Programmed still becomes True.
+  args=(--namespace "$ns" --create-namespace -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" --wait --timeout 8m --set dataPlane.service.type=ClusterIP)
   if [[ "$source_mode" == "release-tag" ]]; then
     preload_published "ghcr.io/justcoding121/titanium-gateway:${version}"
     preload_published "ghcr.io/justcoding121/titanium-web-proxy:${version}"
-    helm install "$rel" "oci://ghcr.io/justcoding121/charts/titanium-gateway" --version "$chart_version" "${args[@]}" \
+    if ! helm install "$rel" "oci://ghcr.io/justcoding121/charts/titanium-gateway" --version "$chart_version" "${args[@]}" \
       --set controller.image.repository=ghcr.io/justcoding121/titanium-gateway \
       --set controller.image.tag="$version" \
       --set controller.image.pullPolicy=IfNotPresent \
       --set dataPlane.image.repository=ghcr.io/justcoding121/titanium-web-proxy \
       --set dataPlane.image.tag="$version" \
-      --set dataPlane.image.pullPolicy=IfNotPresent
+      --set dataPlane.image.pullPolicy=IfNotPresent; then
+      dump_failed_install
+      exit 1
+    fi
   else
     load_local proxy titanium-web-proxy:ci
     load_local gateway titanium-gateway:ci
     kind load docker-image titanium-web-proxy:ci titanium-gateway:ci --name "$cluster"
     tgz="$(ls "$charts_dir"/titanium-gateway-*.tgz | head -1)"
-    helm install "$rel" "$tgz" "${args[@]}"
+    if ! helm install "$rel" "$tgz" "${args[@]}"; then
+      dump_failed_install
+      exit 1
+    fi
   fi
   kubectl -n "$ns" wait gatewayclass/titanium --for=condition=Accepted --timeout=120s
   cat <<'YAML' | kubectl apply -f -
