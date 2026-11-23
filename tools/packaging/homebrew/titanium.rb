@@ -12,6 +12,7 @@ class Titanium < Formula
   homepage "https://github.com/justcoding121/titanium-web-proxy"
   version "8.0.7-beta"
   license "MIT"
+  depends_on :macos
 
   on_macos do
     on_arm do
