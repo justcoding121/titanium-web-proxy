@@ -182,7 +182,8 @@ jobs:
     timeout-minutes: 50
     continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
     concurrency:
-      group: product-smoke-macos-15-${{ github.repository }}
+      # Per workflow+ref so a schedule smoke cannot hold the slot while a release-dry-run waits for a runner.
+      group: product-smoke-macos-15-${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
@@ -234,7 +235,7 @@ jobs:
     timeout-minutes: 50
     continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
     concurrency:
-      group: product-smoke-macos-15-intel-${{ github.repository }}
+      group: product-smoke-macos-15-intel-${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
