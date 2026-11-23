@@ -1,0 +1,91 @@
+name: release-dry-run
+
+# Required on pull requests into beta and stable. Builds, signs, notarizes, and
+# smokes the PR merge commit without publishing. Forks fail closed so signing
+# secrets never leave this repository.
+
+on:
+  pull_request:
+    branches: [beta, stable]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'stable or beta'
+        required: true
+        type: choice
+        default: beta
+        options:
+          - beta
+          - stable
+
+permissions:
+  actions: write
+  contents: write
+  id-token: write
+  issues: write
+  packages: write
+  security-events: write
+
+concurrency:
+  group: release-dry-run-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  call:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      actions: write
+      contents: write
+      id-token: write
+      issues: write
+      packages: write
+      security-events: write
+    uses: ./.github/workflows/release.yml
+    with:
+      channel: ${{ github.event_name == 'workflow_dispatch' && inputs.channel || (github.base_ref == 'stable' && 'stable' || 'beta') }}
+      dry_run: true
+    secrets: inherit
+
+  release-dry-run:
+    name: release-dry-run
+    needs: call
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Fork pull requests do not receive signing secrets
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::release-dry-run refuses fork pull requests"
+          exit 1
+      - name: Called release workflow
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          set -euo pipefail
+          if [[ "${{ needs.call.result }}" != "success" ]]; then
+            echo "::error::release dry-run finished as ${{ needs.call.result }}"
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          fetch-depth: 0
+      - name: Record the tested tree
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          set -euo pipefail
+          git rev-parse "HEAD^{tree}" | tee tree.txt
+          {
+            echo "### release-dry-run tree"
+            echo '```'
+            cat tree.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          name: release-dry-run-tree
+          path: tree.txt
+          if-no-files-found: error

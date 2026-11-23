@@ -17,7 +17,13 @@ internal static class Program
         PrivilegePrompt.TryAttachParentConsole();
 
         // Framework-dependent macOS Debug: make app-local libmsquic visible to QuicListener.
-        Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
+        // On Linux, leftover root-owned OpenSSL beside MsQuic must stop before MsQuic loads.
+        var blockedOpenSsl = Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
+        if (blockedOpenSsl.Count > 0)
+        {
+            AsyncConsole.WriteError(Http3NativeBootstrap.FormatBlockedOpenSslMessage(blockedOpenSsl));
+            return 1;
+        }
 
         // Before any configuration is loaded, so kind: lua / kind: wasm plugins resolve. Registration is lazy: no native
         // library loads until a configuration names a script kind.

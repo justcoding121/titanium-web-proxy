@@ -1,7 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http3;
 
@@ -21,7 +26,14 @@ internal static class Program
 
         // Framework-dependent macOS Debug: System.Net.Quic does not search BaseDirectory for
         // libmsquic; relaunch with DYLD_FALLBACK when natives were copied beside the apphost.
-        Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
+        // On Linux, leftover root-owned OpenSSL beside MsQuic must stop before MsQuic loads.
+        var blockedOpenSsl = Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
+        if (blockedOpenSsl.Count > 0)
+        {
+            ShowBlockedOpenSslAndExit(args, blockedOpenSsl);
+            return;
+        }
+
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
@@ -36,6 +48,52 @@ internal static class Program
                 ex.Message);
             Console.Error.WriteLine(
                 "Start it from the desktop session so it can use the existing display.");
+            Environment.ExitCode = 1;
+        }
+    }
+
+    private static void ShowBlockedOpenSslAndExit(string[] args, IReadOnlyList<string> blockedPaths)
+    {
+        var message = Http3NativeBootstrap.FormatBlockedOpenSslMessage(blockedPaths);
+        Environment.SetEnvironmentVariable("TITANIUM_INSPECTOR_SKIP_AUTO_MAINWINDOW", "1");
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, desktop =>
+            {
+                var text = new TextBlock
+                {
+                    Text = message,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(16),
+                };
+                var ok = new Button
+                {
+                    Content = "OK",
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Margin = new Thickness(16),
+                    MinWidth = 88,
+                };
+                var root = new DockPanel();
+                DockPanel.SetDock(ok, Dock.Bottom);
+                root.Children.Add(ok);
+                root.Children.Add(text);
+                var window = new Window
+                {
+                    Title = "Titanium Inspector",
+                    Width = 560,
+                    Height = 320,
+                    CanResize = false,
+                    Content = root,
+                };
+                ok.Click += (_, _) => window.Close();
+                window.Closed += (_, _) => desktop.Shutdown(1);
+                desktop.MainWindow = window;
+            });
+            Environment.ExitCode = 1;
+        }
+        catch (Exception ex) when (IsXOpenDisplayFailure(ex))
+        {
+            Console.Error.WriteLine(message);
             Environment.ExitCode = 1;
         }
     }

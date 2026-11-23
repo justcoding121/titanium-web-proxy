@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Install a CLI package. Prints the titanium binary path.
+# Usage: install-cli.sh <package> <dest-dir>
+set -euo pipefail
+pkg="${1:?package}"
+dest="${2:?dest}"
+mkdir -p "$dest"
+base="$(basename "$pkg")"
+# Callers capture stdout as the binary path. Installer chatter stays on stderr.
+exec 3>&1
+exec 1>&2
+case "$base" in
+  *.zip)
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    unzip -q "$pkg" -d "$dest"
+    if [[ -f "$dest/titanium.exe" ]]; then
+      echo "$dest/titanium.exe" >&3
+    else
+      chmod +x "$dest/titanium"
+      echo "$dest/titanium" >&3
+    fi
+    ;;
+  *.deb)
+    sudo dpkg -i "$pkg" >&2 || sudo apt-get install -y -f >&2
+    test -x /opt/titanium-cli/titanium
+    echo /opt/titanium-cli/titanium >&3
+    ;;
+  *.rpm)
+    if command -v dnf >/dev/null 2>&1; then
+      sudo dnf install -y "$pkg" >&2
+    else
+      sudo rpm -Uvh "$pkg" >&2
+    fi
+    test -x /opt/titanium-cli/titanium
+    echo /opt/titanium-cli/titanium >&3
+    ;;
+  *.AppImage)
+    chmod +x "$pkg"
+    export APPIMAGE_EXTRACT_AND_RUN=1
+    work="$dest/extract"
+    rm -rf "$work"
+    mkdir -p "$work"
+    pkg="$(cd "$(dirname "$pkg")" && pwd)/$(basename "$pkg")"
+    (cd "$work" && "$pkg" --appimage-extract >/dev/null)
+    bin="$work/squashfs-root/usr/bin/titanium"
+    if [[ ! -f "$bin" ]]; then bin="$work/squashfs-root/titanium"; fi
+    test -x "$bin" || chmod +x "$bin"
+    "$bin" version
+    echo "$bin" >&3
+    ;;
+  *)
+    echo "ASSERT: unsupported cli package $base" >&2
+    exit 1
+    ;;
+esac
