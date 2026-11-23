@@ -38,7 +38,8 @@ for tgz in "$out"/*.tgz; do
     echo "ASSERT: $tgz has no Chart.yaml" >&2
     exit 1
   fi
-  app="$(tar -xOf "$tgz" "$member" | awk '/^appVersion:/ { gsub(/"/, "", $2); print $2; exit }')"
+  chart="$(tar -xOf "$tgz" "$member")"
+  app="$(printf '%s\n' "$chart" | awk '/^appVersion:/ { gsub(/"/, "", $2); print $2; exit }')"
   if [[ "$app" != "$prefix" && "$app" != "$version" ]]; then
     echo "ASSERT: $(basename "$tgz") appVersion '$app' != release $version" >&2
     exit 1

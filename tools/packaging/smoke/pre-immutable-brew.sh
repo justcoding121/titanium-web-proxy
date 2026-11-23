@@ -16,11 +16,13 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_ENV_HINTS=1
-brew audit --strict --formula "$formula"
 sha="$(sha256sum "$zip" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$zip" | awk '{print $1}')"
 abs="$(cd "$(dirname "$zip")" && pwd)/$(basename "$zip")"
 work="$(mktemp -d)"
-cat > "$work/titanium-smoke.rb" <<EOF
+tap="$work/homebrew-smoke"
+mkdir -p "$tap/Formula"
+cp "$formula" "$tap/Formula/titanium.rb"
+cat > "$tap/Formula/titanium-smoke.rb" <<EOF
 class TitaniumSmoke < Formula
   desc "Titanium Web Proxy CLI local smoke"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
@@ -37,5 +39,11 @@ class TitaniumSmoke < Formula
   end
 end
 EOF
-brew install --formula "$work/titanium-smoke.rb"
+git -C "$tap" init -q
+git -C "$tap" add Formula
+git -C "$tap" -c user.email=smoke@localhost -c user.name=smoke commit -qm smoke
+brew tap --force local/smoke "$tap"
+brew audit --strict --formula local/smoke/titanium
+brew install --formula local/smoke/titanium-smoke
+brew untap local/smoke
 echo "homebrew local install ok"
