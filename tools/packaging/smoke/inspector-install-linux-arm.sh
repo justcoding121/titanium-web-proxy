@@ -9,6 +9,13 @@ bash tools/packaging/smoke/install-required-browsers.sh
 ver=$(grep -oP '(?<=<VersionPrefix>)[^<]+' src/Titanium.Inspector/Titanium.Inspector.csproj)
 out=artifacts/inspector/linux-arm64
 dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r linux-arm64 --self-contained true -o "$out" -p:Version="$ver"
+clear_out="${RUNNER_TEMP}/titanium-inspector-clear-linux-arm64"
+mkdir -p "$clear_out"
+dotnet publish src/Titanium.Inspector.ClearProxy/Titanium.Inspector.ClearProxy.csproj \
+  -c Release -r linux-arm64 --self-contained true -p:PublishSingleFile=true \
+  -o "$clear_out" -p:Version="$ver"
+cp -f "$clear_out/titanium-inspector-clear" "$out/titanium-inspector-clear"
+chmod +x "$out/titanium-inspector-clear"
 cp -f src/Titanium.Inspector/Assets/app.ico tools/packaging/linux/TitaniumInspector.desktop.in tools/packaging/desktop-icons.sh "$out/"
 cp -f tools/packaging/icons/titanium-inspector.png tools/packaging/icons/titanium-inspector-*.png "$out/" || true
 chmod +x tools/packaging/linux/build-deb-rpm.sh
