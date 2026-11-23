@@ -19,9 +19,26 @@ if (Test-Path $sums) {
     if ($actual -ne $expected) { throw "ASSERT: checksum mismatch for $name" }
 }
 $log = Join-Path $LogDir 'msiexec.log'
-$p = Start-Process msiexec -ArgumentList "/i `"$Msi`" /qn /norestart /l*v `"$log`"" -PassThru
-if (-not $p.WaitForExit(480000)) { throw "msiexec timed out" }
-if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "msiexec exited $($p.ExitCode)" }
+Write-Host "install-inspector: msiexec /qn $Msi"
+# pwsh passes a single -ArgumentList string as one argv entry, so msiexec never
+# sees /qn and waits on a UI that the runner does not have. Pass each switch separately.
+# Poll HasExited: WaitForExit(int) did not return before the 50 minute job limit.
+$p = Start-Process -FilePath "$env:SystemRoot\System32\msiexec.exe" -ArgumentList @('/i', $Msi, '/qn', '/norestart', '/l*v', $log) -PassThru
+$deadline = (Get-Date).AddMinutes(8)
+while (-not $p.HasExited) {
+    if ((Get-Date) -gt $deadline) {
+        Write-Host "install-inspector: msiexec still running after 8 minutes"
+        if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 30 | ForEach-Object { Write-Host $_ } }
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        throw "msiexec timed out"
+    }
+    Start-Sleep -Seconds 10
+}
+Write-Host "install-inspector: msiexec exit $($p.ExitCode)"
+if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
+    if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 30 | ForEach-Object { Write-Host $_ } }
+    throw "msiexec exited $($p.ExitCode)"
+}
 $exe = Join-Path ${env:ProgramFiles} 'Titanium Inspector\TitaniumInspector.exe'
 if (-not (Test-Path $exe)) { throw "ASSERT: Inspector exe missing after install" }
 Write-Output $exe
