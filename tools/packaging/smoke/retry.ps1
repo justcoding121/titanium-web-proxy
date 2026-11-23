@@ -41,13 +41,21 @@ function Get-SmokeClass([string] $Text) {
 
 $attempt = 1
 while ($true) {
+    $logFile = Join-Path ([System.IO.Path]::GetTempPath()) ("smoke-retry-" + [guid]::NewGuid().ToString('n') + ".log")
     try {
-        $log = & $Command *>&1 | Out-String
+        # A pipe (`*>&1 | Out-String`) leaves Inspector holding the driver's stdout.
+        # The reader waits for that handle to close, so the job sits until it is cancelled.
+        # A file does not. Same pattern as retry.sh.
+        & $Command *> $logFile
         $code = $LASTEXITCODE
         if (-not $code) { $code = 0 }
+        $log = if (Test-Path -LiteralPath $logFile) { Get-Content -LiteralPath $logFile -Raw } else { '' }
+        if (-not $log) { $log = '' }
     } catch {
         $log = "$_"
         $code = 1
+    } finally {
+        Remove-Item -LiteralPath $logFile -Force -ErrorAction SilentlyContinue
     }
     Write-Host $log
     if ($code -eq 0) {
