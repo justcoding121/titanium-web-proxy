@@ -6,6 +6,9 @@ pkg="${1:?package}"
 log="${2:?log dir}"
 mkdir -p "$log"
 base="$(basename "$pkg")"
+# Callers capture stdout as the executable path. Checksums and Gatekeeper stay on stderr.
+exec 3>&1
+exec 1>&2
 
 verify_checksum() {
   local dir file sums
@@ -35,7 +38,7 @@ case "$base" in
   *.deb)
     sudo dpkg -i "$pkg" >&2 || sudo apt-get install -y -f >&2
     test -x /opt/titanium-inspector/TitaniumInspector
-    echo /opt/titanium-inspector/TitaniumInspector
+    echo /opt/titanium-inspector/TitaniumInspector >&3
     ;;
   *.rpm)
     if command -v dnf >/dev/null 2>&1; then
@@ -44,7 +47,7 @@ case "$base" in
       sudo rpm -Uvh "$pkg" >&2
     fi
     test -x /opt/titanium-inspector/TitaniumInspector
-    echo /opt/titanium-inspector/TitaniumInspector
+    echo /opt/titanium-inspector/TitaniumInspector >&3
     ;;
   *.dmg)
     # Quarantine matches a browser download so Gatekeeper runs the same checks a user gets.
@@ -68,7 +71,7 @@ case "$base" in
       echo "ASSERT: stapler did not validate the notarized app" >&2
       exit 1
     }
-    echo "$exe"
+    echo "$exe" >&3
     ;;
   *.AppImage)
     chmod +x "$pkg"
@@ -81,7 +84,7 @@ case "$base" in
     exe="$(find "$work/squashfs-root" -type f -name TitaniumInspector | head -1)"
     test -n "$exe"
     chmod +x "$exe"
-    echo "$exe"
+    echo "$exe" >&3
     ;;
   *.zip)
     dest="$log/musl"
@@ -91,7 +94,7 @@ case "$base" in
     exe="$(find "$dest" -type f -name TitaniumInspector | head -1)"
     test -n "$exe"
     chmod +x "$exe"
-    echo "$exe"
+    echo "$exe" >&3
     ;;
   *)
     echo "ASSERT: unsupported inspector package $base" >&2
