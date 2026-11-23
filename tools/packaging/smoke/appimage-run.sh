@@ -5,6 +5,7 @@
 set -euo pipefail
 img="${1:?appimage}"
 work="${2:?work}"
+img="$(cd "$(dirname "$img")" && pwd)/$(basename "$img")"
 chmod +x "$img"
 export APPIMAGE_EXTRACT_AND_RUN=1
 rm -rf "$work"

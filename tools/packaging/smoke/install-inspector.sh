@@ -76,6 +76,7 @@ case "$base" in
     work="$log/appimage"
     rm -rf "$work"
     mkdir -p "$work"
+    pkg="$(cd "$(dirname "$pkg")" && pwd)/$(basename "$pkg")"
     (cd "$work" && "$pkg" --appimage-extract >/dev/null)
     exe="$(find "$work/squashfs-root" -type f -name TitaniumInspector | head -1)"
     test -n "$exe"

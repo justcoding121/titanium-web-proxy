@@ -38,6 +38,7 @@ case "$base" in
     work="$dest/extract"
     rm -rf "$work"
     mkdir -p "$work"
+    pkg="$(cd "$(dirname "$pkg")" && pwd)/$(basename "$pkg")"
     (cd "$work" && "$pkg" --appimage-extract >/dev/null)
     bin="$work/squashfs-root/titanium"
     test -x "$bin" || chmod +x "$bin"
