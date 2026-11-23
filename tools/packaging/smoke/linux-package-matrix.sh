@@ -39,8 +39,10 @@ if cli_zip="$(first "${zips[@]}")"; then
   fi
 fi
 if cli_rpm="$(first "${rpms[@]}")"; then
-  docker run --rm -v "$(dirname "$cli_rpm"):/pkg" "fedora:41" \
-    bash -c "dnf install -y /pkg/$(basename "$cli_rpm") && titanium version"
+  stage="$(mktemp -d)"
+  cp -f "$cli_rpm" "$stage/"
+  docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
+    bash -c "dnf install -y '/pkg/$(basename "$cli_rpm")' && titanium version"
 fi
 if ins_deb="$(first "${idebs[@]}")"; then
   if [[ "$rid" == "linux-x64" ]]; then
@@ -56,8 +58,10 @@ if ins_deb="$(first "${idebs[@]}")"; then
   fi
 fi
 if ins_rpm="$(first "${irpms[@]}")"; then
-  docker run --rm -v "$(dirname "$ins_rpm"):/pkg" "fedora:41" \
-    bash -c "dnf install -y /pkg/$(basename "$ins_rpm") && test -x /opt/titanium-inspector/TitaniumInspector"
+  stage="$(mktemp -d)"
+  cp -f "$ins_rpm" "$stage/"
+  docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
+    bash -c "dnf install -y '/pkg/$(basename "$ins_rpm")' && test -x /opt/titanium-inspector/TitaniumInspector"
 fi
 if ins_zip="$(first "${izips[@]}")"; then
   if [[ "$rid" == linux-musl-* ]]; then
