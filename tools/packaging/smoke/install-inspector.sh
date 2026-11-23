@@ -33,15 +33,15 @@ verify_checksum
 
 case "$base" in
   *.deb)
-    sudo dpkg -i "$pkg" || sudo apt-get install -y -f
+    sudo dpkg -i "$pkg" >&2 || sudo apt-get install -y -f >&2
     test -x /opt/titanium-inspector/TitaniumInspector
     echo /opt/titanium-inspector/TitaniumInspector
     ;;
   *.rpm)
     if command -v dnf >/dev/null 2>&1; then
-      sudo dnf install -y "$pkg"
+      sudo dnf install -y "$pkg" >&2
     else
-      sudo rpm -Uvh "$pkg"
+      sudo rpm -Uvh "$pkg" >&2
     fi
     test -x /opt/titanium-inspector/TitaniumInspector
     echo /opt/titanium-inspector/TitaniumInspector
@@ -49,7 +49,8 @@ case "$base" in
   *.dmg)
     # Quarantine matches a browser download so Gatekeeper runs the same checks a user gets.
     xattr -w com.apple.quarantine "0083;$(date +%s);Safari;$(uuidgen)" "$pkg" || true
-    mount="$(hdiutil attach "$pkg" -nobrowse | awk '/\/Volumes\// { print $3 }' | tail -1)"
+    # Volume names contain spaces ("Titanium Inspector"). Field 3 stops at the space.
+    mount="$(hdiutil attach "$pkg" -nobrowse | sed -n 's/^.*\(\/Volumes\/.*\)$/\1/p' | tail -1)"
     if [[ -z "${mount:-}" ]]; then
       echo "ASSERT: hdiutil did not mount $pkg" >&2
       exit 1
