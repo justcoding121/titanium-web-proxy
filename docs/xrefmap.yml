@@ -5576,6 +5576,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible
   nameWithType: Http3NativeBootstrap.EnsureAppLocalMsQuicVisible
+- uid: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList{System.String})
+  name: FormatBlockedOpenSslMessage(IReadOnlyList<string>)
+  href: api/Titanium.Web.Proxy.Http3.Http3NativeBootstrap.html#Titanium_Web_Proxy_Http3_Http3NativeBootstrap_FormatBlockedOpenSslMessage_System_Collections_Generic_IReadOnlyList_System_String__
+  commentId: M:Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList{System.String})
+  name.vb: FormatBlockedOpenSslMessage(IReadOnlyList(Of String))
+  fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList<string>)
+  fullName.vb: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList(Of String))
+  nameWithType: Http3NativeBootstrap.FormatBlockedOpenSslMessage(IReadOnlyList<string>)
+  nameWithType.vb: Http3NativeBootstrap.FormatBlockedOpenSslMessage(IReadOnlyList(Of String))
+- uid: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage*
+  name: FormatBlockedOpenSslMessage
+  href: api/Titanium.Web.Proxy.Http3.Http3NativeBootstrap.html#Titanium_Web_Proxy_Http3_Http3NativeBootstrap_FormatBlockedOpenSslMessage_
+  commentId: Overload:Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage
+  nameWithType: Http3NativeBootstrap.FormatBlockedOpenSslMessage
 - uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch
   name: MacHttp3NativeArch
   href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html
