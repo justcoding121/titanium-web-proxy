@@ -583,8 +583,19 @@ internal static class SmokeApp
         });
         if (proc is null)
             return pids;
-        var output = proc.StandardOutput.ReadToEnd();
-        proc.WaitForExit(15000);
+        // Read both pipes before waiting. ReadToEnd on stdout alone never returns when
+        // powershell fills the unread stderr buffer, and the 15s limit is never reached.
+        var stdout = proc.StandardOutput.ReadToEndAsync();
+        var stderr = proc.StandardError.ReadToEndAsync();
+        if (!proc.WaitForExit(20000))
+        {
+            try { proc.Kill(entireProcessTree: true); } catch { /* already gone */ }
+            return pids;
+        }
+
+        proc.WaitForExit();
+        var output = stdout.GetAwaiter().GetResult();
+        _ = stderr.GetAwaiter().GetResult();
         foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
         {
             if (int.TryParse(line.Trim(), out var pid))
