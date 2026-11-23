@@ -7,7 +7,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 spec:
   minAvailable: 1
@@ -25,7 +25,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 spec:
   maxUnavailable: 1
@@ -45,7 +45,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -60,7 +60,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -75,7 +75,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -92,7 +92,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 type: Opaque
 data:
@@ -106,7 +106,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -125,7 +125,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 rules:
   - apiGroups: ["gateway.networking.k8s.io"]
@@ -164,7 +164,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -183,7 +183,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 rules:
   # Leader election.
@@ -222,7 +222,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -242,7 +242,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -271,7 +271,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -288,7 +288,7 @@ spec:
       labels:
         helm.sh/chart: titanium-gateway-1.0.7
         app.kubernetes.io/part-of: titanium-gateway
-        app.kubernetes.io/version: "8.0.7"
+        app.kubernetes.io/version: "8.0.8"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: titanium-gateway
         app.kubernetes.io/instance: rel
@@ -306,7 +306,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: controller
-          image: "ghcr.io/justcoding121/titanium-gateway:8.0.7"
+          image: "ghcr.io/justcoding121/titanium-gateway:8.0.8"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -395,7 +395,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -417,7 +417,7 @@ spec:
       labels:
         helm.sh/chart: titanium-gateway-1.0.7
         app.kubernetes.io/part-of: titanium-gateway
-        app.kubernetes.io/version: "8.0.7"
+        app.kubernetes.io/version: "8.0.8"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: titanium-gateway
         app.kubernetes.io/instance: rel
@@ -436,7 +436,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: titanium
-          image: "ghcr.io/justcoding121/titanium-web-proxy:8.0.7"
+          image: "ghcr.io/justcoding121/titanium-web-proxy:8.0.8"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -520,7 +520,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 spec:
   controller: titanium.io/ingress-controller
@@ -533,7 +533,7 @@ metadata:
   labels:
     helm.sh/chart: titanium-gateway-1.0.7
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.7"
+    app.kubernetes.io/version: "8.0.8"
     app.kubernetes.io/managed-by: Helm
 spec:
   controllerName: titaniumproxy.com/gateway-controller
