@@ -170,3 +170,27 @@ entries:
     status: covered
     test: .github/workflows/inspector-install-smoke.yml
     job: install-smoke
+
+  - id: inspector-update-under-decrypt
+    capability: Inspector startup update check under Decrypt HTTPS + system proxy (loopback bypass)
+    status: covered
+    test: InspectorInstallSmoke update-under-decrypt (advisory until three clean runs)
+    job: install-smoke
+
+  - id: inspector-uninstall-proxy-clear
+    capability: Uninstall while capturing clears loopback system proxy (MSI / deb / uninstall-app.sh)
+    status: covered
+    test: .github/workflows/inspector-install-smoke.yml
+    job: install-smoke
+
+  - id: cli-update-ignores-proxy
+    capability: CLI and Plus update bypass loopback HTTPS_PROXY
+    status: covered
+    test: tools/packaging/smoke/cli-update-ignores-proxy.sh
+    job: release-smoke
+
+  - id: cli-upgrade-from-published
+    capability: Published stable CLI upgrades to candidate zip via local feed
+    status: covered
+    test: tools/packaging/smoke/cli-upgrade-from-published.sh
+    job: release-smoke

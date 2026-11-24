@@ -157,6 +157,9 @@ jobs:
                 ;;
               *.md)
                 case "$f" in
+                  tools/packaging/*)
+                    # Packaging docs alone must not force the full code matrix.
+                    ;;
                   */*) code=true ;;
                 esac
                 continue
