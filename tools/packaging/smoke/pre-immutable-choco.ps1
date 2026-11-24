@@ -58,6 +58,12 @@ try {
 }
 finally {
     if ($listener -and -not $listener.HasExited) { Stop-Process -Id $listener.Id -Force -ErrorAction SilentlyContinue }
-    choco uninstall titanium-cli titanium-inspector -y --no-progress 2>$null
+    choco uninstall titanium-cli titanium-inspector -y --no-progress
+    if ($LASTEXITCODE -ne 0) { throw "ASSERT: choco uninstall failed exit $LASTEXITCODE" }
+    foreach ($pkg in @('titanium-cli', 'titanium-inspector')) {
+        $hit = choco list $pkg --local-only --limit-output -r 2>$null
+        if ($hit) { throw "ASSERT: $pkg still installed after choco uninstall" }
+    }
+    Write-Host 'chocolatey uninstall ok'
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
 }

@@ -36,7 +36,7 @@ public sealed class MapRemoteRuleDto
 
 public sealed class InspectorSettings
 {
-    public bool CheckForUpdatesOnStartup { get; set; }
+    public bool CheckForUpdatesOnStartup { get; set; } = true;
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
     public string UpdateChannel { get; set; } = "Stable";
 

@@ -4,6 +4,7 @@
 # Covers fresh, upgrade (when a previous arm64 deb exists), uninstall, and
 # advisory update-under-decrypt.
 set -euo pipefail
+chmod +x tools/packaging/smoke/*.sh 2>/dev/null || true
 sudo apt-get update
 sudo apt-get install -y xvfb xdotool libnss3-tools curl ca-certificates wget gnupg rsync imagemagick libnuma1
 export BROWSERS=required
@@ -23,6 +24,8 @@ cp -f tools/packaging/icons/titanium-inspector.png tools/packaging/icons/titaniu
 chmod +x tools/packaging/linux/build-deb-rpm.sh
 ./tools/packaging/linux/build-deb-rpm.sh inspector "$out" artifacts/candidate "$ver" linux-arm64
 cand="$(ls artifacts/candidate/TitaniumInspector-linux-arm64.deb)"
+cand_ver="$(dpkg-deb -f "$cand" Version)"
+export LIFECYCLE_PROOF="${LIFECYCLE_PROOF:-${RUNNER_TEMP}/lifecycle-proof-install-smoke-arm.json}"
 
 # Prefer a previous published arm64 deb when available for upgrade coverage.
 mkdir -p artifacts/prev
@@ -50,10 +53,13 @@ run_driver() {
 }
 
 if [[ -n "$prev" ]]; then
+  prev_ver="$(dpkg-deb -f "$prev" Version)"
   sudo dpkg -i "$prev" || sudo apt-get install -y -f
   run_driver upgrade-seed --exe /opt/titanium-inspector/TitaniumInspector --browsers firefox --out "$log" || true
   sudo dpkg -i "$cand" || sudo apt-get install -y -f
+  test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
   run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,firefox --out "$log" || true
+  test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
   sudo dpkg -r titanium-inspector || true
   if command -v gsettings >/dev/null; then
     mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null || true)"
@@ -63,6 +69,10 @@ if [[ -n "$prev" ]]; then
       exit 1
     fi
   fi
+  bash tools/packaging/smoke/append-lifecycle-proof.sh "$LIFECYCLE_PROOF" inspector linux-arm64 deb upgrade \
+    "$prev_ver" "$cand_ver" "$cand_ver" false
+  bash tools/packaging/smoke/append-lifecycle-proof.sh "$LIFECYCLE_PROOF" inspector linux-arm64 deb uninstall \
+    "$prev_ver" "$cand_ver" "" true
   echo "pass linux-arm64 upgrade+uninstall"
 fi
 
@@ -73,6 +83,15 @@ if run_driver update-under-decrypt --exe /opt/titanium-inspector/TitaniumInspect
   echo "update-under-decrypt=pass" | tee -a "$log/advisory.txt"
 else
   echo "update-under-decrypt=fail (advisory)" | tee -a "$log/advisory.txt"
+fi
+if [[ -f "$cand" ]]; then
+  if run_driver in-app-apply --exe /opt/titanium-inspector/TitaniumInspector --package "$cand" --out "$log"; then
+    echo "in-app-apply=pass" | tee -a "$log/advisory.txt"
+  else
+    echo "in-app-apply=fail (advisory)" | tee -a "$log/advisory.txt"
+  fi
+else
+  echo "in-app-apply=skip (advisory)" | tee -a "$log/advisory.txt"
 fi
 dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r linux-arm64 --self-contained true -o artifacts/cli/linux-arm64
 ./tools/packaging/linux/build-deb-rpm.sh cli artifacts/cli/linux-arm64 artifacts/candidate "$ver" linux-arm64

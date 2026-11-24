@@ -192,6 +192,26 @@ public class PlusBundleApplyEdgeBehaviorTests
         Assert.IsTrue(File.Exists(Path.Combine(_install, "Titanium.Plus.files")));
     }
 
+    // Bug class: a Plus bundle upgrade leaves satellites on disk that are no longer in Titanium.Plus.files.
+    [TestMethod]
+    public void BundleUpgrade_RemovesFilesDroppedFromTheFileList()
+    {
+        var zipA = WriteZip(
+            ("Titanium.Plus.dll", "a"),
+            ("Titanium.Xds.NOTICE", "notice"),
+            ("Titanium.Plus.files", "Titanium.Plus.dll\nTitanium.Xds.NOTICE\nTitanium.Plus.files\n"));
+        Assert.AreEqual(0, UpdateCommand.ApplyPlusBundleZip(zipA, _install));
+
+        var zipB = WriteZip(
+            ("Titanium.Plus.dll", "b"),
+            ("smoke-plus-upgrade.marker", "x"),
+            ("Titanium.Plus.files", "Titanium.Plus.dll\nsmoke-plus-upgrade.marker\nTitanium.Plus.files\n"));
+        Assert.AreEqual(0, UpdateCommand.ApplyPlusBundleZip(zipB, _install));
+
+        Assert.IsFalse(File.Exists(Path.Combine(_install, "Titanium.Xds.NOTICE")));
+        Assert.IsTrue(File.Exists(Path.Combine(_install, "smoke-plus-upgrade.marker")));
+    }
+
     // Bug class: a nested path in the zip is extracted outside the stage directory (zip slip).
     [TestMethod]
     public async Task BundleEntryWithATraversalPath_IsRejectedAndNothingEscapes()

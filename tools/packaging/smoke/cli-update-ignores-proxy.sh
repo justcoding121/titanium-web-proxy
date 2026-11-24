@@ -222,6 +222,30 @@ if [[ "$update_rc" -ne 0 ]]; then
   exit 1
 fi
 
+assert_version_applied() {
+  local target="$1"
+  local tries=0
+  while [[ "$tries" -lt 90 ]]; do
+    tries=$((tries + 1))
+    if [[ -f "$identity_dir/installed-release.json" ]] \
+      && grep -qF "$target" "$identity_dir/installed-release.json" 2>/dev/null; then
+      return 0
+    fi
+    if "$bin" version 2>/dev/null | grep -qF "$target"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ASSERT: installed identity did not advance to $target after update" >&2
+  "$bin" version >&2 || true
+  cat "$identity_dir/installed-release.json" >&2 2>/dev/null || true
+  return 1
+}
+
+if [[ "$plus" -eq 0 ]]; then
+  assert_version_applied "$version"
+fi
+
 hit_count="$(tr -d ' \r\n' <"$hits" 2>/dev/null || echo 0)"
 hit_count="${hit_count:-0}"
 if [[ "$hit_count" != "0" ]]; then
@@ -232,5 +256,5 @@ fi
 if [[ "$plus" -eq 1 ]]; then
   echo "plus update ignored loopback proxy ok (hits=0 version=$version)"
 else
-  echo "cli update ignored loopback proxy ok (hits=0 version=$version)"
+  echo "cli update ignored loopback proxy ok (hits=0 version=$version identity=$version)"
 fi
