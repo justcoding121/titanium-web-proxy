@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Rewrite version and all four sha256 lines in the Homebrew formula from a
-# release SHA256SUMS file. Edits the formula in place.
+# Rewrite formula URL version segments, sha256 digests, and the optional
+# version stanza from a release SHA256SUMS file. Edits the formula in place.
+# Stable (X.Y.Z): no version stanza; URLs use literal /vX.Y.Z/.
+# Prerelease (contains '-'): keep/insert version "…"; URLs use /vX.Y.Z-suffix/.
 # Usage: bump-formula-from-sums.sh <version> <SHA256SUMS> [formula.rb]
 #        bump-formula-from-sums.sh --self-test
 set -euo pipefail
@@ -21,10 +23,17 @@ eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee  other.zip
 EOF
   bash "$root/bump-formula-from-sums.sh" "9.9.9-beta" "$tmp/SHA256SUMS" "$formula"
   grep -q 'version "9.9.9-beta"' "$formula"
+  grep -q '/v9.9.9-beta/Titanium.Cli-osx-arm64.zip' "$formula"
   grep -q 'sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' "$formula"
   grep -q 'sha256 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' "$formula"
   grep -q 'sha256 "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"' "$formula"
   grep -q 'sha256 "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"' "$formula"
+  bash "$root/bump-formula-from-sums.sh" "9.9.9" "$tmp/SHA256SUMS" "$formula"
+  if grep -qE '^\s*version\s+"' "$formula"; then
+    echo "ASSERT: stable bump left a version stanza" >&2
+    exit 1
+  fi
+  grep -q '/v9.9.9/Titanium.Cli-linux-x64.zip' "$formula"
   echo "bump-formula-from-sums self-test ok"
 }
 
@@ -71,7 +80,42 @@ import sys
 path = Path(sys.argv[1])
 version, arm_osx, x64_osx, arm_linux, x64_linux = sys.argv[2:7]
 text = path.read_text(encoding="utf-8")
-text = re.sub(r'version\s+"[^"]+"', f'version "{version}"', text, count=1)
+prerelease = "-" in version
+
+# Rewrite /v…/ in every download URL (literal or #{version}).
+text, n_url = re.subn(
+    r'(releases/download/)v[^/"]+',
+    rf"\g<1>v{version}",
+    text,
+)
+if n_url < 4:
+    raise SystemExit(f"expected at least 4 download URLs to rewrite, got {n_url}")
+
+# Drop any existing version stanza; re-add only for prerelease.
+text = re.sub(r'^[ \t]*version\s+"[^"]+"\s*\n', "", text, flags=re.M)
+if prerelease:
+    if re.search(r'^[ \t]*license\s+', text, flags=re.M):
+        text, n = re.subn(
+            r'(^[ \t]*license\s+"[^"]+"\s*\n)',
+            rf'\1  version "{version}"\n',
+            text,
+            count=1,
+            flags=re.M,
+        )
+        if n != 1:
+            raise SystemExit("could not insert version after license")
+    elif re.search(r'^[ \t]*homepage\s+', text, flags=re.M):
+        text, n = re.subn(
+            r'(^[ \t]*homepage\s+"[^"]+"\s*\n)',
+            rf'\1  version "{version}"\n',
+            text,
+            count=1,
+            flags=re.M,
+        )
+        if n != 1:
+            raise SystemExit("could not insert version after homepage")
+    else:
+        raise SystemExit("formula has no license/homepage to anchor version stanza")
 
 def replace_block(src: str, marker: str, digest: str) -> str:
     pattern = (
