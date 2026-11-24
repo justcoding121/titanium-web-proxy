@@ -1,0 +1,29 @@
+name: Record tree
+description: Write HEAD^{tree} to tree.txt and upload it as a workflow artifact for later same-tree evidence checks.
+
+inputs:
+  name:
+    description: Artifact name
+    required: false
+    default: tree-dotnet
+
+runs:
+  using: composite
+  steps:
+    - name: Record HEAD tree
+      shell: bash
+      run: |
+        set -euo pipefail
+        git rev-parse "HEAD^{tree}" | tee tree.txt
+        {
+          echo "### recorded tree"
+          echo '```'
+          cat tree.txt
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+    - name: Upload tree artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.name }}
+        path: tree.txt
+        if-no-files-found: error

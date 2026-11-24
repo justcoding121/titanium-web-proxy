@@ -32,8 +32,9 @@ on:
 permissions:
   contents: read
 
+# Per event+SHA so a nightly soak cannot queue or displace a beta/stable push soak.
 concurrency:
-  group: soak
+  group: soak-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: false
 
 env:

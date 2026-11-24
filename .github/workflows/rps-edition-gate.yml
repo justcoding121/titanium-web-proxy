@@ -1,0 +1,80 @@
+name: rps-edition-gate
+
+# Edition and peer RPS gates for beta/stable. Nightly and workflow_dispatch prove the
+# tree ahead of a promotion; push to beta/stable remains the live fallback when
+# vars.TREE_EVIDENCE_ENFORCE is unset. Peer is not required on push (PR compare-spot
+# already covers it via rps-saturation).
+
+on:
+  schedule:
+    - cron: '11 3 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - beta
+      - stable
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rps-edition-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+jobs:
+  # Tiered RPS gates for beta/stable publish — wall clock ~max of the two when both run.
+  # Editions: CLI/Plus tax vs Core.
+  rps-publish-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        # Same host as rps-saturation: net10.0 IL on the .NET 11 shared framework.
+        dotnet-version: |
+          10.0.x
+          11.0.x
+    - name: compare-editions (publish gate)
+      shell: pwsh
+      run: |
+        # Stable GitHub Release additionally requires Linux compare-product-smoke via release.yml.
+        pwsh tools/RpsLoadProbe/run-rps.ps1 `
+          -Mode compare-editions `
+          -Concurrency '8,16,32,64' `
+          -WarmupSec 2 `
+          -DurationSec 8 `
+          -Repeats 1 `
+          -ResultsDir tools/RpsLoadProbe/results `
+          -BombardierCheck
+        $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+          Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $csv) { throw 'No CSV found for edition gate validation' }
+        pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
+
+  # Parallel with rps-publish-gate on schedule/dispatch: Core vs the reference peer (c=64 spot).
+  # Dropped from the push path; PR rps-saturation compare-spot already covers peer.
+  rps-peer-gate:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        # Same host as rps-saturation: net10.0 IL on the .NET 11 shared framework.
+        dotnet-version: |
+          10.0.x
+          11.0.x
+    - name: Ensure MsQuic
+      uses: ./.github/actions/ensure-msquic
+    - name: compare-spot (Core and reference peer)
+      shell: pwsh
+      run: |
+        pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
