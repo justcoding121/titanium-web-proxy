@@ -87,7 +87,7 @@ EOF
 }
 
 clear_user_loopback_gnome() {
-  local user="$1" uid_num home runtime bus helper
+  local user="$1" uid_num home runtime helper
   uid_num="$(id -u "${user}" 2>/dev/null || true)"
   home="$(getent passwd "${user}" | cut -d: -f6)"
   if [[ -z "${uid_num}" || -z "${home}" ]]; then
@@ -96,27 +96,29 @@ clear_user_loopback_gnome() {
   fi
   runtime="/run/user/${uid_num}"
   ensure_user_runtime_dir "${user}" "${uid_num}" "${runtime}"
-  bus="${runtime}/bus"
   helper="$(mktemp)"
   write_clear_helper "${helper}"
   chown "${uid_num}:${uid_num}" "${helper}" 2>/dev/null || true
 
-  # Prefer login bus; otherwise leave DBUS unset so gsettings auto-launches.
-  if [[ -S "${bus}" ]]; then
-    if [[ -x "${EXE}" ]]; then
+  # Always use dbus-run-session so clears hit the same dconf writer path as the
+  # install-smoke driver (xvfb-run dbus-run-session). Pointing at a stale
+  # /run/user/UID/bus can leave the smoke-visible mode=manual untouched.
+  if [[ -x "${EXE}" ]]; then
+    if command -v dbus-run-session >/dev/null 2>&1; then
       sudo -u "${user}" -H \
-        env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" DBUS_SESSION_BUS_ADDRESS="unix:path=${bus}" \
-        "${EXE}" --clear-system-proxy >>"${PRERM_LOG}" 2>&1 || true
-    fi
-    sudo -u "${user}" -H \
-      env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" DBUS_SESSION_BUS_ADDRESS="unix:path=${bus}" \
-      "${helper}" >>"${PRERM_LOG}" 2>&1 || true
-  else
-    if [[ -x "${EXE}" ]]; then
+        env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+        dbus-run-session -- "${EXE}" --clear-system-proxy >>"${PRERM_LOG}" 2>&1 || true
+    else
       sudo -u "${user}" -H \
         env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
         "${EXE}" --clear-system-proxy >>"${PRERM_LOG}" 2>&1 || true
     fi
+  fi
+  if command -v dbus-run-session >/dev/null 2>&1; then
+    sudo -u "${user}" -H \
+      env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+      dbus-run-session -- "${helper}" >>"${PRERM_LOG}" 2>&1 || true
+  else
     sudo -u "${user}" -H \
       env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
       "${helper}" >>"${PRERM_LOG}" 2>&1 || true
@@ -129,8 +131,11 @@ clear_user_loopback_gnome() {
   echo "PATH=${PATH}"
   command -v gsettings || echo "gsettings missing"
   command -v sudo || echo "sudo missing"
+  command -v dbus-run-session || echo "dbus-run-session missing"
   ls -ld /run/user /run/user/* 2>&1 || echo "(no /run/user entries)"
 } > "${PRERM_LOG}" 2>&1 || true
+# Helper runs as each desktop user and appends probes; root-owned 644 blocks that.
+chmod 666 "${PRERM_LOG}" 2>/dev/null || true
 
 while read -r USER_NAME; do
   [[ -n "${USER_NAME}" ]] || continue
