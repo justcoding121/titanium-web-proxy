@@ -10,28 +10,28 @@
 class Titanium < Formula
   desc "MITM and reverse proxy command-line"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
-  version "8.0.8-beta"
+  version "8.0.8"
   license "MIT"
 
   on_macos do
     on_arm do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-osx-arm64.zip"
-      sha256 "af36d26dc9b3cd9a6818b52ddd0e3fcbee320e3671f33a7c3dd47a31ab271add"
+      sha256 "c70219e705a863eee0ab094b586291aa9aca8354d9b91ee8269419930f8d02b2"
     end
     on_intel do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-osx-x64.zip"
-      sha256 "7494f928513fe871fcee4eb4d4bcf0bc6c33995e1b8e53652115d09e532136b2"
+      sha256 "f37a6e978de8514b304e291a10c53199deb680c9d66b77f1622cc854dae2a4ef"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-linux-arm64.zip"
-      sha256 "9e9c93c77a5ed3fcc73b89ee5c384b00909594e18f74eb94848cafb7d0552345"
+      sha256 "493f00e54dfad410b52fc1559237e55a4a2b2687a946f59a1baa652c0fa4f295"
     end
     on_intel do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-linux-x64.zip"
-      sha256 "67aa209e642cd52c4f1dfe37f0bc199a436c3aea8980cb76e33dba50afdeb2ac"
+      sha256 "52496f8698da6a01c45eb18456eed7bfec2b5aa96e55eff43170d9c7a1d1883e"
     end
   end
 
