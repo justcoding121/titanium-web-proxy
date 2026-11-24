@@ -68,6 +68,11 @@ for path in sorted(root.glob("*.yml")):
         Write-Check 'assert-tree-evidence -SelfTest' ($LASTEXITCODE -eq 0)
     }
 
+    if (Test-Path 'tools/ci/Invoke-DotnetTestRetry.ps1') {
+        & pwsh -NoProfile -File tools/ci/Invoke-DotnetTestRetry.ps1 -SelfTest
+        Write-Check 'Invoke-DotnetTestRetry -SelfTest' ($LASTEXITCODE -eq 0)
+    }
+
     if (Test-Path 'tools/ci/assert-signing-environment.sh') {
         bash tools/ci/assert-signing-environment.sh --self-test
         Write-Check 'assert-signing-environment --self-test' ($LASTEXITCODE -eq 0)
