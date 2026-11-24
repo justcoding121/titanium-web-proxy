@@ -2,16 +2,17 @@
 # Load the amd64 slice of a smoked OCI archive and run one process health check.
 # Manager answers /v1/healthz. The proxy and gateway images have no shell; the
 # chart install is their runtime proof, so here they only have to start.
-# Usage: image-health.sh <image.oci.tar> <local-tag> <kind>
-# kind is proxy, gateway, or manager.
+# Usage: image-health.sh <image.oci.tar> <local-tag> <kind> [arch]
+# kind is proxy, gateway, or manager. arch defaults to amd64.
 set -euo pipefail
 oci="${1:?oci}"
 tag="${2:?tag}"
 kind="${3:?kind}"
+arch="${4:-${IMAGE_ARCH:-amd64}}"
 if [[ "$oci" == "-" ]]; then
   docker image inspect "$tag" >/dev/null
 else
-  skopeo copy --override-os linux --override-arch amd64 "oci-archive:$oci" "docker-daemon:$tag"
+  skopeo copy --override-os linux --override-arch "$arch" "oci-archive:$oci" "docker-daemon:$tag"
 fi
 case "$kind" in
   manager)

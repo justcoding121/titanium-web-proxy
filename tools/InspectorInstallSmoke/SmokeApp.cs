@@ -26,7 +26,7 @@ internal static class SmokeApp
         if (args.Length == 0)
         {
             Console.Error.WriteLine(
-                "commands: wipe | fresh | upgrade-seed | upgrade-verify | cli | local-windows | update-under-decrypt | uninstall-proxy-clear");
+                "commands: wipe | fresh | upgrade-seed | upgrade-verify | cli | local-windows | update-under-decrypt | in-app-apply | uninstall-proxy-clear");
             return 2;
         }
 
@@ -43,6 +43,7 @@ internal static class SmokeApp
                 "cli" => await CliAsync(opt),
                 "local-windows" => await LocalWindowsAsync(opt),
                 "update-under-decrypt" => await UpdateUnderDecryptAsync(opt),
+                "in-app-apply" => await InAppApplyAsync(opt),
                 "uninstall-proxy-clear" => await UninstallProxyClearAsync(opt),
                 _ => Fail(2, "unknown command " + cmd),
             };
@@ -1496,6 +1497,202 @@ internal static class SmokeApp
     }
 
     /// <summary>
+    ///     Startup update check with <c>TITANIUM_UPDATE_AUTO_APPLY=1</c> against a loopback feed
+    ///     serving a real candidate package. Pass when the feed is hit and either the process exits
+    ///     for restart (full apply) or download + SHA verification and apply-script construction
+    ///     completed (partial — e.g. MSI UAC on CI without elevation).
+    /// </summary>
+    private static async Task<int> InAppApplyAsync(Options opt)
+    {
+        var package = Require(opt.Package, "--package");
+        var exe = Require(opt.Exe, "--exe");
+        if (!File.Exists(package))
+            return Fail(2, "in-app-apply: package file missing: " + package);
+
+        var port = FreePort();
+        var fromVersion = ReadExeProductVersion(exe);
+        var remoteVersion = BumpVersionForFeed(fromVersion);
+        WriteInAppApplySettings(port);
+
+        using var feed = LocalUpdateFeed.StartFromPackage(remoteVersion, package);
+        Console.WriteLine($"in-app-apply feed={feed.ManifestUrl} package={package} remote={remoteVersion} from={fromVersion}");
+
+        var app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feed.ManifestUrl, autoApplyUpdate: true);
+        try
+        {
+            await TrustRootAsync();
+            if (!await app.CaptureIsListeningAsync())
+                return Fail(1, "in-app-apply: capture did not start");
+
+            var hitDeadline = DateTime.UtcNow.AddSeconds(60);
+            while (DateTime.UtcNow < hitDeadline && feed.Hits < 1)
+                await Task.Delay(250);
+            if (feed.Hits < 1)
+                return Fail(1, "in-app-apply: feed manifest was never requested (hits=0)");
+
+            var ux = Path.Combine(ProfileDir(), "logs", "ux-trace.log");
+            var waitDeadline = DateTime.UtcNow.AddSeconds(120);
+            var fullApply = false;
+            var partialApply = false;
+            while (DateTime.UtcNow < waitDeadline)
+            {
+                if (app.HasExited)
+                {
+                    fullApply = true;
+                    break;
+                }
+
+                if (feed.AssetHits >= 1
+                    && ApplyHelperScriptExists()
+                    && !UxTraceHasUntrustedRoot(ux))
+                {
+                    partialApply = true;
+                    break;
+                }
+
+                await Task.Delay(500);
+            }
+
+            if (File.Exists(ux))
+            {
+                var text = await File.ReadAllTextAsync(ux);
+                if (text.Contains("UntrustedRoot", StringComparison.OrdinalIgnoreCase) ||
+                    text.Contains("update traffic may be going through", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Fail(1, "in-app-apply: UntrustedRoot / MITM failure in ux-trace");
+                }
+            }
+
+            var outcome = fullApply ? "full" : partialApply ? "partial" : "none";
+            if (outcome == "none")
+            {
+                return Fail(
+                    1,
+                    $"in-app-apply: timed out (hits={feed.Hits} assetHits={feed.AssetHits} applyScript={ApplyHelperScriptExists()})");
+            }
+
+            WriteInAppApplyLifecycleProof(opt, fromVersion, remoteVersion, outcome, feed.Hits, feed.AssetHits);
+
+            if (fullApply)
+            {
+                Console.WriteLine(
+                    $"pass in-app-apply full hits={feed.Hits} assetHits={feed.AssetHits} process-exited");
+                Console.WriteLine(
+                    "note: workflow may append lifecycle-proof via tools/packaging/smoke/append-lifecycle-proof.sh");
+                return 0;
+            }
+
+            Console.WriteLine(
+                $"pass in-app-apply partial hits={feed.Hits} assetHits={feed.AssetHits} apply-script=ok");
+            Console.WriteLine(
+                "headless-gap: MSI/deb apply may require UAC/pkexec; partial pass records download+sha+apply-script only.");
+            Console.WriteLine(
+                "note: workflow may append lifecycle-proof via tools/packaging/smoke/append-lifecycle-proof.sh");
+            return 0;
+        }
+        finally
+        {
+            if (!app.HasExited)
+                await app.DisposeAsync();
+        }
+    }
+
+    private static void WriteInAppApplyLifecycleProof(
+        Options opt,
+        string fromVersion,
+        string toVersion,
+        string outcome,
+        int manifestHits,
+        int assetHits)
+    {
+        var outDir = opt.Out ?? Path.GetTempPath();
+        Directory.CreateDirectory(outDir);
+        var row = new Dictionary<string, object?>
+        {
+            ["product"] = "inspector",
+            ["rid"] = UpdateService.SuggestRid(),
+            ["format"] = Path.GetExtension(Require(opt.Package, "--package")).TrimStart('.'),
+            ["phase"] = "in-app-apply",
+            ["from_version"] = fromVersion,
+            ["to_version"] = toVersion,
+            ["outcome"] = outcome,
+            ["manifest_hits"] = manifestHits,
+            ["asset_hits"] = assetHits,
+            ["state_restored"] = false,
+        };
+        var path = Path.Combine(outDir, "in-app-apply-lifecycle.json");
+        File.WriteAllText(path, JsonSerializer.Serialize(row, SettingsJson));
+    }
+
+    private static string ReadExeProductVersion(string exe)
+    {
+        try
+        {
+            var info = FileVersionInfo.GetVersionInfo(exe);
+            var text = info.ProductVersion?.Split('+')[0].Trim();
+            if (!string.IsNullOrEmpty(text))
+                return text;
+        }
+        catch
+        {
+            // fall through
+        }
+
+        return "0.0.0";
+    }
+
+    private static string BumpVersionForFeed(string localVersion)
+    {
+        if (Version.TryParse(localVersion.Split('-')[0], out var v))
+            return $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0) + 1}-smoke-in-app";
+        return "99.0.0-smoke-in-app";
+    }
+
+    private static void WriteInAppApplySettings(int port)
+    {
+        Directory.CreateDirectory(ProfileDir());
+        var settings = new InspectorSettings
+        {
+            BindPort = port,
+            BindAddress = "127.0.0.1",
+            DecryptHttps = true,
+            EnableDecryptFailureBypass = false,
+            AutoStartCapture = true,
+            AutoSystemProxyOnStart = true,
+            CheckForUpdatesOnStartup = true,
+            InstalledReleaseTag = "0.0.1",
+            InstalledReleaseChannel = "Stable",
+        };
+        File.WriteAllText(Path.Combine(ProfileDir(), "settings.json"), JsonSerializer.Serialize(settings, SettingsJson));
+    }
+
+    private static bool ApplyHelperScriptExists()
+    {
+        var workDir = Path.Combine(Path.GetTempPath(), "TitaniumInspector-update");
+        if (!Directory.Exists(workDir))
+            return false;
+        if (OperatingSystem.IsWindows())
+            return File.Exists(Path.Combine(workDir, "apply-update.ps1"));
+        return File.Exists(Path.Combine(workDir, "apply-update.sh"));
+    }
+
+    private static bool UxTraceHasUntrustedRoot(string uxPath)
+    {
+        if (!File.Exists(uxPath))
+            return false;
+        try
+        {
+            var text = File.ReadAllText(uxPath);
+            return text.Contains("UntrustedRoot", StringComparison.OrdinalIgnoreCase)
+                   || text.Contains("update traffic may be going through", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     ///     Windows-only: start capturing, then either leave running (graceful) or kill (orphan)
     ///     and require the caller to uninstall. This command only prepares state and prints the
     ///     bind port; assertions live in the workflow after msiexec /x.
@@ -1581,10 +1778,12 @@ internal static class SmokeApp
         private readonly CancellationTokenSource _cts = new();
         private readonly string _dir;
         private int _hits;
+        private int _assetHits;
 
         public int Port { get; }
         public string ManifestUrl { get; }
         public int Hits => Volatile.Read(ref _hits);
+        public int AssetHits => Volatile.Read(ref _assetHits);
 
         private LocalUpdateFeed(HttpListener listener, string dir, int port)
         {
@@ -1594,12 +1793,47 @@ internal static class SmokeApp
             ManifestUrl = $"http://127.0.0.1:{port}/release-manifest.json";
         }
 
-        public static LocalUpdateFeed Start(string version)
+        public static LocalUpdateFeed Start(string version) =>
+            StartCore(version, BuildPlaceholderAssets);
+
+        public static LocalUpdateFeed StartFromPackage(string version, string packagePath)
+        {
+            packagePath = Path.GetFullPath(packagePath);
+            if (!File.Exists(packagePath))
+                throw new FileNotFoundException("package not found", packagePath);
+
+            return StartCore(version, (dir, port) => BuildPackageAssets(dir, port, packagePath));
+        }
+
+        private static LocalUpdateFeed StartCore(
+            string version,
+            Func<string, int, (Dictionary<string, object> Assets, string ManifestPath)> buildAssets)
         {
             var dir = Path.Combine(Path.GetTempPath(), "twp-insp-feed-" + Guid.NewGuid().ToString("n"));
             Directory.CreateDirectory(dir);
+            var (listener, port) = ListenOnLoopback();
+            var (assets, _) = buildAssets(dir, port);
+            var manifest = new Dictionary<string, object>
+            {
+                ["version"] = version,
+                ["channel"] = "stable",
+                ["products"] = new Dictionary<string, object>
+                {
+                    ["inspector"] = new Dictionary<string, object> { ["assets"] = assets },
+                },
+            };
+            File.WriteAllText(
+                Path.Combine(dir, "release-manifest.json"),
+                JsonSerializer.Serialize(manifest));
+
+            var feed = new LocalUpdateFeed(listener, dir, port);
+            _ = Task.Run(() => feed.ServeAsync());
+            return feed;
+        }
+
+        private static (HttpListener Listener, int Port) ListenOnLoopback()
+        {
             var listener = new HttpListener();
-            var port = 0;
             for (var p = 18700; p < 18900; p++)
             {
                 try
@@ -1607,8 +1841,7 @@ internal static class SmokeApp
                     listener.Prefixes.Clear();
                     listener.Prefixes.Add($"http://127.0.0.1:{p}/");
                     listener.Start();
-                    port = p;
-                    break;
+                    return (listener, p);
                 }
                 catch
                 {
@@ -1616,9 +1849,11 @@ internal static class SmokeApp
                 }
             }
 
-            if (port == 0)
-                throw new InvalidOperationException("no free port for local update feed");
+            throw new InvalidOperationException("no free port for local update feed");
+        }
 
+        private static (Dictionary<string, object> Assets, string ManifestPath) BuildPlaceholderAssets(string dir, int port)
+        {
             var url = $"http://127.0.0.1:{port}/inspector.zip";
             var sha = new string('a', 64);
             var asset = new Dictionary<string, object> { ["url"] = url, ["sha256"] = sha, ["size"] = 1 };
@@ -1630,23 +1865,43 @@ internal static class SmokeApp
                 ["linux-x64"] = asset,
                 ["linux-arm64"] = asset,
             };
-            var manifest = new Dictionary<string, object>
-            {
-                ["version"] = version,
-                ["channel"] = "beta",
-                ["products"] = new Dictionary<string, object>
-                {
-                    ["inspector"] = new Dictionary<string, object> { ["assets"] = assets },
-                },
-            };
-            File.WriteAllText(
-                Path.Combine(dir, "release-manifest.json"),
-                JsonSerializer.Serialize(manifest));
             File.WriteAllBytes(Path.Combine(dir, "inspector.zip"), [0x50, 0x4B, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+            return (assets, "release-manifest.json");
+        }
 
-            var feed = new LocalUpdateFeed(listener, dir, port);
-            _ = Task.Run(() => feed.ServeAsync());
-            return feed;
+        private static (Dictionary<string, object> Assets, string ManifestPath) BuildPackageAssets(
+            string dir,
+            int port,
+            string packagePath)
+        {
+            var (assetKey, serveName) = ResolvePackageAsset(packagePath);
+            var dest = Path.Combine(dir, serveName);
+            File.Copy(packagePath, dest, overwrite: true);
+            var bytes = File.ReadAllBytes(dest);
+            var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            var url = $"http://127.0.0.1:{port}/{serveName}";
+            var entry = new Dictionary<string, object> { ["url"] = url, ["sha256"] = sha, ["size"] = bytes.Length };
+            return (new Dictionary<string, object> { [assetKey] = entry }, "release-manifest.json");
+        }
+
+        private static (string AssetKey, string ServeFileName) ResolvePackageAsset(string packagePath)
+        {
+            var fileName = Path.GetFileName(packagePath);
+            var ext = Path.GetExtension(packagePath);
+            var rid = UpdateService.SuggestRid();
+            if (ext.Equals(".msi", StringComparison.OrdinalIgnoreCase))
+                return ("win-x64-msi", fileName);
+            if (ext.Equals(".deb", StringComparison.OrdinalIgnoreCase))
+                return ($"{rid}.deb", fileName);
+            if (ext.Equals(".rpm", StringComparison.OrdinalIgnoreCase))
+                return ($"{rid}.rpm", fileName);
+            if (ext.Equals(".AppImage", StringComparison.OrdinalIgnoreCase))
+                return ($"{rid}.AppImage", fileName);
+            if (ext.Equals(".dmg", StringComparison.OrdinalIgnoreCase))
+                return ($"{rid}.dmg", fileName);
+            if (ext.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+                return (rid, fileName);
+            throw new InvalidOperationException("unsupported package extension: " + ext);
         }
 
         private async Task ServeAsync()
@@ -1656,12 +1911,17 @@ internal static class SmokeApp
                 HttpListenerContext ctx;
                 try { ctx = await _listener.GetContextAsync(); }
                 catch { break; }
-                Interlocked.Increment(ref _hits);
                 try
                 {
                     var path = ctx.Request.Url?.AbsolutePath.TrimStart('/') ?? "release-manifest.json";
                     if (string.IsNullOrEmpty(path))
                         path = "release-manifest.json";
+                    var isManifest = path.Equals("release-manifest.json", StringComparison.OrdinalIgnoreCase);
+                    if (isManifest)
+                        Interlocked.Increment(ref _hits);
+                    else
+                        Interlocked.Increment(ref _assetHits);
+
                     var file = Path.Combine(_dir, path);
                     if (File.Exists(file))
                     {
@@ -2260,7 +2520,11 @@ internal sealed class InspectorProcess : IAsyncDisposable
         StartedUtc = DateTime.UtcNow;
     }
 
-    public static Task<InspectorProcess> StartAsync(string exe, int port, string? updateFeedUrl = null)
+    public static Task<InspectorProcess> StartAsync(
+        string exe,
+        int port,
+        string? updateFeedUrl = null,
+        bool autoApplyUpdate = false)
     {
         var psi = new ProcessStartInfo
         {
@@ -2274,8 +2538,10 @@ internal sealed class InspectorProcess : IAsyncDisposable
         };
         psi.Environment["TITANIUM_SKIP_ROOT_STORE_UI"] = "1";
         // Empty string disables the startup update check (default for install smokes).
-        // Pass a feed URL for update-under-decrypt.
+        // Pass a feed URL for update-under-decrypt / in-app-apply.
         psi.Environment["TITANIUM_UPDATE_FEED"] = updateFeedUrl ?? "";
+        if (autoApplyUpdate)
+            psi.Environment["TITANIUM_UPDATE_AUTO_APPLY"] = "1";
         var proc = Process.Start(psi) ?? throw new InvalidOperationException("Inspector did not start: " + exe);
         proc.OutputDataReceived += static (_, _) => { };
         proc.ErrorDataReceived += static (_, _) => { };
@@ -2640,11 +2906,12 @@ internal readonly record struct Options(
     string? Thumb,
     string? ExpectThumb,
     string[]? Browsers,
-    string? Mode = null)
+    string? Mode = null,
+    string? Package = null)
 {
     public static Options Parse(string[] args)
     {
-        string? exe = null, prev = null, titanium = null, output = null, thumb = null, expect = null, mode = null;
+        string? exe = null, prev = null, titanium = null, output = null, thumb = null, expect = null, mode = null, package = null;
         string[]? browsers = null;
         for (var i = 0; i < args.Length; i++)
         {
@@ -2660,10 +2927,11 @@ internal readonly record struct Options(
                 case "--expect-thumb": expect = Next(); break;
                 case "--browsers": browsers = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
                 case "--mode": mode = Next(); break;
+                case "--package": package = Next(); break;
                 default: throw new InvalidOperationException("unknown option " + a);
             }
         }
 
-        return new Options(exe, prev, titanium, output, thumb, expect, browsers, mode);
+        return new Options(exe, prev, titanium, output, thumb, expect, browsers, mode, package);
     }
 }

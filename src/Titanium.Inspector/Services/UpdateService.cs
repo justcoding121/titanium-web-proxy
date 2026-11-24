@@ -414,6 +414,71 @@ public sealed class UpdateService
         }
     }
 
+    private const string AutoApplyEnv = "TITANIUM_UPDATE_AUTO_APPLY";
+
+    /// <summary>
+    /// True when <see cref="AutoApplyEnv"/> is enabled and <c>TITANIUM_UPDATE_FEED</c> is an
+    /// <c>http</c> loopback URL (automation-only; never auto-apply from production feeds).
+    /// </summary>
+    public static bool ShouldAutoApplyUpdate()
+    {
+        if (!AutoApplyEnvEnabled())
+        {
+            return false;
+        }
+
+        var feed = Environment.GetEnvironmentVariable("TITANIUM_UPDATE_FEED");
+        if (IsLoopbackHttpUpdateFeed(feed))
+        {
+            return true;
+        }
+
+        InspectorUxTrace.Event(
+            "Update.AutoApplyBlocked",
+            "TITANIUM_UPDATE_AUTO_APPLY is set but TITANIUM_UPDATE_FEED is not a loopback http URL");
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="feedUrl"/> is <c>http://</c> on loopback (127.0.0.1, localhost, [::1]).</summary>
+    public static bool IsLoopbackHttpUpdateFeed(string? feedUrl)
+    {
+        if (string.IsNullOrWhiteSpace(feedUrl))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (uri.IsLoopback)
+        {
+            return true;
+        }
+
+        var host = uri.Host;
+        return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+               || host is "127.0.0.1" or "::1" or "[::1]";
+    }
+
+    private static bool AutoApplyEnvEnabled()
+    {
+        var raw = Environment.GetEnvironmentVariable(AutoApplyEnv);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        return string.Equals(raw.Trim(), "1", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(raw.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Download package, verify SHA256, spawn apply helper, return true if helper started.</summary>
     /// <summary>
     ///     When non-null, in-app zip/MSI apply must not run from this location

@@ -9,6 +9,7 @@ root="$(cd "$(dirname "$0")/../../.." && pwd)"
 here="$(cd "$(dirname "$0")" && pwd)"
 log="${RUNNER_TEMP:-/tmp}/pkg-$rid"
 mkdir -p "$log"
+allow_missing="${ALLOW_MISSING:-0}"
 
 shopt -s nullglob
 debs=("$dist"/Titanium.Cli-"$rid".deb "$dist"/*/"Titanium.Cli-$rid".deb)
@@ -22,7 +23,46 @@ izips=("$dist"/TitaniumInspector-"$rid".zip "$dist"/*/"TitaniumInspector-$rid".z
 
 first() { for f in "$@"; do [[ -f "$f" ]] && echo "$f" && return 0; done; return 1; }
 
+missing_required() {
+  local label="$1"
+  if [[ "$allow_missing" == "1" ]]; then
+    echo "::warning::missing $label for $rid (ALLOW_MISSING=1)" >&2
+    return 1
+  fi
+  echo "missing required package: $label (rid=$rid, dist=$dist)" >&2
+  exit 1
+}
+
+require_first() {
+  local label="$1"
+  shift
+  local path
+  if path="$(first "$@")"; then
+    printf '%s\n' "$path"
+    return 0
+  fi
+  missing_required "$label"
+  return 1
+}
+
+if [[ "$rid" == linux-x64 || "$rid" == linux-arm64 ]]; then
+  require_first "cli deb" "${debs[@]}" >/dev/null
+  require_first "cli rpm" "${rpms[@]}" >/dev/null
+  require_first "cli AppImage" "${images[@]}" >/dev/null
+  require_first "inspector deb" "${idebs[@]}" >/dev/null
+  require_first "inspector rpm" "${irpms[@]}" >/dev/null
+  require_first "inspector AppImage" "${iimages[@]}" >/dev/null
+elif [[ "$rid" == linux-musl-* ]]; then
+  require_first "cli zip" "${zips[@]}" >/dev/null
+  require_first "inspector zip" "${izips[@]}" >/dev/null
+fi
+
 if cli_deb="$(first "${debs[@]}")"; then
+  if [[ -n "${PREV_CLI_DEB:-}" && -f "$PREV_CLI_DEB" ]]; then
+    bash "$here/cli-package-lifecycle.sh" deb "$PREV_CLI_DEB" "$cli_deb" "$rid" "${LIFECYCLE_PROOF:-}"
+  else
+    echo "skip cli deb package lifecycle (PREV_CLI_DEB unset)"
+  fi
   bin="$("$here/install-cli.sh" "$cli_deb" "$log/cli-deb")"
   "$here/retry.sh" --leg assert -- "$here/cli-mitm.sh" "$bin" "$log/cli-mitm"
   # Uninstall restores nothing for CLI (no system-proxy flag); assert package gone.
@@ -30,6 +70,9 @@ if cli_deb="$(first "${debs[@]}")"; then
   if [[ -x /opt/titanium-cli/titanium ]]; then
     echo "ASSERT: CLI deb left /opt/titanium-cli/titanium after dpkg -r" >&2
     exit 1
+  fi
+  if [[ -n "${LIFECYCLE_PROOF:-}" ]]; then
+    bash "$here/append-lifecycle-proof.sh" "$LIFECYCLE_PROOF" cli "$rid" deb uninstall "" "" "" true
   fi
   echo "cli deb uninstall ok"
 fi
@@ -43,24 +86,52 @@ if cli_img="$(first "${images[@]}")"; then
   echo "cli AppImage present ok"
 fi
 if ins_img="$(first "${iimages[@]}")"; then
-  "$here/appimage-run.sh" "$ins_img" "$log/inspector-appimage"
-  echo "inspector AppImage present ok"
+  if [[ -n "${PREV_INS_APPIMAGE:-}" && -f "$PREV_INS_APPIMAGE" ]]; then
+    bash "$here/enforce.sh" inspector-appimage-lifecycle -- \
+      bash "$here/inspector-package-lifecycle.sh" appimage "$PREV_INS_APPIMAGE" "$ins_img" "$rid" "${LIFECYCLE_PROOF:-}"
+  else
+    echo "skip inspector AppImage package lifecycle (PREV_INS_APPIMAGE unset)"
+    "$here/appimage-run.sh" "$ins_img" "$log/inspector-appimage"
+    echo "inspector AppImage present ok"
+  fi
 fi
 if cli_zip="$(first "${zips[@]}")"; then
   if [[ "$rid" == linux-musl-* ]]; then
     stage="$(mktemp -d)"
     cp -f "$cli_zip" "$stage/"
+    prev_zip_arg=""
+    upgrade_cmd="echo 'skip musl cli-upgrade-from-published (PREV_CLI_ZIP unset)'"
+    if [[ -n "${PREV_CLI_ZIP:-}" && -f "$PREV_CLI_ZIP" ]]; then
+      cp -f "$PREV_CLI_ZIP" "$stage/"
+      prev_zip_arg="/pkg/$(basename "$PREV_CLI_ZIP")"
+      upgrade_cmd="bash tools/packaging/smoke/cli-upgrade-from-published.sh '$prev_zip_arg' '/pkg/$(basename "$cli_zip")' /tmp/cli-musl-upgrade"
+    fi
     docker run --rm -v "$root:/src" -v "$stage:/pkg:ro" -w /src "alpine:3.24" \
-      sh -c "apk add --no-cache bash && bash tools/packaging/smoke/alpine-deps.sh && unzip -q '/pkg/$(basename "$cli_zip")' -d /cli && chmod +x /cli/titanium && /cli/titanium version && bash tools/packaging/smoke/openssl-leftover.sh /cli /cli/titanium && bash tools/packaging/smoke/cli-update-ignores-proxy.sh /cli '/pkg/$(basename "$cli_zip")' /cli/titanium"
+      sh -c "apk add --no-cache bash unzip && bash tools/packaging/smoke/alpine-deps.sh && unzip -q '/pkg/$(basename "$cli_zip")' -d /cli && chmod +x /cli/titanium && /cli/titanium version && bash tools/packaging/smoke/openssl-leftover.sh /cli /cli/titanium && bash tools/packaging/smoke/cli-update-ignores-proxy.sh /cli '/pkg/$(basename "$cli_zip")' /cli/titanium && $upgrade_cmd"
+    if [[ -n "${LIFECYCLE_PROOF:-}" && -n "$prev_zip_arg" ]]; then
+      bash "$here/append-lifecycle-proof.sh" "$LIFECYCLE_PROOF" cli "$rid" zip upgrade \
+        "published" "${RELEASE_VERSION:-candidate}" "${RELEASE_VERSION:-candidate}" false
+    fi
   fi
 fi
 if cli_rpm="$(first "${rpms[@]}")"; then
-  stage="$(mktemp -d)"
-  cp -f "$cli_rpm" "$stage/"
-  docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
-    bash -c "dnf install -y libicu '/pkg/$(basename "$cli_rpm")' && titanium version && rpm -e titanium-cli && ! test -x /opt/titanium-cli/titanium && echo 'cli rpm uninstall ok'"
+  if [[ -n "${PREV_CLI_RPM:-}" && -f "$PREV_CLI_RPM" ]]; then
+    bash "$here/cli-package-lifecycle.sh" rpm "$PREV_CLI_RPM" "$cli_rpm" "$rid" "${LIFECYCLE_PROOF:-}"
+  else
+    echo "skip cli rpm package lifecycle (PREV_CLI_RPM unset)"
+    stage="$(mktemp -d)"
+    cp -f "$cli_rpm" "$stage/"
+    docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
+      bash -c "dnf install -y libicu '/pkg/$(basename "$cli_rpm")' && titanium version && rpm -e titanium-cli && ! test -x /opt/titanium-cli/titanium && echo 'cli rpm uninstall ok'"
+  fi
 fi
 if ins_deb="$(first "${idebs[@]}")"; then
+  if [[ -n "${PREV_INS_DEB:-}" && -f "$PREV_INS_DEB" ]]; then
+    bash "$here/enforce.sh" inspector-deb-lifecycle -- \
+      bash "$here/inspector-package-lifecycle.sh" deb "$PREV_INS_DEB" "$ins_deb" "$rid" "${LIFECYCLE_PROOF:-}"
+  else
+    echo "skip inspector deb package lifecycle (PREV_INS_DEB unset)"
+  fi
   if [[ "$rid" == "linux-x64" ]]; then
     browsers=chrome,firefox
     [[ "${BROWSERS:-required}" == "extended" ]] && browsers=chrome,firefox,edge
@@ -74,17 +145,35 @@ if ins_deb="$(first "${idebs[@]}")"; then
   fi
 fi
 if ins_rpm="$(first "${irpms[@]}")"; then
-  stage="$(mktemp -d)"
-  cp -f "$ins_rpm" "$stage/"
-  docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
-    bash -c "dnf install -y '/pkg/$(basename "$ins_rpm")' && test -x /opt/titanium-inspector/TitaniumInspector && rpm -e titanium-inspector && ! test -x /opt/titanium-inspector/TitaniumInspector && echo 'inspector rpm uninstall ok'"
+  if [[ -n "${PREV_INS_RPM:-}" && -f "$PREV_INS_RPM" ]]; then
+    bash "$here/enforce.sh" inspector-rpm-lifecycle -- \
+      bash "$here/inspector-package-lifecycle.sh" rpm "$PREV_INS_RPM" "$ins_rpm" "$rid" "${LIFECYCLE_PROOF:-}"
+  else
+    echo "skip inspector rpm package lifecycle (PREV_INS_RPM unset)"
+    stage="$(mktemp -d)"
+    cp -f "$ins_rpm" "$stage/"
+    docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
+      bash -c "dnf install -y '/pkg/$(basename "$ins_rpm")' && test -x /opt/titanium-inspector/TitaniumInspector && rpm -e titanium-inspector && ! test -x /opt/titanium-inspector/TitaniumInspector && echo 'inspector rpm uninstall ok'"
+    if [[ -n "${LIFECYCLE_PROOF:-}" ]]; then
+      bash "$here/append-lifecycle-proof.sh" "$LIFECYCLE_PROOF" inspector "$rid" rpm uninstall "" "" "" true
+    fi
+  fi
 fi
 if ins_zip="$(first "${izips[@]}")"; then
   if [[ "$rid" == linux-musl-* ]]; then
-    stage="$(mktemp -d)"
-    cp -f "$ins_zip" "$stage/"
-    docker run --rm -v "$stage:/pkg:ro" "alpine:3.24" \
-      sh -c "apk add --no-cache unzip && unzip -q '/pkg/$(basename "$ins_zip")' -d /opt/inspector && test -f /opt/inspector/TitaniumInspector && rm -rf /opt/inspector && ! test -f /opt/inspector/TitaniumInspector && echo 'inspector musl zip remove ok'"
+    if [[ -n "${PREV_INS_ZIP:-}" && -f "$PREV_INS_ZIP" ]]; then
+      bash "$here/enforce.sh" inspector-musl-zip-lifecycle -- \
+        bash "$here/inspector-package-lifecycle.sh" zip "$PREV_INS_ZIP" "$ins_zip" "$rid" "${LIFECYCLE_PROOF:-}"
+    else
+      echo "skip inspector musl zip package lifecycle (PREV_INS_ZIP unset)"
+      stage="$(mktemp -d)"
+      cp -f "$ins_zip" "$stage/"
+      docker run --rm -v "$stage:/pkg:ro" "alpine:3.24" \
+        sh -c "apk add --no-cache unzip && unzip -q '/pkg/$(basename "$ins_zip")' -d /opt/inspector && test -f /opt/inspector/TitaniumInspector && rm -rf /opt/inspector && ! test -f /opt/inspector/TitaniumInspector && echo 'inspector musl zip remove ok'"
+      if [[ -n "${LIFECYCLE_PROOF:-}" ]]; then
+        bash "$here/append-lifecycle-proof.sh" "$LIFECYCLE_PROOF" inspector "$rid" zip uninstall "" "" "" true
+      fi
+    fi
   fi
 fi
 echo "linux packages $rid ok"

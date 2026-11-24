@@ -261,6 +261,11 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
         string channelDisplay,
         UpdateOfferKind offerKind = UpdateOfferKind.Upgrade)
     {
+        if (UpdateService.ShouldAutoApplyUpdate())
+        {
+            return Task.FromResult(true);
+        }
+
         var (title, body, accept) = offerKind switch
         {
             UpdateOfferKind.Downgrade => (

@@ -179,6 +179,26 @@ try {
     $proc = Start-Process -FilePath $Titanium -ArgumentList $updateArgs -Wait -PassThru -NoNewWindow
     if ($proc.ExitCode -ne 0) { throw "ASSERT: titanium update exited $($proc.ExitCode)" }
 
+    if (-not $Plus) {
+        $idFile = Join-Path $env:LOCALAPPDATA 'TitaniumCli\installed-release.json'
+        $applied = $false
+        for ($t = 0; $t -lt 90; $t++) {
+            if ((Test-Path $idFile) -and ((Get-Content $idFile -Raw) -match [regex]::Escape($Version))) {
+                $applied = $true
+                break
+            }
+            $verOut = & $Titanium version 2>&1 | Out-String
+            if ($verOut -match [regex]::Escape($Version)) {
+                $applied = $true
+                break
+            }
+            Start-Sleep -Seconds 1
+        }
+        if (-not $applied) {
+            throw "ASSERT: installed identity did not advance to $Version after update"
+        }
+    }
+
     $count = [int]((Get-Content $hitsFile -Raw).Trim())
     if ($count -ne 0) {
         throw "ASSERT: update used loopback HTTPS_PROXY ($count hits)"
@@ -186,7 +206,7 @@ try {
     if ($Plus) {
         Write-Host "plus update ignored loopback proxy ok (hits=0 version=$Version)"
     } else {
-        Write-Host "cli update ignored loopback proxy ok (hits=0 version=$Version)"
+        Write-Host "cli update ignored loopback proxy ok (hits=0 version=$Version identity=$Version)"
     }
 }
 finally {

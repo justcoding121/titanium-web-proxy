@@ -708,12 +708,13 @@ jobs:
           [[ "$rid" == *arm64* ]] && arch=aarch64
           sudo apt-get update -qq
           sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm squashfs-tools file || true
-          sudo gem install --no-document fpm || true
+          sudo gem install --no-document fpm
+          command -v fpm >/dev/null
           chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
           # AppImage is required for glibc RIDs (fail hard — no soft-fail).
           ./tools/packaging/linux/build-appimage.sh cli "artifacts/cli/$rid" \
             "Titanium.Cli-$rid.AppImage" "$ver" "$arch"
-          ./tools/packaging/linux/build-deb-rpm.sh cli "artifacts/cli/$rid" . "$pkg_ver" "$rid" || echo "deb/rpm soft-failed"
+          ./tools/packaging/linux/build-deb-rpm.sh cli "artifacts/cli/$rid" . "$pkg_ver" "$rid"
       - name: Stage CLI artifacts
         shell: bash
         run: |
@@ -727,6 +728,9 @@ jobs:
           done
           bash tools/packaging/smoke/write-checksums.sh "staged-cli-$rid"
           ls -la "staged-cli-$rid"
+      - name: Assert CLI release assets
+        shell: pwsh
+        run: ./tools/ci/assert-release-assets.ps1 -StageDir "staged-cli-${{ matrix.rid }}" -Product cli -Rid "${{ matrix.rid }}"
       - uses: actions/upload-artifact@v7
         with:
           name: cli-${{ matrix.rid }}
@@ -757,6 +761,9 @@ jobs:
           $tag = $env:RELEASE_TAG
           if ([string]::IsNullOrWhiteSpace($tag)) { $tag = "0.0.0-dev" }
           ./tools/packaging/plus-bundle/build-plus-bundle.ps1 -Tag $tag -Version $env:RELEASE_VERSION -OutputDirectory .
+      - name: Assert Plus release assets
+        shell: pwsh
+        run: ./tools/ci/assert-release-assets.ps1 -StageDir . -Product plus
       - uses: actions/upload-artifact@v7
         with:
           name: plus
@@ -937,6 +944,7 @@ jobs:
         if: startsWith(matrix.rid, 'osx-')
         env:
           RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+          RELEASE_CHANNEL: ${{ needs.resolve-version.outputs.channel }}
           APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -953,18 +961,26 @@ jobs:
           ./tools/packaging/osx/build-app-bundle.sh \
             "artifacts/inspector/$rid" "TitaniumInspector.app" "$ver"
           if [[ -n "${APPLE_CERTIFICATE_P12:-}" ]]; then
-            # Codesign is required; notary can 403 on an expired Apple developer agreement.
-            # Soft-fail like the DMG path so Win/Linux/CLI assets still publish.
-            ./tools/packaging/osx/sign-and-notarize.sh \
-              TitaniumInspector.app tools/packaging/osx/TitaniumInspector.entitlements \
-              || echo "::warning::Inspector .app notarize failed (codesign may still be present); accept pending Apple developer agreements and re-run release.yml"
+            if [[ "${RELEASE_CHANNEL}" == "stable" ]]; then
+              ./tools/packaging/osx/sign-and-notarize.sh \
+                TitaniumInspector.app tools/packaging/osx/TitaniumInspector.entitlements
+            else
+              ./tools/packaging/osx/sign-and-notarize.sh \
+                TitaniumInspector.app tools/packaging/osx/TitaniumInspector.entitlements \
+                || echo "::warning::Inspector .app notarize failed (codesign may still be present); accept pending Apple developer agreements and re-run release.yml"
+            fi
           else
             echo "Apple secrets not set — building unsigned DMG for CI artifact shape"
           fi
           ./tools/packaging/osx/build-dmg.sh \
             TitaniumInspector.app "TitaniumInspector-$rid.dmg" "Titanium Inspector"
           if [[ -n "${APPLE_CERTIFICATE_P12:-}" ]]; then
-            ./tools/packaging/osx/sign-and-notarize.sh "TitaniumInspector-$rid.dmg" || true
+            if [[ "${RELEASE_CHANNEL}" == "stable" ]]; then
+              ./tools/packaging/osx/sign-and-notarize.sh "TitaniumInspector-$rid.dmg"
+            else
+              ./tools/packaging/osx/sign-and-notarize.sh "TitaniumInspector-$rid.dmg" \
+                || echo "::warning::Inspector DMG notarize failed on beta channel"
+            fi
           fi
       - name: Linux packages (AppImage + deb/rpm)
         if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-arm64'
@@ -980,13 +996,13 @@ jobs:
           [[ "$rid" == *arm64* ]] && arch=aarch64
           sudo apt-get update -qq
           sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm squashfs-tools file || true
-          sudo gem install --no-document fpm || true
+          sudo gem install --no-document fpm
+          command -v fpm >/dev/null
           chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
           # AppImage is required for glibc RIDs (fail hard — no soft-fail).
           ./tools/packaging/linux/build-appimage.sh inspector "artifacts/inspector/$rid" \
             "TitaniumInspector-$rid.AppImage" "$ver" "$arch"
-          ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "$pkg_ver" "$rid" \
-            || echo "deb/rpm soft-failed"
+          ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "$pkg_ver" "$rid"
           if [[ -f "TitaniumInspector-${rid}.deb" ]]; then
             # Buffer the listing first: with pipefail, `dpkg-deb -c | grep -q` can SIGPIPE
             # tar when grep exits early and fail the step even though the member is present.
@@ -1013,6 +1029,9 @@ jobs:
           done
           bash tools/packaging/smoke/write-checksums.sh "staged-inspector-$rid"
           ls -la "staged-inspector-$rid"
+      - name: Assert Inspector release assets
+        shell: pwsh
+        run: ./tools/ci/assert-release-assets.ps1 -StageDir "staged-inspector-${{ matrix.rid }}" -Product inspector -Rid "${{ matrix.rid }}"
       - uses: actions/upload-artifact@v7
         with:
           name: inspector-${{ matrix.rid }}
@@ -1081,6 +1100,9 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: bash tools/packaging/smoke/helm-static.sh "$PWD/charts"
+      - name: Assert charts release assets
+        shell: pwsh
+        run: ./tools/ci/assert-release-assets.ps1 -StageDir charts -Product charts
       - uses: actions/upload-artifact@v7
         with:
           name: charts
@@ -1301,73 +1323,18 @@ jobs:
           if [[ -d artifacts/sbom ]]; then
             cp -a artifacts/sbom/. dist/ || true
           fi
-          python3 - <<'PY'
-          import hashlib, json, os, pathlib, datetime
-          tag = os.environ["RELEASE_TAG"]
-          version = os.environ["VERSION"]
-          channel = "beta" if ("-" in version or "beta" in version.lower()) else "stable"
-          dist = pathlib.Path("dist")
-          def sha(p):
-            h = hashlib.sha256()
-            h.update(p.read_bytes())
-            return h.hexdigest()
-          assets = {}
-          for p in dist.iterdir():
-            if p.is_file():
-              assets[p.name] = {"path": str(p), "sha256": sha(p)}
-          manifest = {
-            "version": version,
-            "channel": channel,
-            "releasedUtc": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "abstractionsVersion": version.split("-")[0],
-            "products": {
-              "cli": {"assets": {}},
-              "plus": {"version": version, "requiredAbstractions": "8.0.0", "asset": None},
-              "inspector": {"assets": {}},
-            },
-            "nuget": {
-              "Titanium.Web.Proxy": version.split("-")[0],
-              "Titanium.Web.Proxy.Abstractions": version.split("-")[0],
-              "Titanium.Web.Proxy.Configuration": version.split("-")[0],
-            },
-          }
-          def put(product, key, entry):
-            manifest["products"][product]["assets"][key] = entry
-          for name, meta in assets.items():
-            url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}/{name}"
-            entry = {"url": url, "sha256": meta["sha256"]}
-            if name.startswith("Titanium.Cli-"):
-              stem = name.removeprefix("Titanium.Cli-")
-              for ext in (".zip", ".AppImage", ".deb", ".rpm"):
-                if stem.endswith(ext):
-                  rid = stem[: -len(ext)]
-                  key = rid if ext == ".zip" else f"{rid}{ext}"
-                  put("cli", key, entry)
-                  break
-            elif name.startswith("TitaniumInspector-"):
-              stem = name.removeprefix("TitaniumInspector-")
-              if stem.endswith(".msi"):
-                put("inspector", "win-x64-msi", entry)
-              else:
-                for ext in (".zip", ".AppImage", ".deb", ".rpm", ".dmg"):
-                  if stem.endswith(ext):
-                    rid = stem[: -len(ext)]
-                    key = rid if ext == ".zip" else f"{rid}{ext}"
-                    put("inspector", key, entry)
-                    break
-            elif name.startswith("Titanium.Plus") and name.endswith(".zip"):
-              bundle = dict(entry)
-              bundle["size"] = pathlib.Path(meta["path"]).stat().st_size
-              manifest["products"]["plus"]["bundle"] = bundle
-              manifest["products"]["plus"]["version"] = version
-            elif name.startswith("Titanium.Plus") and name.endswith(".dll"):
-              manifest["products"]["plus"]["asset"] = entry
-              manifest["products"]["plus"]["version"] = version
-          pathlib.Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2))
-          print(json.dumps(manifest, indent=2))
-          PY
+          python3 tools/ci/build-release-manifest.py \
+            --dist dist \
+            --output dist/release-manifest.json \
+            --tag "$TAG" \
+            --version "$VERSION"
           chmod +x tools/packaging/sign-checksums.sh
           ./tools/packaging/sign-checksums.sh dist
+          python3 tools/ci/verify-release-manifest.py \
+            --manifest dist/release-manifest.json \
+            --sums dist/SHA256SUMS \
+            --stage-dir dist \
+            --tag "$TAG"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"
@@ -1809,13 +1776,63 @@ jobs:
           gh workflow run packaging-catalog-smoke.yml --ref develop \
             -f release_tag="$TAG" -f run_homebrew=true
 
+  release-manifest-gate:
+    needs: [resolve-version, build-cli, build-plus, build-inspector, product-smoke]
+    if: |
+      always() &&
+      needs.resolve-version.outputs.dry_run == 'true' &&
+      needs.build-cli.result == 'success' &&
+      needs.build-plus.result == 'success' &&
+      needs.build-inspector.result == 'success' &&
+      needs.product-smoke.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Build and verify release-manifest (dry-run)
+        env:
+          RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG="$RELEASE_TAG"
+          VERSION="$RELEASE_VERSION"
+          export RELEASE_TAG VERSION
+          mkdir -p dist
+          find artifacts -type f \( \
+            -name '*.zip' -o -name '*.dll' -o -name '*.msi' \
+            -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \
+            -o -name '*.cdx.json' \
+          \) -exec cp {} dist/ \;
+          if [[ -d artifacts/sbom ]]; then
+            cp -a artifacts/sbom/. dist/ || true
+          fi
+          python3 tools/ci/build-release-manifest.py \
+            --dist dist \
+            --output dist/release-manifest.json \
+            --tag "$TAG" \
+            --version "$VERSION"
+          chmod +x tools/packaging/sign-checksums.sh
+          ./tools/packaging/sign-checksums.sh dist
+          python3 tools/ci/verify-release-manifest.py \
+            --manifest dist/release-manifest.json \
+            --sums dist/SHA256SUMS \
+            --stage-dir dist \
+            --tag "$TAG"
+
   publish-rehearsal:
-    needs: [resolve-version, product-smoke, build-images, build-charts]
+    needs: [resolve-version, product-smoke, build-images, build-charts, release-manifest-gate]
     if: |
       needs.resolve-version.outputs.dry_run == 'true' &&
       needs.product-smoke.result == 'success' &&
       needs.build-images.result == 'success' &&
-      needs.build-charts.result == 'success'
+      needs.build-charts.result == 'success' &&
+      needs.release-manifest-gate.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
