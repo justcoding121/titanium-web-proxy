@@ -166,17 +166,17 @@ jobs:
           & $driver fresh --exe $installed --browsers chrome,edge,brave,firefox,opera --out $log
           if ($LASTEXITCODE -ne 0) { throw "fresh failed $LASTEXITCODE" }
           # Advisory until three clean runs: update under decrypt + in-app apply.
+          # Avoid markdown table lines that start with "|" in this YAML block (breaks PyYAML).
           function Write-AdvisoryRow([string]$Name, [string]$Result) {
             if (-not $script:AdvisoryHeader) {
-              @"
-### install-smoke advisory (windows)
-| step | result |
-| --- | --- |
-"@ | Add-Content $env:GITHUB_STEP_SUMMARY
+              Add-Content $env:GITHUB_STEP_SUMMARY '### install-smoke advisory (windows)'
+              Add-Content $env:GITHUB_STEP_SUMMARY ''
+              Add-Content $env:GITHUB_STEP_SUMMARY ('|' + ' step | result |')
+              Add-Content $env:GITHUB_STEP_SUMMARY ('|' + ' --- | --- |')
               $script:AdvisoryHeader = $true
             }
-            "| $Name | $Result |" | Add-Content $env:GITHUB_STEP_SUMMARY
-            "$Name=$Result" | Add-Content "$log\advisory.txt"
+            Add-Content $env:GITHUB_STEP_SUMMARY ('|' + " $Name | $Result |")
+            Add-Content "$log\advisory.txt" "$Name=$Result"
             if ($Result -eq 'fail') {
               Write-Host "::warning title=Lifecycle advisory ($Name)::failed (advisory until promoted)"
             }
