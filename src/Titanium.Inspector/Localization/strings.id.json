@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 ke server",
   "network.http3Help": "Hanya ke server. Mematikan HTTP/2 tidak mematikan ini.",
   "network.http3Unavailable": "HTTP/3 butuh QUIC, yang tidak ada di komputer ini.",
+  "network.http3WrongArch": "Pustaka QUIC pada build ini untuk arsitektur Mac yang salah.",
+  "network.http3WrongArchAppleSilicon": "Pustaka QUIC pada build ini untuk arsitektur Mac yang salah. Gunakan DMG Apple silicon.",
   "network.newConnections": "Perubahan berlaku untuk koneksi baru.",
   "network.protocols": "Protokol",
   "network.reuse": "Pakai ulang koneksi server",

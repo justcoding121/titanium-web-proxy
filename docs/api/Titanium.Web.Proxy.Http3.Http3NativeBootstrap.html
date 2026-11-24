@@ -140,7 +140,7 @@ SIGTERM from a service manager, and Ctrl+C reach the process that actually runs 
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http3_Http3NativeBootstrap_EnsureAppLocalMsQuicVisible_System_String___.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(System.String%5B%5D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http3/Http3NativeBootstrap.cs/#L41">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http3/Http3NativeBootstrap.cs/#L46">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http3_Http3NativeBootstrap_EnsureAppLocalMsQuicVisible_" data-uid="Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible*"></a>
   <h4 id="Titanium_Web_Proxy_Http3_Http3NativeBootstrap_EnsureAppLocalMsQuicVisible_System_String___" data-uid="Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(System.String[])">EnsureAppLocalMsQuicVisible(string[]?)</h4>
@@ -152,7 +152,7 @@ when natives are missing, or when the library path already includes the app dire
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public static void EnsureAppLocalMsQuicVisible(string[]? args = null)</code></pre>
+    <pre><code class="lang-csharp hljs">public static IReadOnlyList&lt;string&gt; EnsureAppLocalMsQuicVisible(string[]? args = null)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-condensed">
@@ -169,6 +169,73 @@ when natives are missing, or when the library path already includes the app dire
         <td><span class="parametername">args</span></td>
         <td><p>Application arguments (as passed to <code>Main</code>), used when relaunching.</p>
 </td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ireadonlylist-1">IReadOnlyList</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><p>On Linux Titanium hosts, paths of leftover <code>libssl.so*</code> / <code>libcrypto.so*</code>
+that could not be deleted. Empty when cleanup succeeded or did not apply. Callers must
+stop before MsQuic loads when this list is not empty.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http3_Http3NativeBootstrap_FormatBlockedOpenSslMessage_System_Collections_Generic_IReadOnlyList_System_String__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList%7BSystem.String%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http3/Http3NativeBootstrap.cs/#L166">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Http3_Http3NativeBootstrap_FormatBlockedOpenSslMessage_" data-uid="Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage*"></a>
+  <h4 id="Titanium_Web_Proxy_Http3_Http3NativeBootstrap_FormatBlockedOpenSslMessage_System_Collections_Generic_IReadOnlyList_System_String__" data-uid="Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList{System.String})">FormatBlockedOpenSslMessage(IReadOnlyList&lt;string&gt;)</h4>
+  <div class="markdown level1 summary"><p>Message for the CLI stderr and the Inspector dialog when leftover OpenSSL
+files are still beside the install and could not be deleted.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static string FormatBlockedOpenSslMessage(IReadOnlyList&lt;string&gt; blockedPaths)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ireadonlylist-1">IReadOnlyList</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">blockedPaths</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td></td>
       </tr>
     </tbody>
   </table>

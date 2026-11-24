@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "notes": "Pinned HTTP/3 native packages for CLI/Inspector publish. MIT-clean zips ship MsQuic + OpenSSL only; libnuma / lttng-ust are host packages (http3-deps), not redistributed. Bump quarterly for CVE patching. Do not commit downloaded binaries under .cache/.",
+  "notes": "Pinned HTTP/3 native packages for CLI/Inspector publish. Linux zips ship MsQuic only; OpenSSL, libnuma, and lttng-ust are host packages. macOS zips ship MsQuic plus Homebrew OpenSSL. Bump quarterly for CVE patching. Do not commit downloaded binaries under .cache/.",
   "glibcBaseline": "ubuntu-22.04",
   "alpineBranch": "v3.24",
   "rids": {
@@ -16,15 +16,10 @@
           "name": "libmsquic",
           "url": "https://packages.microsoft.com/ubuntu/22.04/prod/pool/main/libm/libmsquic/libmsquic_2.6.0_amd64.deb",
           "sha256": "2fdc1cadddaf68487da22a03baa9597c60de9cfd46336d2dc60260372928d354"
-        },
-        {
-          "name": "libssl3",
-          "url": "http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.30_amd64.deb",
-          "sha256": "d1b4636e32ac6d3b95d583ac05ac548b1aa248414bae1c51b14f54be0f8fd7bc"
         }
       ],
-      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
-      "hostPackages": ["libnuma1"]
+      "requiredFiles": ["libmsquic.so*"],
+      "hostPackages": ["libnuma1", "libssl3"]
     },
     "linux-arm64": {
       "mode": "deb",
@@ -33,15 +28,10 @@
           "name": "libmsquic",
           "url": "https://packages.microsoft.com/ubuntu/22.04/prod/pool/main/libm/libmsquic/libmsquic_2.6.0_arm64.deb",
           "sha256": "02cd729367e60e697ba1429bbdee8881aee721658fbaf51ec71f8a87c716fbba"
-        },
-        {
-          "name": "libssl3",
-          "url": "http://ports.ubuntu.com/ubuntu-ports/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.30_arm64.deb",
-          "sha256": "1c4b8cc736eed8a0caafc385f854fa6852382221d84be4795f1d19a52b9fec53"
         }
       ],
-      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
-      "hostPackages": ["libnuma1"]
+      "requiredFiles": ["libmsquic.so*"],
+      "hostPackages": ["libnuma1", "libssl3"]
     },
     "linux-musl-x64": {
       "mode": "apk",
@@ -50,20 +40,10 @@
           "name": "libmsquic",
           "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/libmsquic-2.5.7-r0.apk",
           "sha256": "cefc019005f6f0613b56796ca912d42fc70f0097b3ce56bbbd17c08c331f9552"
-        },
-        {
-          "name": "libssl3",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.9-r0.apk",
-          "sha256": "05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877"
-        },
-        {
-          "name": "libcrypto3",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk",
-          "sha256": "6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689"
         }
       ],
-      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
-      "hostPackages": ["numactl", "lttng-ust"]
+      "requiredFiles": ["libmsquic.so*"],
+      "hostPackages": ["numactl", "lttng-ust", "libssl3", "libcrypto3"]
     },
     "linux-musl-arm64": {
       "mode": "apk",
@@ -72,20 +52,10 @@
           "name": "libmsquic",
           "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/community/aarch64/libmsquic-2.5.7-r0.apk",
           "sha256": "c63eb99109b4bb467fcd9582efcc51e0efc209c4de287ec99353af6bd599f467"
-        },
-        {
-          "name": "libssl3",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.9-r0.apk",
-          "sha256": "20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e"
-        },
-        {
-          "name": "libcrypto3",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk",
-          "sha256": "2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983"
         }
       ],
-      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
-      "hostPackages": ["numactl", "lttng-ust"]
+      "requiredFiles": ["libmsquic.so*"],
+      "hostPackages": ["numactl", "lttng-ust", "libssl3", "libcrypto3"]
     },
     "osx-x64": {
       "mode": "homebrew",

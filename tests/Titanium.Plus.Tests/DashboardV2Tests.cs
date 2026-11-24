@@ -407,6 +407,10 @@ public partial class DashboardV2Tests
         StringAssert.Contains(js.Header("Content-Type")!, "javascript");
         StringAssert.Contains(js.Text, "/api/");
         StringAssert.Contains(js.Text, "2000");
+        StringAssert.Contains(js.Text, "Disconnected, retrying");
+        StringAssert.Contains(js.Text, "window.confirm('Drain ");
+        StringAssert.Contains(js.Text, "errorRatio > 0.05");
+        StringAssert.Contains(js.Text, "p99 > 3");
         Assert.IsFalse(js.Text.Contains("innerHTML", StringComparison.Ordinal), "values are written as text");
         Assert.IsFalse(js.Text.Contains("prompt(", StringComparison.Ordinal), "the prompt() flow is gone");
         Assert.IsFalse(js.Text.Contains("eval(", StringComparison.Ordinal));
@@ -674,6 +678,23 @@ public partial class DashboardV2Tests
         Assert.AreEqual(DashboardMetrics.MaxRoutes + 1, routes.Count, "the cap plus the overflow bucket");
         Assert.IsTrue(routes.Any(r => r.Route == DashboardMetrics.OverflowRoute));
         Assert.AreEqual(DashboardMetrics.MaxRoutes + 11, collector.GetOverview().TotalRequests);
+    }
+
+    [TestMethod]
+    public async Task Routes_PaintsBadWarnAndOkDestinationBadges()
+    {
+        await using var rig = await Rig.CreateAsync(destinationIds: ["healthy", "sick", "leaving", "parked"]);
+        rig.Manager.SetDestinationState("sick", DestinationState.Unhealthy);
+        rig.Manager.SetDestinationState("leaving", DestinationState.Draining);
+        rig.Manager.SetDestinationState("parked", DestinationState.Maintenance);
+
+        var page = await rig.SendAsync("GET", "/routes", secret: Secret);
+
+        Assert.AreEqual(200, page.Status);
+        StringAssert.Contains(page.Text, "data-testid=\"dest-state-healthy\"><span class=\"badge ok\">● Healthy</span>");
+        StringAssert.Contains(page.Text, "data-testid=\"dest-state-sick\"><span class=\"badge bad\">● Unhealthy</span>");
+        StringAssert.Contains(page.Text, "data-testid=\"dest-state-leaving\"><span class=\"badge warn\">◐ Draining</span>");
+        StringAssert.Contains(page.Text, "data-testid=\"dest-state-parked\"><span class=\"badge ok\">● Maintenance</span>");
     }
 
     [TestMethod]

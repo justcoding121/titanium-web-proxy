@@ -67,6 +67,8 @@ For `geo` route policies, assign `ReverseProxyOptions.GeoIpResolver` (`IGeoIpRes
 
 ## System proxy and root CA (Windows / macOS / Linux)
 
+Trusting a generated root certificate changes the current user's certificate store — only do this on a machine you control.
+
 `ProxyServer.SetAsSystemProxy` / `RestoreOriginalProxySettings` work on Windows (WinINET), macOS (`networksetup`), and Linux (GNOME + KDE + process environment). Unsupported platforms throw `NotSupportedException`.
 
 `CertificateManager.TrustRootCertificate` installs into the current-user store on all platforms and additionally trusts for SSL on macOS (login keychain) and Linux (user NSS db). Check `LastOsTrustResult` for structured outcomes (e.g. missing `certutil`, Keychain Always Trust needed). `InstallNssCertutilAndRetryUserTrust` installs NSS tools via package manager / Homebrew after user consent. `FirefoxCertificateTrust` enables Windows `ImportEnterpriseRoots` or profile `user.js` (`security.enterprise_roots.enabled`) so Firefox trusts OS roots, and can import into the default Firefox NSS profile. `TrustRootCertificateAsAdmin` shows an OS admin prompt (UAC / macOS authentication / polkit) for machine-wide trust.

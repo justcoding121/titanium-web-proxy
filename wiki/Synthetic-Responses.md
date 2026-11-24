@@ -137,6 +137,6 @@ For Range support, use `ProxyResults.Stream` (or `RespondStreaming` directly) wi
 ## Common pitfalls
 
 - **Calling `Respond` after the response was sent** throws `InvalidOperationException`. Only call from `BeforeRequest` or `BeforeResponse`.
-- **Replacing a response after the origin replied** — the original server body is drained so the connection can be reused. For large origin bodies you don't want to read, pass `closeServerConnection: true` or call `e.TerminateServerConnection()`.
+- **Replacing a response after the origin replied** — the original server body is drained so the connection can be reused. For large origin bodies you don't want to read, pass `closeServerConnection: true` or call `e.TerminateServerConnection()`. On a keep-alive synthetic response that close drops the origin socket and keeps the client connection.
 - **Do not buffer large bodies through `Html` / `Json`** — use `File` or `Stream` instead.
 - **`AfterResponse` cannot synthesize** — use `BeforeRequest` or `BeforeResponse`.

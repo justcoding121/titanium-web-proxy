@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 ไปยังเซิร์ฟเวอร์",
   "network.http3Help": "ไปยังเซิร์ฟเวอร์เท่านั้น การปิด HTTP/2 ไม่ปิดรายการนี้",
   "network.http3Unavailable": "HTTP/3 ต้องใช้ QUIC ซึ่งคอมพิวเตอร์นี้ไม่มี",
+  "network.http3WrongArch": "ไลบรารี QUIC ของบิลด์นี้เป็นสถาปัตยกรรม Mac ที่ไม่ถูกต้อง",
+  "network.http3WrongArchAppleSilicon": "ไลบรารี QUIC ของบิลด์นี้เป็นสถาปัตยกรรม Mac ที่ไม่ถูกต้อง ใช้ DMG สำหรับ Apple silicon",
   "network.newConnections": "การเปลี่ยนแปลงมีผลกับการเชื่อมต่อใหม่",
   "network.protocols": "โพรโทคอล",
   "network.reuse": "ใช้การเชื่อมต่อเซิร์ฟเวอร์ซ้ำ",

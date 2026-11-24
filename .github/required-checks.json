@@ -27,7 +27,8 @@
         "cla",
         "install-smoke (windows-latest)",
         "install-smoke (ubuntu-latest)",
-        "install-smoke (macos-latest)"
+        "install-smoke (macos-latest)",
+        "release-dry-run"
       ]
     },
     "stable": {
@@ -43,7 +44,8 @@
         "cla",
         "install-smoke (windows-latest)",
         "install-smoke (ubuntu-latest)",
-        "install-smoke (macos-latest)"
+        "install-smoke (macos-latest)",
+        "release-dry-run"
       ]
     }
   }

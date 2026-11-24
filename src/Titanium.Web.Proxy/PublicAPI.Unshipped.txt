@@ -251,7 +251,19 @@ static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? win
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? winInetProxyOverride, bool proxyLoopback) -> string!
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(string? winInetProxyOverride) -> System.Collections.Generic.IReadOnlyList<string!>!
 Titanium.Web.Proxy.Http3.Http3NativeBootstrap
-static Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(string![]? args = null) -> void
+static Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(string![]? args = null) -> System.Collections.Generic.IReadOnlyList<string!>!
+static Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList<string!>! blockedPaths) -> string!
+Titanium.Web.Proxy.Http3.MacHttp3NativeArch
+const Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeArm64 = 16777228 -> int
+const Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeX64 = 16777223 -> int
+static Titanium.Web.Proxy.Http3.MacHttp3NativeArch.DetectMismatch(string? baseDirectory = null, System.Runtime.InteropServices.Architecture? processArchitecture = null, bool? processTranslated = null) -> Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind
+static Titanium.Web.Proxy.Http3.MacHttp3NativeArch.IsProcessTranslated() -> bool
+static Titanium.Web.Proxy.Http3.MacHttp3NativeArch.MatchesProcessArchitecture(int dylibCpuType, System.Runtime.InteropServices.Architecture processArchitecture) -> bool
+static Titanium.Web.Proxy.Http3.MacHttp3NativeArch.TryReadCpuType(System.ReadOnlySpan<byte> header, out int cpuType) -> bool
+Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind
+Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.None = 0 -> Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind
+Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.WrongArchitecture = 1 -> Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind
+Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.WrongArchitectureUnderRosetta = 2 -> Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind
 Titanium.Web.Proxy.SystemProxyChangeResult
 Titanium.Web.Proxy.SystemProxyChangeResult.Message.get -> string!
 Titanium.Web.Proxy.SystemProxyChangeResult.Succeeded.get -> bool

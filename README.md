@@ -1,6 +1,6 @@
 # Titanium Web Proxy
 
-Embeddable .NET 10 HTTP(S) and man-in-the-middle (MITM) proxy library, standalone CLI and Kubernetes reverse proxy, and desktop MITM inspector — on Windows, Linux, and macOS.
+Embeddable .NET HTTP(S) and man-in-the-middle (MITM) proxy library, standalone CLI and Kubernetes reverse proxy, and desktop MITM inspector — on Windows, Linux, and macOS.
 
 [![Build](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml/badge.svg?branch=develop&event=push)](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml?query=branch%3Adevelop+event%3Apush)
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
@@ -56,7 +56,7 @@ Task OnRequest(object sender, SessionEventArgs e)
 
 <img src="wiki/images/basic-screenshot.jpg" alt="Console log of each requested URL" width="900" />
 
-Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. The first run installs a root certificate for the current user — only on a machine you control. [Trust](#trust-and-native-scripting).
+Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. The first run installs a root certificate for the current user — only on a machine you control. [Trust](https://titaniumproxy.com/docs/library#system-proxy-and-root-ca-windows-macos-linux).
 
 - **[Titanium.Web.Proxy](https://www.nuget.org/packages/Titanium.Web.Proxy)** — Embed a proxy (MITM and/or reverse) in a .NET app
 - **[Titanium.Cli](https://titaniumproxy.com/download#stable-cli)** (`titanium` / `twp`) — Standalone reverse / edge proxy from the command line
@@ -162,12 +162,6 @@ helm install titanium deploy/helm/titanium \
   -n proxy --create-namespace \
   -f my-values.yaml
 ```
-
-## Trust and native scripting
-
-Trusting a generated root certificate changes the current user's certificate store — only do this on a machine you control.
-
-Lua 5.4 and proxy-wasm scripting ship with the CLI (`titanium scripting-deps`). Container images include Lua and Wasmtime natives per RID. Details: [Scripting](https://titaniumproxy.com/docs/scripting).
 
 ## What you can do
 

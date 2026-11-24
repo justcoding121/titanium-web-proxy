@@ -1,0 +1,32 @@
+name: signing-env-probe
+
+# Proves azure/login against the signing environment from a branch that is not a
+# release tag. Dispatch this on develop before relying on release-dry-run.
+# The federated credential subject is repo:<owner>/<name>:environment:signing.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: windows-2025
+    environment: signing
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Environment accepted this ref
+        shell: pwsh
+        run: |
+          Write-Host "signing environment accepted $env:GITHUB_REF"
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            throw 'Dispatch this probe from a branch, not a tag.'
+          }

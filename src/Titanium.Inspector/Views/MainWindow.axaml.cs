@@ -309,6 +309,14 @@ public partial class MainWindow : Window
         vm.SetSelectedSessions(selected);
     }
 
+    private void ExitAfterInstallOffer()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
+        else
+            Close();
+    }
+
     private async void OnOpened(object? sender, EventArgs e)
     {
         EnsureNotificationManager();
@@ -326,19 +334,13 @@ public partial class MainWindow : Window
             if (await vm.TryOfferMacDmgMoveAsync())
             {
                 // Installed copy is launching — exit this DMG-hosted process.
-                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-                    desktop.Shutdown();
-                else
-                    Close();
+                ExitAfterInstallOffer();
                 return;
             }
 
             if (await vm.TryOfferLinuxAppImageInstallAsync())
             {
-                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-                    desktop.Shutdown();
-                else
-                    Close();
+                ExitAfterInstallOffer();
                 return;
             }
         }
@@ -354,6 +356,15 @@ public partial class MainWindow : Window
         catch
         {
             // never crash UI on auto-start failure
+        }
+
+        try
+        {
+            vm.NotifyHttp3NativeArchMismatchIfNeeded();
+        }
+        catch
+        {
+            // never block startup on HTTP/3 arch probe failure
         }
 
         try

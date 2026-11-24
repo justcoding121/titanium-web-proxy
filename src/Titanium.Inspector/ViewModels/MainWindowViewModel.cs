@@ -16,6 +16,7 @@ using Titanium.Inspector.Services;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Inspector.Views;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.ViewModels;
@@ -1122,6 +1123,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         {
             PlusPanelsSummary = string.Join("; ", panels.Select(DescribePanel));
         }
+    }
+
+    /// <summary>
+    /// When the open Mac build’s app-local MsQuic dylib does not match this process, show that once in the status bar.
+    /// </summary>
+    public void NotifyHttp3NativeArchMismatchIfNeeded()
+    {
+        var mismatch = MacHttp3NativeArch.DetectMismatch();
+        if (mismatch == MacHttp3NativeMismatchKind.None)
+        {
+            return;
+        }
+
+        var key = mismatch == MacHttp3NativeMismatchKind.WrongArchitectureUnderRosetta
+            ? "network.http3WrongArchAppleSilicon"
+            : "network.http3WrongArch";
+        SetStatus(LanguageService.Get(key), StatusSeverity.Warning);
     }
 
     private async Task ToggleInterceptAsync()

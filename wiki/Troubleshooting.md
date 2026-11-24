@@ -42,3 +42,9 @@ A configured port that is already taken fails the start. The process exits 1 and
 If the message also names a process id, that process was started with the same config file. Use `titanium reload -c <file>` or `titanium restart -c <file>` for that copy. Linux hot restart is the only time two processes share a port on purpose.
 
 On Windows, "access denied" on bind usually means the port is privileged or inside a reserved or excluded range.
+
+## Linux: No usable version of libssl was found
+
+Packages through 8.0.5 shipped Ubuntu 22.04 `libssl.so.3` and `libcrypto.so.3` beside the binary. On a host whose OpenSSL is 3.3 or newer (Ubuntu 26.04, Debian 13, current Fedora), MsQuic loads those copies and aborts with `No usable version of libssl was found` before the window opens. Current builds do not ship those two files and use the host OpenSSL.
+
+On first start, the CLI and Inspector delete leftover `libssl.so*` / `libcrypto.so*` next to `libmsquic` when the install directory is writable. A zip extracted in a home directory cleans up on its own. When the leftovers are root-owned (for example a previous `sudo` zip install under `/opt` or `/usr/local`), the app stops before MsQuic loads: the CLI prints the exact `sudo rm -f …` command, and Inspector shows the same text in a dialog. Delete those files, leave `libmsquic` in place, and start again. A `.deb` / `.rpm` upgrade that runs as root does not need this step.

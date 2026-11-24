@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 לשרתים",
   "network.http3Help": "לשרתים בלבד. כיבוי HTTP/2 לא מכבה את זה.",
   "network.http3Unavailable": "HTTP/3 צריך QUIC, והמחשב הזה לא מספק אותו.",
+  "network.http3WrongArch": "ספריית QUIC בבנייה זו היא לארכיטקטורת Mac הלא נכונה.",
+  "network.http3WrongArchAppleSilicon": "ספריית QUIC בבנייה זו היא לארכיטקטורת Mac הלא נכונה. השתמשו ב-DMG של Apple silicon.",
   "network.newConnections": "השינויים חלים על חיבורים חדשים.",
   "network.protocols": "פרוטוקולים",
   "network.reuse": "שימוש חוזר בחיבורי שרת",

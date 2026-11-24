@@ -132,15 +132,15 @@ choco install titanium-inspector --pre
 ## HTTP/3 native lock file
 
 - **Lock:** [`http3-native.lock.json`](http3-native.lock.json) — pinned URLs + SHA256 per RID.
-- **Script:** [`bundle-http3-native.ps1`](bundle-http3-native.ps1) — download/verify → extract → copy beside binary → `patchelf --set-rpath '$ORIGIN'` (Linux, except the .NET OpenSSL shims, which must keep the host `libssl`) or `install_name_tool` `@loader_path` (macOS).
+- **Script:** [`bundle-http3-native.ps1`](bundle-http3-native.ps1) — download/verify → extract → copy beside binary → `patchelf --set-rpath '$ORIGIN'` on Linux MsQuic (OpenSSL is not copied; the host `libssl` is used) or `install_name_tool` `@loader_path` (macOS, which still bundles OpenSSL).
 - **Cache:** `tools/packaging/.cache/http3-natives/` (gitignored). CI caches this with `actions/cache` keyed on the lock file.
 - **License:** [`THIRD-PARTY-HTTP3.txt`](THIRD-PARTY-HTTP3.txt) is copied into every publish folder (MsQuic MIT + OpenSSL Apache-2.0). Inspector also ships [`THIRD-PARTY-INSPECTOR.txt`](THIRD-PARTY-INSPECTOR.txt) (Inter SIL OFL-1.1).
 
 | RID | Source |
 | --- | --- |
 | `win-x64` | OS component (no DLL shipped) |
-| `linux-x64` / `linux-arm64` | Ubuntu 22.04-class `.deb` (Microsoft `libmsquic` + Ubuntu `libssl3`). Host package: `libnuma1` via `http3-deps` / apt |
-| `linux-musl-x64` / `linux-musl-arm64` | Alpine v3.24 `.apk` (`libmsquic` + Alpine OpenSSL). Host packages: `numactl` + `lttng-ust` via `http3-deps` / apk |
+| `linux-x64` / `linux-arm64` | Ubuntu 22.04-class `.deb` (Microsoft `libmsquic` only). Host packages: `libnuma1` and `libssl3` |
+| `linux-musl-x64` / `linux-musl-arm64` | Alpine v3.24 `.apk` (`libmsquic` only). Host packages: `numactl`, `lttng-ust`, `libssl3`, `libcrypto3`, `icu-libs`. The zip's `titanium` and `twp` commands say `apk add icu-libs` when ICU is missing, then run the binary. |
 | `osx-x64` / `osx-arm64` | Homebrew `libmsquic` + `openssl@3` on `macos-latest` |
 
 Do **not** mix glibc `.so` into musl zips (or the reverse). Do **not** redistribute LGPL/GPL natives (`libnuma`, `lttng-ust`) in the zip — install them on the host.
@@ -165,8 +165,9 @@ See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):
 - Matrix RID × matching runner (`windows-latest` for `win-x64`; `ubuntu-24.04-arm` for linux-arm64 / musl-arm64; `macos-15-intel` for `osx-x64`; `macos-latest` for `osx-arm64`; Alpine container for musl Lua).
 - Azure Artifact Signing on Windows; optional Apple notarize when secrets exist; optional GPG on checksums.
 - Smoke: `linux-x64` / `linux-musl-x64` HTTP/3; `linux-x64` + `win-x64` scripting (`titanium scripting-deps status` + native files).
-- Install smoke: [`inspector-install-smoke.yml`](../../.github/workflows/inspector-install-smoke.yml) installs the packaged Inspector (MSI, deb, DMG) and CLI on Windows, Linux, and macOS. An upgrade keeps Decrypt on. A fresh install starts with Decrypt off until it is turned on. Both must record a decrypted GET. The three OS checks are required on `beta` and `stable`. The release pull request author fixes a red run.
-- Helm: package three charts onto the Release and `helm push` to OCI (`setup-helm` v5).
+- Install smoke: [`inspector-install-smoke.yml`](../../.github/workflows/inspector-install-smoke.yml) installs the packaged Inspector (MSI, deb, DMG) and CLI on Windows, Linux, and macOS. An upgrade keeps Decrypt on. A fresh install starts with Decrypt off until it is turned on. Both must record a decrypted GET. The three OS checks are required on `beta` and `stable`. `macos-15-intel` and `ubuntu-24.04-arm` run as well and are not required until five consecutive greens. The release pull request author fixes a red run.
+- Product smoke: [`product-smoke.yml`](../../.github/workflows/product-smoke.yml) installs the staged Inspector, CLI, and Plus packages, loads the OCI image layout, and installs the packaged Helm charts. `release.yml` builds images and charts once, smokes those artifacts, then publishes the same bytes.
+- Helm: the smoked `.tgz` files are attached to the Release and `helm push`ed to OCI (`setup-helm` v5). Publish does not package the charts again.
 
 Native bundling for CLI scripting runs on **release** and hard-fails the cut when incomplete.
 

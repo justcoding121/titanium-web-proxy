@@ -21,7 +21,7 @@ public static class SystemProxyBrowserCapture
     {
         var quic = disableQuic ? "--disable-quic " : string.Empty;
         var headlessArg = headless ? "--headless=new --disable-gpu " : string.Empty;
-        return Process.Start(new ProcessStartInfo
+        return StartWithoutInheritingOutput(new ProcessStartInfo
         {
             FileName = browserPath,
             Arguments =
@@ -29,8 +29,7 @@ public static class SystemProxyBrowserCapture
                 "--disable-background-networking --disable-sync " +
                 $"--user-data-dir=\"{userDataDir}\" " +
                 $"\"{url}\"",
-            UseShellExecute = false,
-        }) ?? throw new InvalidOperationException($"Failed to start {browserPath}");
+        });
     }
 
     /// <summary>
@@ -41,12 +40,29 @@ public static class SystemProxyBrowserCapture
     public static Process StartFirefox(string browserPath, string profileDir, string url, bool headless = false)
     {
         var headlessArg = headless ? "--headless " : string.Empty;
-        return Process.Start(new ProcessStartInfo
+        return StartWithoutInheritingOutput(new ProcessStartInfo
         {
             FileName = browserPath,
             Arguments = $"{headlessArg}-no-remote -profile \"{profileDir}\" \"{url}\"",
-            UseShellExecute = false,
-        }) ?? throw new InvalidOperationException($"Failed to start {browserPath}");
+        });
+    }
+
+    /// <summary>
+    /// A browser that inherits the smoke driver's stdout keeps a PowerShell pipeline
+    /// open after the driver exits. The Windows package leg then sits until the job
+    /// is cancelled, after the browsers have already passed.
+    /// </summary>
+    private static Process StartWithoutInheritingOutput(ProcessStartInfo psi)
+    {
+        psi.UseShellExecute = false;
+        psi.RedirectStandardOutput = true;
+        psi.RedirectStandardError = true;
+        var proc = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {psi.FileName}");
+        proc.OutputDataReceived += static (_, _) => { };
+        proc.ErrorDataReceived += static (_, _) => { };
+        proc.BeginOutputReadLine();
+        proc.BeginErrorReadLine();
+        return proc;
     }
 
     /// <summary>

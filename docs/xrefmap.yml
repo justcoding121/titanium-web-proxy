@@ -5576,6 +5576,125 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible
   nameWithType: Http3NativeBootstrap.EnsureAppLocalMsQuicVisible
+- uid: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList{System.String})
+  name: FormatBlockedOpenSslMessage(IReadOnlyList<string>)
+  href: api/Titanium.Web.Proxy.Http3.Http3NativeBootstrap.html#Titanium_Web_Proxy_Http3_Http3NativeBootstrap_FormatBlockedOpenSslMessage_System_Collections_Generic_IReadOnlyList_System_String__
+  commentId: M:Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList{System.String})
+  name.vb: FormatBlockedOpenSslMessage(IReadOnlyList(Of String))
+  fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList<string>)
+  fullName.vb: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage(System.Collections.Generic.IReadOnlyList(Of String))
+  nameWithType: Http3NativeBootstrap.FormatBlockedOpenSslMessage(IReadOnlyList<string>)
+  nameWithType.vb: Http3NativeBootstrap.FormatBlockedOpenSslMessage(IReadOnlyList(Of String))
+- uid: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage*
+  name: FormatBlockedOpenSslMessage
+  href: api/Titanium.Web.Proxy.Http3.Http3NativeBootstrap.html#Titanium_Web_Proxy_Http3_Http3NativeBootstrap_FormatBlockedOpenSslMessage_
+  commentId: Overload:Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.FormatBlockedOpenSslMessage
+  nameWithType: Http3NativeBootstrap.FormatBlockedOpenSslMessage
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch
+  name: MacHttp3NativeArch
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html
+  commentId: T:Titanium.Web.Proxy.Http3.MacHttp3NativeArch
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch
+  nameWithType: MacHttp3NativeArch
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeArm64
+  name: CpuTypeArm64
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_CpuTypeArm64
+  commentId: F:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeArm64
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeArm64
+  nameWithType: MacHttp3NativeArch.CpuTypeArm64
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeX64
+  name: CpuTypeX64
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_CpuTypeX64
+  commentId: F:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeX64
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.CpuTypeX64
+  nameWithType: MacHttp3NativeArch.CpuTypeX64
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.DetectMismatch(System.String,System.Nullable{System.Runtime.InteropServices.Architecture},System.Nullable{System.Boolean})
+  name: DetectMismatch(string?, Architecture?, bool?)
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_DetectMismatch_System_String_System_Nullable_System_Runtime_InteropServices_Architecture__System_Nullable_System_Boolean__
+  commentId: M:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.DetectMismatch(System.String,System.Nullable{System.Runtime.InteropServices.Architecture},System.Nullable{System.Boolean})
+  name.vb: DetectMismatch(String, Architecture?, Boolean?)
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.DetectMismatch(string?, System.Runtime.InteropServices.Architecture?, bool?)
+  fullName.vb: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.DetectMismatch(String, System.Runtime.InteropServices.Architecture?, Boolean?)
+  nameWithType: MacHttp3NativeArch.DetectMismatch(string?, Architecture?, bool?)
+  nameWithType.vb: MacHttp3NativeArch.DetectMismatch(String, Architecture?, Boolean?)
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.DetectMismatch*
+  name: DetectMismatch
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_DetectMismatch_
+  commentId: Overload:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.DetectMismatch
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.DetectMismatch
+  nameWithType: MacHttp3NativeArch.DetectMismatch
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.IsProcessTranslated
+  name: IsProcessTranslated()
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_IsProcessTranslated
+  commentId: M:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.IsProcessTranslated
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.IsProcessTranslated()
+  nameWithType: MacHttp3NativeArch.IsProcessTranslated()
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.IsProcessTranslated*
+  name: IsProcessTranslated
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_IsProcessTranslated_
+  commentId: Overload:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.IsProcessTranslated
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.IsProcessTranslated
+  nameWithType: MacHttp3NativeArch.IsProcessTranslated
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.MatchesProcessArchitecture(System.Int32,System.Runtime.InteropServices.Architecture)
+  name: MatchesProcessArchitecture(int, Architecture)
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_MatchesProcessArchitecture_System_Int32_System_Runtime_InteropServices_Architecture_
+  commentId: M:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.MatchesProcessArchitecture(System.Int32,System.Runtime.InteropServices.Architecture)
+  name.vb: MatchesProcessArchitecture(Integer, Architecture)
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.MatchesProcessArchitecture(int, System.Runtime.InteropServices.Architecture)
+  fullName.vb: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.MatchesProcessArchitecture(Integer, System.Runtime.InteropServices.Architecture)
+  nameWithType: MacHttp3NativeArch.MatchesProcessArchitecture(int, Architecture)
+  nameWithType.vb: MacHttp3NativeArch.MatchesProcessArchitecture(Integer, Architecture)
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.MatchesProcessArchitecture*
+  name: MatchesProcessArchitecture
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_MatchesProcessArchitecture_
+  commentId: Overload:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.MatchesProcessArchitecture
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.MatchesProcessArchitecture
+  nameWithType: MacHttp3NativeArch.MatchesProcessArchitecture
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.TryReadCpuType(System.ReadOnlySpan{System.Byte},System.Int32@)
+  name: TryReadCpuType(ReadOnlySpan<byte>, out int)
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_TryReadCpuType_System_ReadOnlySpan_System_Byte__System_Int32__
+  commentId: M:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.TryReadCpuType(System.ReadOnlySpan{System.Byte},System.Int32@)
+  name.vb: TryReadCpuType(ReadOnlySpan(Of Byte), Integer)
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.TryReadCpuType(System.ReadOnlySpan<byte>, out int)
+  fullName.vb: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.TryReadCpuType(System.ReadOnlySpan(Of Byte), Integer)
+  nameWithType: MacHttp3NativeArch.TryReadCpuType(ReadOnlySpan<byte>, out int)
+  nameWithType.vb: MacHttp3NativeArch.TryReadCpuType(ReadOnlySpan(Of Byte), Integer)
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.TryReadCpuType*
+  name: TryReadCpuType
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeArch.html#Titanium_Web_Proxy_Http3_MacHttp3NativeArch_TryReadCpuType_
+  commentId: Overload:Titanium.Web.Proxy.Http3.MacHttp3NativeArch.TryReadCpuType
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeArch.TryReadCpuType
+  nameWithType: MacHttp3NativeArch.TryReadCpuType
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind
+  name: MacHttp3NativeMismatchKind
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.html
+  commentId: T:Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind
+  nameWithType: MacHttp3NativeMismatchKind
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.None
+  name: None
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.html#Titanium_Web_Proxy_Http3_MacHttp3NativeMismatchKind_None
+  commentId: F:Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.None
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.None
+  nameWithType: MacHttp3NativeMismatchKind.None
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.WrongArchitecture
+  name: WrongArchitecture
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.html#Titanium_Web_Proxy_Http3_MacHttp3NativeMismatchKind_WrongArchitecture
+  commentId: F:Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.WrongArchitecture
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.WrongArchitecture
+  nameWithType: MacHttp3NativeMismatchKind.WrongArchitecture
+- uid: Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.WrongArchitectureUnderRosetta
+  name: WrongArchitectureUnderRosetta
+  href: api/Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.html#Titanium_Web_Proxy_Http3_MacHttp3NativeMismatchKind_WrongArchitectureUnderRosetta
+  commentId: F:Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.WrongArchitectureUnderRosetta
+  fullName: Titanium.Web.Proxy.Http3.MacHttp3NativeMismatchKind.WrongArchitectureUnderRosetta
+  nameWithType: MacHttp3NativeMismatchKind.WrongArchitectureUnderRosetta
 - uid: Titanium.Web.Proxy.Logging
   name: Titanium.Web.Proxy.Logging
   href: api/Titanium.Web.Proxy.Logging.html

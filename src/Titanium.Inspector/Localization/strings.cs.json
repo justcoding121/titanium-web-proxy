@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 na servery",
   "network.http3Help": "Jen na servery. Vypnutí HTTP/2 toto nevypne.",
   "network.http3Unavailable": "HTTP/3 potřebuje QUIC, který tento počítač nemá.",
+  "network.http3WrongArch": "Knihovna QUIC v tomto sestavení má špatnou architekturu Macu.",
+  "network.http3WrongArchAppleSilicon": "Knihovna QUIC v tomto sestavení má špatnou architekturu Macu. Použijte DMG pro Apple silicon.",
   "network.newConnections": "Změny platí pro nová spojení.",
   "network.protocols": "Protokoly",
   "network.reuse": "Znovu použít spojení se serverem",

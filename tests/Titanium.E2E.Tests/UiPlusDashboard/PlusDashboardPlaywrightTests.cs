@@ -28,10 +28,22 @@ public class PlusDashboardPlaywrightTests : PageTest
     private ControlPlaneServer? _control;
     private DashboardHost? _dashboard;
     private string _prefix = "";
+    private bool _acceptDialogs = true;
 
     [TestInitialize]
     public async Task StartDashboardAsync()
     {
+        Page.Dialog += async (_, dialog) =>
+        {
+            if (_acceptDialogs)
+            {
+                await dialog.AcceptAsync();
+            }
+            else
+            {
+                await dialog.DismissAsync();
+            }
+        };
         Environment.SetEnvironmentVariable("TITANIUM_PLUS_ALLOW_DEV_SECRET", "1");
         await StartAsync([new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 80 }]);
     }
@@ -320,6 +332,68 @@ public class PlusDashboardPlaywrightTests : PageTest
         await Page.GotoAsync(_prefix + "routes");
         await Expect(Page.GetByTestId("plus-dashboard")).ToBeVisibleAsync();
         await Expect(Page.Locator("body")).ToContainTextAsync("No destinations in snapshot.");
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    public async Task Drain_CancelledConfirm_DoesNotChangeState()
+    {
+        await LoginAsync(Secret);
+        await Page.GotoAsync(_prefix + "routes");
+        _acceptDialogs = false;
+        await Page.GetByTestId("btn-drain-d1").ClickAsync();
+        await Expect(Page.GetByTestId("dest-state-d1")).ToContainTextAsync("Healthy");
+        Assert.AreEqual(DestinationState.Healthy, _manager!.GetDestinationState("d1"));
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    public async Task PollFailure_ShowsDisconnected_AndNarrowLayoutDoesNotOverflow()
+    {
+        await Page.SetViewportSizeAsync(390, 800);
+        await LoginAsync(Secret);
+        await Expect(Page.GetByTestId("live-status")).ToBeVisibleAsync();
+        var overflow = await Page.EvaluateAsync<bool>(
+            "() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1");
+        Assert.IsFalse(overflow, "The page itself scrolls sideways; only a table container may.");
+
+        await Page.GotoAsync(_prefix + "routes");
+        var scrolls = await Page.EvaluateAsync<bool>(
+            "() => Array.from(document.querySelectorAll('.table-scroll')).some(el => el.scrollWidth > el.clientWidth + 1)");
+        Assert.IsTrue(scrolls, "A wide table scrolls inside its own container.");
+        await Page.GotoAsync(_prefix);
+
+        await Page.RouteAsync("**/api/overview", route => route.AbortAsync());
+        await Page.WaitForTimeoutAsync(2500);
+        await Expect(Page.GetByTestId("live-status")).ToContainTextAsync("Disconnected");
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    public async Task Views_CaptureLightDarkAndNarrowScreenshots()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "plus-dashboard-shots");
+        Directory.CreateDirectory(dir);
+        await LoginAsync(Secret);
+        foreach (var scheme in new[] { ColorScheme.Light, ColorScheme.Dark })
+        {
+            await Page.EmulateMediaAsync(new() { ColorScheme = scheme });
+            foreach (var (slug, path) in new[] { ("overview", ""), ("routes", "routes"), ("health", "health"), ("config", "config"), ("certs", "certificates"), ("audit", "audit") })
+            {
+                await Page.GotoAsync(_prefix + path);
+                await Expect(Page.GetByTestId("live-status")).ToContainTextAsync("Live");
+                await Page.ScreenshotAsync(new()
+                {
+                    Path = Path.Combine(dir, scheme + "-" + slug + ".png"),
+                    FullPage = true,
+                });
+            }
+        }
+
+        await Page.SetViewportSizeAsync(390, 800);
+        await Page.GotoAsync(_prefix + "routes");
+        await Expect(Page.GetByTestId("live-status")).ToContainTextAsync("Live");
+        await Page.ScreenshotAsync(new() { Path = Path.Combine(dir, "narrow-routes.png"), FullPage = true });
     }
 
     private async Task LoginAsync(string secret)

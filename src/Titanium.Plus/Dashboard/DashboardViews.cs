@@ -41,7 +41,7 @@ internal static class DashboardViews
     private const string TableRowCellOpen = "\"><td>";
     private const string TableCellCloseOpen = "</td><td>";
     private const string TableRowClose = "</td></tr>";
-    private const string TableBodyClose = "</tbody></table>";
+    private const string TableBodyClose = "</tbody></table></div>";
 
     internal static readonly (DashboardView View, string Path, string Slug, string Title)[] Navigation =
     [
@@ -89,7 +89,7 @@ internal static class DashboardViews
             if (features.ShowLocalUsers)
             {
                 sb.Append("<label for=\"user\">Username</label>")
-                    .Append("<input id=\"user\" name=\"user\" type=\"text\" autocomplete=\"username\" data-testid=\"login-user\"/>")
+                    .Append("<input id=\"user\" name=\"user\" type=\"text\" autocomplete=\"username\" autofocus data-testid=\"login-user\"/>")
                     .Append("<label for=\"password\">Password</label>")
                     .Append("<input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"current-password\" data-testid=\"login-password\"/>");
             }
@@ -100,7 +100,7 @@ internal static class DashboardViews
                     .Append("<input id=\"secret\" name=\"secret\" type=\"password\" autocomplete=\"current-password\" data-testid=\"login-secret\"");
                 if (!features.ShowLocalUsers)
                 {
-                    sb.Append(" required");
+                    sb.Append(" required autofocus");
                 }
 
                 sb.Append("/>");
@@ -130,6 +130,7 @@ internal static class DashboardViews
             .Append("<body data-testid=\"plus-dashboard\" data-view=\"").Append(current.Slug)
             .Append("\" data-role=\"").Append(Enc(role))
             .Append("\" data-csrf=\"").Append(Enc(csrfToken)).Append("\">")
+            .Append("<a class=\"skip\" href=\"#content\">Skip to content</a>")
             .Append("<header><h1>Titanium Plus</h1><nav aria-label=\"Views\">");
         foreach (var (v, path, slug, title) in Navigation)
         {
@@ -143,9 +144,10 @@ internal static class DashboardViews
         }
 
         sb.Append("</nav><span class=\"who\" data-testid=\"whoami\">").Append(Enc(role)).Append("</span>")
-            .Append("<button type=\"button\" id=\"logout\" data-testid=\"btn-logout\">Sign out</button></header>")
+            .Append("<span class=\"live\" data-testid=\"live-status\" aria-live=\"polite\">Connecting</span>")
+            .Append("<button type=\"button\" id=\"logout\" class=\"secondary\" data-testid=\"btn-logout\">Sign out</button></header>")
             .Append("<p id=\"flash\" role=\"status\" data-testid=\"flash\"></p>")
-            .Append("<main>").Append(body).Append("</main>")
+            .Append("<main id=\"content\">").Append(body).Append("</main>")
             .Append("<script src=\"/assets/dashboard.js\"></script></body></html>");
         return sb.ToString();
     }
@@ -153,14 +155,14 @@ internal static class DashboardViews
     public static string Overview(DashboardOverview o)
     {
         var sb = new StringBuilder("<section class=\"cards\" data-testid=\"overview\">");
-        Card(sb, "rps", "Requests per second", Rate(o.RequestsPerSecond));
-        Card(sb, "error-ratio", "Error ratio", Ratio(o.ErrorRatio));
-        Card(sb, "p50", "p50 latency", Seconds(o.Latency.P50Seconds));
-        Card(sb, "p95", "p95 latency", Seconds(o.Latency.P95Seconds));
-        Card(sb, "p99", "p99 latency", Seconds(o.Latency.P99Seconds));
-        Card(sb, "active-connections", "Active connections", o.ActiveConnections.ToString(CultureInfo.InvariantCulture));
-        Card(sb, "active-requests", "Active requests", o.ActiveRequests.ToString(CultureInfo.InvariantCulture));
-        Card(sb, "total-requests", "Requests since start", o.TotalRequests.ToString(CultureInfo.InvariantCulture));
+        Card(sb, "rps", "Requests per second", Rate(o.RequestsPerSecond), null);
+        Card(sb, "error-ratio", "Error ratio", Ratio(o.ErrorRatio), "Amber above 1 %. Red above 5 %.");
+        Card(sb, "p50", "p50 latency", Seconds(o.Latency.P50Seconds), null);
+        Card(sb, "p95", "p95 latency", Seconds(o.Latency.P95Seconds), null);
+        Card(sb, "p99", "p99 latency", Seconds(o.Latency.P99Seconds), "Amber above 1 s. Red above 3 s.");
+        Card(sb, "active-connections", "Active connections", o.ActiveConnections.ToString(CultureInfo.InvariantCulture), null);
+        Card(sb, "active-requests", "Active requests", o.ActiveRequests.ToString(CultureInfo.InvariantCulture), null);
+        Card(sb, "total-requests", "Requests since start", o.TotalRequests.ToString(CultureInfo.InvariantCulture), null);
         sb.Append("</section><p class=\"hint\">Rate averages the last ").Append(o.RateWindowSeconds)
             .Append(" s. Error ratio and percentiles cover the last ").Append(o.StatsWindowSeconds)
             .Append(" s. An error is a 5xx answer or no answer.</p>")
@@ -173,12 +175,12 @@ internal static class DashboardViews
     public static string Routes(RoutesPageData data, bool canOperate)
     {
         var sb = new StringBuilder();
-        sb.Append("<h2>Routes</h2><table data-testid=\"routes-table\"><thead><tr><th>Route</th><th>Match</th><th>Action</th>")
+        sb.Append("<h2>Routes</h2><div class=\"table-scroll\"><table data-testid=\"routes-table\"><thead><tr><th>Route</th><th>Match</th><th>Action</th>")
             .Append("<th>Cluster</th><th>Transforms</th><th>Requests</th><th>Errors</th><th>p50</th><th>p95</th><th>p99</th></tr></thead>")
             .Append("<tbody id=\"routes-body\">");
         if (data.Routes.Count == 0)
         {
-            sb.Append("<tr><td colspan=\"10\">No routes configured.</td></tr>");
+            sb.Append("<tr><td colspan=\"10\">No routes configured. Add a route from the edit panel below.</td></tr>");
         }
 
         foreach (var r in data.Routes)
@@ -191,12 +193,12 @@ internal static class DashboardViews
                 .Append(TableCellCloseOpen).Append(Seconds(r.P99Seconds)).Append(TableRowClose);
         }
 
-        sb.Append(TableBodyClose).Append("<h2>Clusters</h2><table data-testid=\"clusters-table\"><thead><tr><th>Cluster</th>")
+        sb.Append(TableBodyClose).Append("<h2>Clusters</h2><div class=\"table-scroll\"><table data-testid=\"clusters-table\"><thead><tr><th>Cluster</th>")
             .Append("<th>Balancing</th><th>Healthy</th><th>Active probe</th><th>Passive health</th><th>Upstream TLS</th></tr></thead>")
             .Append("<tbody id=\"clusters-body\">");
         if (data.Clusters.Count == 0)
         {
-            sb.Append("<tr><td colspan=\"6\">No clusters configured.</td></tr>");
+            sb.Append("<tr><td colspan=\"6\">No clusters configured. Add a cluster from the edit panel below.</td></tr>");
         }
 
         foreach (var c in data.Clusters)
@@ -209,11 +211,11 @@ internal static class DashboardViews
         }
 
         sb.Append(TableBodyClose).Append("<h2>Destinations</h2>")
-            .Append("<table data-testid=\"destinations-table\"><thead><tr><th>Destination</th><th>Cluster</th><th>Address</th>")
+            .Append("<div class=\"table-scroll\"><table data-testid=\"destinations-table\"><thead><tr><th>Destination</th><th>Cluster</th><th>Address</th>")
             .Append("<th>State</th><th>Actions</th></tr></thead><tbody id=\"destinations-body\">");
         if (data.Destinations.Count == 0)
         {
-            sb.Append("<tr><td colspan=\"5\">No destinations in snapshot.</td></tr>");
+            sb.Append("<tr><td colspan=\"5\">No destinations in snapshot. Add a cluster from the edit panel below.</td></tr>");
         }
 
         foreach (var d in data.Destinations)
@@ -221,11 +223,11 @@ internal static class DashboardViews
             var id = Enc(d.Id);
             sb.Append("<tr data-testid=\"dest-row-").Append(id).Append(TableRowCellOpen).Append(id)
                 .Append(TableCellCloseOpen).Append(Enc(d.ClusterId)).Append(TableCellCloseOpen).Append(Enc(AddressOf(d)))
-                .Append(TableCellCloseOpen).Append("<td data-testid=\"dest-state-").Append(id).Append("\">").Append(Enc(d.State))
-                .Append("</td><td><button type=\"button\" data-act=\"drain\" data-id=\"").Append(id)
-                .Append("\" data-testid=\"btn-drain-").Append(id).Append('"').Append(canOperate ? "" : " disabled")
-                .Append(">Drain</button> <button type=\"button\" data-act=\"healthy\" data-id=\"").Append(id)
-                .Append("\" data-testid=\"btn-healthy-").Append(id).Append('"').Append(canOperate ? "" : " disabled")
+                .Append(TableCellCloseOpen).Append("<td data-testid=\"dest-state-").Append(id).Append("\">").Append(StateBadge(d.State))
+                .Append("</td><td><button type=\"button\" class=\"danger\" data-act=\"drain\" data-id=\"").Append(id)
+                .Append("\" data-testid=\"btn-drain-").Append(id).Append('"').Append(canOperate ? "" : " disabled title=\"Viewer role cannot operate\"")
+                .Append(">Drain</button> <button type=\"button\" class=\"secondary\" data-act=\"healthy\" data-id=\"").Append(id)
+                .Append("\" data-testid=\"btn-healthy-").Append(id).Append('"').Append(canOperate ? "" : " disabled title=\"Viewer role cannot operate\"")
                 .Append(">Healthy</button></td></tr>");
         }
 
@@ -308,7 +310,7 @@ internal static class DashboardViews
     public static string Health(IReadOnlyList<HealthEventView> events)
     {
         var sb = new StringBuilder("<p class=\"hint\">The newest 200 ejections, recoveries, and failed probes, newest first.</p>")
-            .Append("<table data-testid=\"health-table\"><thead><tr><th>Time (UTC)</th><th>Destination</th><th>Event</th>")
+            .Append("<div class=\"table-scroll\"><table data-testid=\"health-table\"><thead><tr><th>Time (UTC)</th><th>Destination</th><th>Event</th>")
             .Append("<th>Source</th><th>Detail</th></tr></thead><tbody id=\"health-body\">");
         if (events.Count == 0)
         {
@@ -364,7 +366,7 @@ internal static class DashboardViews
 
     public static string Certificates(IReadOnlyList<CertificateView> certs)
     {
-        var sb = new StringBuilder("<table data-testid=\"cert-table\"><thead><tr><th>Name</th><th>Role</th><th>Subject</th>")
+        var sb = new StringBuilder("<div class=\"table-scroll\"><table data-testid=\"cert-table\"><thead><tr><th>Name</th><th>Role</th><th>Subject</th>")
             .Append("<th>Issuer</th><th>Expires (UTC)</th><th>Days left</th><th>Status</th></tr></thead><tbody id=\"certs-body\">");
         if (certs.Count == 0)
         {
@@ -380,13 +382,13 @@ internal static class DashboardViews
                 .Append(TableCellCloseOpen).Append(Enc(c.Error.Length > 0 ? c.Status + ": " + c.Error : c.Status)).Append(TableRowClose);
         }
 
-        return sb.Append("</tbody></table>").ToString();
+        return sb.Append("</tbody></table></div>").ToString();
     }
 
     public static string Audit(IReadOnlyList<AuditView> entries)
     {
         var sb = new StringBuilder("<p class=\"hint\">The newest events first. The full ring is at <a href=\"/api/audit\">/api/audit</a>.</p>")
-            .Append("<table data-testid=\"audit-table\"><thead><tr><th>Time (UTC)</th><th>Actor</th><th>Remote</th>")
+            .Append("<div class=\"table-scroll\"><table data-testid=\"audit-table\"><thead><tr><th>Time (UTC)</th><th>Actor</th><th>Remote</th>")
             .Append("<th>Action</th><th>Target</th><th>Result</th></tr></thead><tbody id=\"audit-body\">");
         if (entries.Count == 0)
         {
@@ -400,13 +402,39 @@ internal static class DashboardViews
                 .Append(TableCellCloseOpen).Append(Enc(e.Target)).Append(TableCellCloseOpen).Append(Enc(e.Result)).Append(TableRowClose);
         }
 
-        return sb.Append("</tbody></table>").ToString();
+        return sb.Append("</tbody></table></div>").ToString();
     }
 
-    private static void Card(StringBuilder sb, string key, string label, string value) =>
-        sb.Append("<div class=\"card\"><span class=\"label\">").Append(Enc(label))
+    private static void Card(StringBuilder sb, string key, string label, string value, string? threshold)
+    {
+        sb.Append("<div class=\"card\" data-card=\"").Append(key).Append("\"><span class=\"label\">").Append(Enc(label))
             .Append("</span><span class=\"value\" data-field=\"").Append(key).Append("\" data-testid=\"ov-").Append(key)
-            .Append("\">").Append(Enc(value)).Append("</span></div>");
+            .Append("\">").Append(Enc(value)).Append("</span><span class=\"spark\" data-spark=\"").Append(key).Append("\"></span>");
+        if (threshold is not null)
+        {
+            sb.Append("<span class=\"threshold\">").Append(Enc(threshold)).Append("</span>");
+        }
+
+        sb.Append("</div>");
+    }
+
+    private static string StateBadge(string state)
+    {
+        var kind = "ok";
+        if (state.Contains("Unhealthy", StringComparison.OrdinalIgnoreCase)
+            || state.Contains("Fail", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = "bad";
+        }
+        else if (state.Contains("Drain", StringComparison.OrdinalIgnoreCase)
+            || state.Contains("Eject", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = "warn";
+        }
+
+        var mark = kind == "warn" ? "◐ " : "● ";
+        return "<span class=\"badge " + kind + "\">" + mark + Enc(state) + "</span>";
+    }
 
     private static void Fact(StringBuilder sb, string key, string label, string value) =>
         sb.Append("<dt>").Append(Enc(label)).Append("</dt><dd data-field=\"").Append(key)

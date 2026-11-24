@@ -38,48 +38,175 @@ public static class Http3NativeBootstrap
     /// when natives are missing, or when the library path already includes the app directory.
     /// </summary>
     /// <param name="args">Application arguments (as passed to <c>Main</c>), used when relaunching.</param>
-    public static void EnsureAppLocalMsQuicVisible(string[]? args = null)
+    /// <returns>
+    /// On Linux Titanium hosts, paths of leftover <c>libssl.so*</c> / <c>libcrypto.so*</c>
+    /// that could not be deleted. Empty when cleanup succeeded or did not apply. Callers must
+    /// stop before MsQuic loads when this list is not empty.
+    /// </returns>
+    public static IReadOnlyList<string> EnsureAppLocalMsQuicVisible(string[]? args = null)
     {
+        // An 8.0.5 zip update copies the new build over the old directory and
+        // leaves libssl/libcrypto behind. That updater runs inside 8.0.5, so
+        // the delete has to happen when this process starts, before MsQuic loads.
+        // Only Titanium's own hosts: this method is public, and a library consumer
+        // may keep its own OpenSSL beside the app.
+        IReadOnlyList<string> blocked = Array.Empty<string>();
+        if (OperatingSystem.IsLinux()
+            && IsTitaniumOpenSslCleanupHost(Assembly.GetEntryAssembly()?.GetName().Name))
+        {
+            blocked = RemoveStaleBundledOpenSsl(AppContext.BaseDirectory).BlockedPaths;
+        }
+
         if (!OperatingSystem.IsMacOS())
         {
-            return;
+            return blocked;
         }
 
         if (string.Equals(Environment.GetEnvironmentVariable(SkipReexecEnv), "1", StringComparison.Ordinal))
         {
-            return;
+            return blocked;
         }
 
         if (string.Equals(Environment.GetEnvironmentVariable(ReexecMarkerEnv), "1", StringComparison.Ordinal))
         {
-            return;
+            return blocked;
         }
 
         var baseDir = NormalizeDir(AppContext.BaseDirectory);
         if (string.IsNullOrEmpty(baseDir))
         {
-            return;
+            return blocked;
         }
 
         var msquic = Path.Combine(baseDir, "libmsquic.dylib");
         if (!File.Exists(msquic))
         {
-            return;
+            return blocked;
         }
 
         // Self-contained / app-local framework: System.Net.Quic lives next to the dylibs.
         if (IsQuicAssemblyBesideApp(baseDir))
         {
-            return;
+            return blocked;
         }
 
         if (DyldSearchPathContains(baseDir))
         {
-            return;
+            return blocked;
         }
 
         RelaunchWithDyldFallback(baseDir, args ?? Array.Empty<string>());
+        return blocked;
     }
+
+    /// <summary>
+    /// True for the Titanium CLI, Inspector, and load-probe hosts. Other entry
+    /// assemblies keep whatever OpenSSL they shipped beside their binaries.
+    /// </summary>
+    internal static bool IsTitaniumOpenSslCleanupHost(string? entryAssemblyName) =>
+        entryAssemblyName is "titanium" or "TitaniumInspector" or "RpsLoadProbe";
+
+    /// <summary>
+    /// Deletes bundled OpenSSL copies next to the app. Host OpenSSL 3.3+ aborts
+    /// when MsQuic loads those files beside <c>libmsquic</c>. Writable files are
+    /// removed quietly. A file that cannot be deleted is left in place and listed
+    /// in <see cref="StaleOpenSslCleanupResult.BlockedPaths"/>. A directory with
+    /// no <c>libmsquic.so*</c> is left untouched.
+    /// </summary>
+    internal static StaleOpenSslCleanupResult RemoveStaleBundledOpenSsl(string? directory) =>
+        RemoveStaleBundledOpenSsl(directory, File.Delete);
+
+    internal static StaleOpenSslCleanupResult RemoveStaleBundledOpenSsl(
+        string? directory,
+        Action<string> delete)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return StaleOpenSslCleanupResult.Empty;
+        }
+
+        if (!HasBundledMsQuic(directory))
+        {
+            return StaleOpenSslCleanupResult.Empty;
+        }
+
+        var removed = 0;
+        List<string>? blocked = null;
+        foreach (var path in Directory.EnumerateFiles(directory))
+        {
+            var name = Path.GetFileName(path);
+            if (!name.StartsWith("libssl.so", StringComparison.Ordinal)
+                && !name.StartsWith("libcrypto.so", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                delete(path);
+                removed++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Root-owned or locked leftovers. Stop the host before MsQuic loads.
+                blocked ??= new List<string>();
+                blocked.Add(path);
+            }
+        }
+
+        return new StaleOpenSslCleanupResult(
+            removed,
+            blocked is null ? Array.Empty<string>() : blocked);
+    }
+
+    /// <summary>
+    /// Message for the CLI stderr and the Inspector dialog when leftover OpenSSL
+    /// files are still beside the install and could not be deleted.
+    /// </summary>
+    public static string FormatBlockedOpenSslMessage(IReadOnlyList<string> blockedPaths)
+    {
+        if (blockedPaths is null || blockedPaths.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var dir = Path.GetDirectoryName(blockedPaths[0]) ?? ".";
+        var quoted = string.Join(
+            " ",
+            blockedPaths.Select(static p => "'" + p.Replace("'", "'\\''", StringComparison.Ordinal) + "'"));
+        return
+            "Leftover OpenSSL libraries next to this install could not be removed "
+            + "(often because a previous install wrote them as root)."
+            + Environment.NewLine
+            + "MsQuic will abort with \"No usable version of libssl was found\" if they stay."
+            + Environment.NewLine
+            + "Delete them, leave libmsquic in place, then start again:"
+            + Environment.NewLine
+            + "  sudo rm -f " + quoted
+            + Environment.NewLine
+            + "Install directory: " + dir;
+    }
+
+    /// <summary>Result of deleting leftover bundled OpenSSL next to MsQuic.</summary>
+    internal readonly struct StaleOpenSslCleanupResult
+    {
+        public static StaleOpenSslCleanupResult Empty { get; } =
+            new(0, Array.Empty<string>());
+
+        public StaleOpenSslCleanupResult(int removedCount, IReadOnlyList<string> blockedPaths)
+        {
+            RemovedCount = removedCount;
+            BlockedPaths = blockedPaths ?? Array.Empty<string>();
+        }
+
+        public int RemovedCount { get; }
+
+        public IReadOnlyList<string> BlockedPaths { get; }
+    }
+
+    private static bool HasBundledMsQuic(string directory) =>
+        Directory.EnumerateFiles(directory)
+            .Any(path => Path.GetFileName(path).StartsWith("libmsquic.so", StringComparison.Ordinal));
 
     private static bool IsQuicAssemblyBesideApp(string baseDir)
     {

@@ -362,6 +362,8 @@
   "network.http3": "Sunuculara HTTP/3",
   "network.http3Help": "Yalnızca sunuculara. HTTP/2 kapatmak bunu kapatmaz.",
   "network.http3Unavailable": "HTTP/3 için QUIC gerekir. Bu bilgisayar bunu sağlamaz.",
+  "network.http3WrongArch": "Bu derlemenin QUIC kitaplığı yanlış Mac mimarisi için.",
+  "network.http3WrongArchAppleSilicon": "Bu derlemenin QUIC kitaplığı yanlış Mac mimarisi için. Apple silicon DMG dosyasını kullanın.",
   "network.newConnections": "Değişiklikler yeni bağlantılara uygulanır.",
   "network.protocols": "Protokoller",
   "network.reuse": "Sunucu bağlantılarını yeniden kullan",

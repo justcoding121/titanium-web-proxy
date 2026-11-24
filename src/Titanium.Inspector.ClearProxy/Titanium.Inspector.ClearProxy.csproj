@@ -7,7 +7,7 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <SignAssembly>false</SignAssembly>
-    <VersionPrefix>8.0.5</VersionPrefix>
+    <VersionPrefix>8.0.8</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Clears leftover Titanium Inspector loopback proxy hooks when the app is not running.</Description>
     <AssemblyName>titanium-inspector-clear</AssemblyName>
