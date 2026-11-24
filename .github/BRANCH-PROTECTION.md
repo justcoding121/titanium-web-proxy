@@ -24,6 +24,12 @@ Apply after a promotion pull request has shown `merge-gate` green:
 gh api -X PUT repos/justcoding121/titanium-web-proxy/rulesets/24311415 --input .github/branch-ruleset-beta-stable.json
 ```
 
+## Promotion heads
+
+Promotion pull requests use head branch `release/<version>-to-<channel>` created from `develop` (for example `release/809-to-beta`). Do not open the promotion from a long-lived `develop` push tip: the dry-run concurrency group is per PR and `cancel-in-progress` is on for `pull_request`, so ordinary develop merges would cancel an in-flight dry-run on a `develop`-based head.
+
+The `signing` environment deployment-branch policy may list exact names or wildcards such as `release/*`. `tools/ci/assert-signing-environment.sh` matches with `fnmatch`. Today the environment admits all branches (`deployment_branch_policy: null`); if that tightens, add a `release/*` policy before the next promotion.
+
 ## Release ladder
 
 1. **Pull request into `beta` or `stable`.** The ruleset above, plus the CodeQL rule. `rps` runs `compare-spot` on three OS. `inspector-install-smoke` runs on one runner per OS. `macos-15-intel` and `ubuntu-24.04-arm` also run and stay non-blocking until five consecutive greens; they are not in the ruleset. `release-dry-run` builds, signs, notarizes, and smokes Inspector, CLI, Plus, the control-plane images, and the packaged Helm charts on the PR merge commit. Same-repository heads only. There is no waiver label and no `continue-on-error`. The author of the release pull request fixes a red run on that branch. Do not merge it with an admin bypass. Strict status checks stay on, so the base cannot move between the green dry-run and the merge.
