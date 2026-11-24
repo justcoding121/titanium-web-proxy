@@ -1285,3 +1285,8 @@ Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Serve.init -> void
 Titanium.Web.Proxy.Abstractions.Caching.ResponseCacheItems
 const Titanium.Web.Proxy.Abstractions.Caching.ResponseCacheItems.StateKey = "twp.cache.state" -> string!
 
+Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.CreateClient(System.TimeSpan timeout, System.Func<System.Uri?, bool>? bypassResolvedProxy = null) -> System.Net.Http.HttpClient!
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.FormatFailure(System.Exception! ex, bool updateTrafficMayBeCaptured) -> string!
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.IsLoopbackProxy(System.Uri? proxyUri) -> bool
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.IsOwnLoopbackProxy(System.Uri? proxyUri, int boundPort, bool active) -> bool
