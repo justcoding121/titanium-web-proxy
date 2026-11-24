@@ -4,9 +4,12 @@
   Soft-to-hard lifecycle enforcement wrapper.
 
 .DESCRIPTION
-  Usage: enforce.ps1 <name> -- <cmd...>
+  Usage: enforce.ps1 <name> [--] <cmd> [<args...>]
   If LIFECYCLE_ENFORCE is not "true", failures become a warning + step summary row + exit 0.
   If LIFECYCLE_ENFORCE=true, failures exit non-zero.
+
+  Note: PowerShell treats bare "--" as end-of-parameters and strips it before the script
+  runs when invoked without --%. Accept either "<name> -- <cmd>..." or "<name> <cmd>...".
 #>
 param(
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -36,7 +39,7 @@ function Write-LifecycleSummary {
 function Invoke-Enforce {
     param([string] $StepName, [string[]] $Command)
     if ($Command.Count -lt 1) {
-        throw 'usage: enforce.ps1 <name> -- <cmd...>'
+        throw 'usage: enforce.ps1 <name> [--] <cmd> [<args...>]'
     }
     $exe = $Command[0]
     $cmdArgs = @()
@@ -101,10 +104,18 @@ if ($argv.Count -ge 1 -and $argv[0] -eq '--self-test') {
     exit 0
 }
 
-if ($argv.Count -lt 3 -or $argv[1] -ne '--') {
-    throw 'usage: enforce.ps1 <name> -- <cmd...>  or  enforce.ps1 --self-test'
+if ($argv.Count -lt 2) {
+    throw 'usage: enforce.ps1 <name> [--] <cmd> [<args...>]  or  enforce.ps1 --self-test'
 }
+
 $name = $argv[0]
-$cmd = $argv[2..($argv.Count - 1)]
+$cmdStart = 1
+if ($argv.Count -gt 2 -and $argv[1] -eq '--') {
+    $cmdStart = 2
+}
+if ($argv.Count -le $cmdStart) {
+    throw 'usage: enforce.ps1 <name> [--] <cmd> [<args...>]'
+}
+$cmd = $argv[$cmdStart..($argv.Count - 1)]
 $code = Invoke-Enforce -StepName $name -Command $cmd
 exit $code
