@@ -1,0 +1,22 @@
+{
+  "total_count": 2,
+  "jobs": [
+    {
+      "id": 401,
+      "name": "integration (1)",
+      "conclusion": "cancelled",
+      "status": "completed",
+      "steps": [
+        {"name": "Set up job", "conclusion": null, "number": 1},
+        {"name": "Checkout", "conclusion": "skipped", "number": 2}
+      ]
+    },
+    {
+      "id": 402,
+      "name": "merge-gate",
+      "conclusion": "cancelled",
+      "status": "completed",
+      "steps": []
+    }
+  ]
+}

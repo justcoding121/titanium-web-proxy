@@ -1,0 +1,17 @@
+{
+  "run_conclusion": "failure",
+  "jobs": [
+    {
+      "id": 20,
+      "name": "unit",
+      "conclusion": "failure",
+      "steps": [
+        { "name": "Set up job", "conclusion": "success" },
+        { "name": "Test", "conclusion": "failure" }
+      ]
+    }
+  ],
+  "annotations": {
+    "20": [{ "message": "Expected 0, Actual 1" }]
+  }
+}

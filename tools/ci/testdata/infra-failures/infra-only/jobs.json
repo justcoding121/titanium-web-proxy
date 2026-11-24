@@ -1,0 +1,41 @@
+{
+  "total_count": 4,
+  "jobs": [
+    {
+      "id": 101,
+      "name": "unit",
+      "conclusion": "cancelled",
+      "status": "completed",
+      "steps": [
+        {"name": "Set up job", "conclusion": null, "number": 1},
+        {"name": "Checkout", "conclusion": "skipped", "number": 2}
+      ]
+    },
+    {
+      "id": 102,
+      "name": "integration (0)",
+      "conclusion": "cancelled",
+      "status": "completed",
+      "steps": []
+    },
+    {
+      "id": 103,
+      "name": "ui-portable (ubuntu-latest)",
+      "conclusion": "failure",
+      "status": "completed",
+      "steps": [
+        {"name": "Set up job", "conclusion": "success", "number": 1},
+        {"name": "Build", "conclusion": "failure", "number": 2}
+      ]
+    },
+    {
+      "id": 104,
+      "name": "merge-gate",
+      "conclusion": "failure",
+      "status": "completed",
+      "steps": [
+        {"name": "Gate", "conclusion": "failure", "number": 1}
+      ]
+    }
+  ]
+}

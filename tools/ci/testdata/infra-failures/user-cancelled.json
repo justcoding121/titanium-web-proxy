@@ -1,0 +1,12 @@
+{
+  "run_conclusion": "cancelled",
+  "jobs": [
+    {
+      "id": 30,
+      "name": "unit",
+      "conclusion": "cancelled",
+      "steps": []
+    }
+  ],
+  "annotations": {}
+}
