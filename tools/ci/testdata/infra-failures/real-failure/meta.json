@@ -1,0 +1,5 @@
+{
+  "conclusion": "failure",
+  "expect_rerun": false,
+  "description": "Real test failure; call and test-gate aggregators ignored"
+}

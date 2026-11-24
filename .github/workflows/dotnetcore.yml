@@ -1,4 +1,4 @@
-name: .NET
+﻿name: .NET
 
 on:
   push:
@@ -59,6 +59,7 @@ jobs:
       actions: read
     outputs:
       code: ${{ steps.paths.outputs.code }}
+      infra: ${{ steps.paths.outputs.infra }}
       skipped_by_evidence: ${{ steps.paths.outputs.skipped_by_evidence }}
     steps:
       - uses: actions/checkout@v7
@@ -72,11 +73,14 @@ jobs:
           TREE_EVIDENCE_ENFORCE: ${{ vars.TREE_EVIDENCE_ENFORCE }}
         run: |
           set -euo pipefail
+          code=false
+          infra=false
           skipped_by_evidence=false
           emit() {
             echo "code=$code" >> "$GITHUB_OUTPUT"
+            echo "infra=$infra" >> "$GITHUB_OUTPUT"
             echo "skipped_by_evidence=$skipped_by_evidence" >> "$GITHUB_OUTPUT"
-            echo "code=$code skipped_by_evidence=$skipped_by_evidence"
+            echo "code=$code infra=$infra skipped_by_evidence=$skipped_by_evidence"
           }
           if [[ "${{ github.event_name }}" == "push" && ( "${{ github.ref }}" == "refs/heads/beta" || "${{ github.ref }}" == "refs/heads/stable" ) ]]; then
             code=true
@@ -107,31 +111,70 @@ jobs:
             emit
             exit 0
           fi
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" != "refs/heads/develop" ]]; then
             code=true
             emit
             exit 0
           fi
-          git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
-          code=false
+          if [[ "${{ github.event_name }}" != "pull_request" && "${{ github.event_name }}" != "push" ]]; then
+            code=true
+            emit
+            exit 0
+          fi
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+          else
+            before="${{ github.event.before }}"
+            if [[ -z "$before" || "$before" =~ ^0+$ ]]; then
+              code=true
+              emit
+              exit 0
+            fi
+            if ! git cat-file -e "$before^{commit}" 2>/dev/null; then
+              code=true
+              emit
+              exit 0
+            fi
+            git diff --name-only "$before..${{ github.sha }}" > changed.txt
+          fi
+          is_infra() {
+            local f="$1"
+            case "$f" in
+              AGENTS.md) return 0 ;;
+              .github/*.md|.github/*.json|.github/ISSUE_TEMPLATE/*|.github/actions/azure-artifact-sign/*) return 0 ;;
+              .github/workflows/dotnetcore.yml|.github/workflows/release.yml|.github/workflows/kubernetes-ci.yml|.github/workflows/kubernetes-smoke.yml|.github/workflows/gateway-conformance.yml) return 1 ;;
+              .github/workflows/*.yml) return 0 ;;
+              tools/ci/Invoke-IntegrationShard.ps1|tools/ci/Invoke-DotnetTestRetry.ps1) return 1 ;;
+              tools/ci/*) return 0 ;;
+              tools/packaging/smoke/*|tools/packaging/winget/*|tools/packaging/release-highlights/*|tools/packaging/homebrew/*|tools/packaging/chocolatey/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
           while IFS= read -r f || [[ -n "$f" ]]; do
             [[ -z "$f" ]] && continue
             case "$f" in
-              website/*|wiki/*|docs/*|.github/dns/*|.github/workflows/deploy-website.yml|.github/workflows/inspector-install-smoke.yml) ;;
+              website/*|wiki/*|docs/*|.github/dns/*|.github/workflows/deploy-website.yml|.github/workflows/inspector-install-smoke.yml)
+                continue
+                ;;
               *.md)
                 case "$f" in
+                  AGENTS.md) infra=true ;;
                   */*) code=true ;;
                 esac
+                continue
                 ;;
-              *) code=true ;;
             esac
-            if [[ "$code" == "true" ]]; then
-              break
+            if is_infra "$f"; then
+              infra=true
+            else
+              code=true
             fi
           done < changed.txt
+          if [[ "$code" == "true" ]]; then
+            infra=false
+          fi
           emit
 
-  # Sonar begin + instrumented compile only. Coverage finishes end after tests upload.
   sonar-build:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -965,10 +1008,29 @@ jobs:
 
   # One context for branch protection. Docs-only pull requests skip the code jobs;
   # a code change requires each of them to succeed.
+  lint-workflows:
+    name: lint-workflows
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install actionlint and PyYAML
+        run: |
+          set -euo pipefail
+          curl -sL "https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash" | bash -s -- latest ./
+          sudo mv ./actionlint /usr/local/bin/actionlint
+          python3 -m pip install --user pyyaml
+      - name: Preflight workflows
+        shell: pwsh
+        run: ./tools/ci/preflight.ps1 -Mode workflows
+
+  # One context for branch protection. Docs-only pull requests skip the code jobs;
+  # a code change requires each of them to succeed. Infra-only changes require lint-workflows.
   merge-gate:
     name: merge-gate
     if: always()
-    needs: [changes, sonar-build, lint-build, unit, heavy-suites, regression, integration, coverage, redis-fleet, ui-portable, cli-e2e]
+    needs: [changes, lint-workflows, sonar-build, lint-build, unit, heavy-suites, regression, integration, coverage, redis-fleet, ui-portable, cli-e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -977,8 +1039,10 @@ jobs:
       - name: Require the code jobs, or a docs-only skip
         env:
           CODE: ${{ needs.changes.outputs.code }}
+          INFRA: ${{ needs.changes.outputs.infra }}
           SKIPPED_BY_EVIDENCE: ${{ needs.changes.outputs.skipped_by_evidence }}
           CHANGES: ${{ needs.changes.result }}
+          LINT: ${{ needs.lint-workflows.result }}
           SONAR_BUILD: ${{ needs.sonar-build.result }}
           LINT_BUILD: ${{ needs.lint-build.result }}
           UNIT: ${{ needs.unit.result }}
@@ -992,24 +1056,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "changes=$CHANGES sonar-build=$SONAR_BUILD lint-build=$LINT_BUILD unit=$UNIT heavy-suites=$HEAVY regression=$REGRESSION integration=$INTEGRATION coverage=$COVERAGE redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE skipped_by_evidence=$SKIPPED_BY_EVIDENCE"
+          echo "changes=$CHANGES lint-workflows=$LINT sonar-build=$SONAR_BUILD lint-build=$LINT_BUILD unit=$UNIT heavy-suites=$HEAVY regression=$REGRESSION integration=$INTEGRATION coverage=$COVERAGE redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE infra=$INFRA skipped_by_evidence=$SKIPPED_BY_EVIDENCE"
           if [[ "$SKIPPED_BY_EVIDENCE" == "true" ]]; then
             echo "merge-gate passed (skipped by tree evidence)"
             exit 0
           fi
-          for result in "$CHANGES" "$SONAR_BUILD" "$LINT_BUILD" "$UNIT" "$HEAVY" "$REGRESSION" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
+          for result in "$CHANGES" "$LINT" "$SONAR_BUILD" "$LINT_BUILD" "$UNIT" "$HEAVY" "$REGRESSION" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::a required job finished as $result"
               exit 1
             fi
           done
           if [[ "$CODE" == "true" ]]; then
-            for result in "$SONAR_BUILD" "$LINT_BUILD" "$UNIT" "$HEAVY" "$REGRESSION" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
+            for result in "$LINT" "$SONAR_BUILD" "$LINT_BUILD" "$UNIT" "$HEAVY" "$REGRESSION" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
               if [[ "$result" != "success" ]]; then
-                echo "::error::a code change needs success from sonar-build, lint-build, unit, heavy-suites, regression, integration, coverage, redis-fleet, ui-portable, and cli-e2e (got $result)"
+                echo "::error::a code change needs success from lint-workflows, sonar-build, lint-build, unit, heavy-suites, regression, integration, coverage, redis-fleet, ui-portable, and cli-e2e (got $result)"
                 exit 1
               fi
             done
+          elif [[ "$INFRA" == "true" ]]; then
+            if [[ "$LINT" != "success" ]]; then
+              echo "::error::an infra-only change needs lint-workflows success (got $LINT)"
+              exit 1
+            fi
           fi
           echo "merge-gate passed"
       - uses: actions/checkout@v7

@@ -1,0 +1,34 @@
+{
+  "total_count": 3,
+  "jobs": [
+    {
+      "id": 301,
+      "name": "unit",
+      "conclusion": "failure",
+      "status": "completed",
+      "steps": [
+        {"name": "Set up job", "conclusion": "success", "number": 1},
+        {"name": "Restore", "conclusion": "success", "number": 2},
+        {"name": "Test", "conclusion": "failure", "number": 3}
+      ]
+    },
+    {
+      "id": 302,
+      "name": "call",
+      "conclusion": "failure",
+      "status": "completed",
+      "steps": [
+        {"name": "Run reusable workflow", "conclusion": "failure", "number": 1}
+      ]
+    },
+    {
+      "id": 303,
+      "name": "test-gate",
+      "conclusion": "failure",
+      "status": "completed",
+      "steps": [
+        {"name": "Aggregate", "conclusion": "failure", "number": 1}
+      ]
+    }
+  ]
+}
