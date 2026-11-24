@@ -7,7 +7,6 @@
 set +e
 
 EXE="/opt/titanium-inspector/TitaniumInspector"
-PRERM_LOG="/tmp/titanium-inspector-prerm.log"
 
 if [[ -x "${EXE}" ]]; then
   pkill -TERM -f "^${EXE}( |$)" >/dev/null 2>&1 || true
@@ -48,6 +47,7 @@ desktop_users() {
 
 ensure_user_runtime_dir() {
   local user="$1" uid_num="$2" runtime="$3"
+  # Headless CI often has no logind session; dconf needs a writable runtime dir.
   if [[ -d "${runtime}" ]]; then
     return 0
   fi
@@ -65,23 +65,13 @@ set +e
 command -v gsettings >/dev/null 2>&1 || exit 0
 mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
 host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
-echo "before: mode=${mode} host=${host}" >> /tmp/titanium-inspector-prerm.log
 [[ "${mode}" == "manual" ]] || exit 0
 case "${host}" in
   127.0.0.1|localhost|::1|"")
-    gsettings set org.gnome.system.proxy mode none
-    rc1=$?
-    gsettings set org.gnome.system.proxy.http enabled false
-    rc2=$?
-    echo "gsettings set rc=${rc1}/${rc2}" >> /tmp/titanium-inspector-prerm.log
-    ;;
-  *)
-    echo "skip host=${host}" >> /tmp/titanium-inspector-prerm.log
+    gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
+    gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
     ;;
 esac
-mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null || true)"
-host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null || true)"
-echo "after: mode=${mode} host=${host}" >> /tmp/titanium-inspector-prerm.log
 EOF
   chmod 755 "${path}"
 }
@@ -91,7 +81,6 @@ clear_user_loopback_gnome() {
   uid_num="$(id -u "${user}" 2>/dev/null || true)"
   home="$(getent passwd "${user}" | cut -d: -f6)"
   if [[ -z "${uid_num}" || -z "${home}" ]]; then
-    echo "skip ${user}: no home" >> "${PRERM_LOG}" 2>&1 || true
     return 0
   fi
   runtime="/run/user/${uid_num}"
@@ -101,45 +90,33 @@ clear_user_loopback_gnome() {
   chown "${uid_num}:${uid_num}" "${helper}" 2>/dev/null || true
 
   # Always use dbus-run-session so clears hit the same dconf writer path as the
-  # install-smoke driver (xvfb-run dbus-run-session). Pointing at a stale
-  # /run/user/UID/bus can leave the smoke-visible mode=manual untouched.
+  # install-smoke driver (xvfb-run dbus-run-session). A stale /run/user/UID/bus
+  # can leave the smoke-visible mode=manual untouched.
   if [[ -x "${EXE}" ]]; then
     if command -v dbus-run-session >/dev/null 2>&1; then
       sudo -u "${user}" -H \
         env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
-        dbus-run-session -- "${EXE}" --clear-system-proxy >>"${PRERM_LOG}" 2>&1 || true
+        dbus-run-session -- "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
     else
       sudo -u "${user}" -H \
         env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
-        "${EXE}" --clear-system-proxy >>"${PRERM_LOG}" 2>&1 || true
+        "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
     fi
   fi
   if command -v dbus-run-session >/dev/null 2>&1; then
     sudo -u "${user}" -H \
       env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
-      dbus-run-session -- "${helper}" >>"${PRERM_LOG}" 2>&1 || true
+      dbus-run-session -- "${helper}" >/dev/null 2>&1 || true
   else
     sudo -u "${user}" -H \
       env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
-      "${helper}" >>"${PRERM_LOG}" 2>&1 || true
+      "${helper}" >/dev/null 2>&1 || true
   fi
   rm -f "${helper}"
 }
 
-{
-  echo "prerm users: $(desktop_users | tr '\n' ' ')"
-  echo "PATH=${PATH}"
-  command -v gsettings || echo "gsettings missing"
-  command -v sudo || echo "sudo missing"
-  command -v dbus-run-session || echo "dbus-run-session missing"
-  ls -ld /run/user /run/user/* 2>&1 || echo "(no /run/user entries)"
-} > "${PRERM_LOG}" 2>&1 || true
-# Helper runs as each desktop user and appends probes; root-owned 644 blocks that.
-chmod 666 "${PRERM_LOG}" 2>/dev/null || true
-
 while read -r USER_NAME; do
   [[ -n "${USER_NAME}" ]] || continue
-  echo "clear for ${USER_NAME}" >> "${PRERM_LOG}" 2>&1 || true
   clear_user_loopback_gnome "${USER_NAME}"
 done < <(desktop_users)
 
