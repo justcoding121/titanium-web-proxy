@@ -1117,6 +1117,7 @@ public sealed class CertificateManager : IDisposable
 
         // check in cache first
         if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate)
+            && cachedCertificate is not null
             && Volatile.Read(ref certificateCacheGeneration) == generationAtEntry
             && IsCertificateHandleAlive(cachedCertificate))
             return cachedCertificate;
@@ -1140,6 +1141,7 @@ public sealed class CertificateManager : IDisposable
                 {
                     fromDisk.Dispose();
                     if (TryGetValidCachedCertificate(certificateName, out cachedCertificate)
+                        && cachedCertificate is not null
                         && Volatile.Read(ref certificateCacheGeneration) == generationAtEntry
                         && IsCertificateHandleAlive(cachedCertificate))
                         return cachedCertificate;
@@ -1154,6 +1156,7 @@ public sealed class CertificateManager : IDisposable
         {
             // check in cache first
             if (TryGetValidCachedCertificate(certificateName, out cachedCertificate)
+                && cachedCertificate is not null
                 && Volatile.Read(ref certificateCacheGeneration) == generationAtEntry
                 && IsCertificateHandleAlive(cachedCertificate))
                 return cachedCertificate;
@@ -1265,6 +1268,7 @@ public sealed class CertificateManager : IDisposable
             && !clearCertificatesTokenSource.Token.IsCancellationRequested)
         {
             if (TryGetValidCachedCertificate(certificateName, out cachedCertificate)
+                && cachedCertificate is not null
                 && IsCertificateHandleAlive(cachedCertificate)
                 && Volatile.Read(ref certificateCacheGeneration) == generationAtEntry)
                 return cachedCertificate;
