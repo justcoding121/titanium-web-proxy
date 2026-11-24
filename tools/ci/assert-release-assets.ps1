@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   Assert every expected release asset exists in a staged directory.
@@ -36,8 +36,10 @@ function Get-ExpectedAssetLists {
     }
 
     if ($Product -eq 'charts') {
-        $globs = @($globs | Where-Object { $_ -like 'titanium*' })
-        return @(), $globs
+        # Chart archives only (titanium-1.0.N.tgz). Do not match Titanium.Plus-*
+        # — PowerShell -like is case-insensitive.
+        $globs = @($globs | Where-Object { $_ -like 'titanium-*.tgz' -or $_ -like 'titanium-gateway-*.tgz' -or $_ -like 'titanium-manager-*.tgz' })
+        return @('SHA256SUMS'), $globs
     }
 
     $prefix = switch ($Product) {
@@ -138,6 +140,18 @@ if ($SelfTest) {
         if (-not (Test-ReleaseAssets -Dir $cliOnly -Expected $ExpectedPath -Product cli -Rid 'win-x64')) {
             throw 'self-test: cli win-x64 slice should pass'
         }
+
+        $chartsOnly = Join-Path $tmpdir 'charts-only'
+        New-Item -ItemType Directory -Path $chartsOnly -Force | Out-Null
+        foreach ($name in @('titanium-1.0.9.tgz', 'titanium-gateway-1.0.9.tgz', 'titanium-manager-1.0.9.tgz', 'SHA256SUMS')) {
+            New-Item -ItemType File -Path (Join-Path $chartsOnly $name) -Force | Out-Null
+        }
+        # Plus files must not be required for -Product charts (case-insensitive titanium* trap).
+        New-Item -ItemType File -Path (Join-Path $chartsOnly 'Titanium.Plus-9.9.9.zip') -Force | Out-Null
+        if (-not (Test-ReleaseAssets -Dir $chartsOnly -Expected $ExpectedPath -Product charts -Rid '')) {
+            throw 'self-test: charts-only stage should pass without requiring Plus assets'
+        }
+
         Write-Host 'assert-release-assets self-test ok'
         exit 0
     }
