@@ -551,8 +551,10 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
         // Only flip GNOME/KDE off when they still point at this machine. A power loss
         // leaves that loopback entry behind; a proxy the user set to some other host
-        // must stay.
-        if (!restored)
+        // must stay. Always re-check after restore: a polluted snapshot whose
+        // "original" was already loopback manual would otherwise leave browsers
+        // dialing a dead port (arm64 install-smoke after dpkg -r).
+        if (!restored || GnomeOrKdePointsAtLoopback())
             TryClearLoopbackDesktopProxy();
 
         TryBestEffort(ClearProcessProxyEnv);
@@ -938,9 +940,28 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         _dbusSanitized = true;
     }
 
-    internal static bool IsUnusableDbusAddress(string? address) =>
-        string.IsNullOrWhiteSpace(address) ||
-        address.StartsWith("disabled", StringComparison.OrdinalIgnoreCase);
+    internal static bool IsUnusableDbusAddress(string? address)
+    {
+        if (string.IsNullOrWhiteSpace(address) ||
+            address.StartsWith("disabled", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Package scripts often force unix:path=/run/user/UID/bus. On headless CI
+        // that socket is missing; treat it as unusable so gsettings can fall back
+        // to an auto-launched bus that still writes the user dconf DB.
+        const string unixPathPrefix = "unix:path=";
+        if (address.StartsWith(unixPathPrefix, StringComparison.Ordinal))
+        {
+            var path = address[unixPathPrefix.Length..];
+            var comma = path.IndexOf(',');
+            if (comma >= 0)
+                path = path[..comma];
+            if (path.Length > 0 && !File.Exists(path))
+                return true;
+        }
+
+        return false;
+    }
 
     private void ApplyKde(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {

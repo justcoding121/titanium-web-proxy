@@ -14,35 +14,111 @@ if [[ -x "${EXE}" ]]; then
   pkill -KILL -f "^${EXE}( |$)" >/dev/null 2>&1 || true
 fi
 
-desktop_user() {
-  local user=""
+# dpkg runs maintainer scripts with a cleaned environment, so SUDO_USER is often
+# missing. Collect every interactive home owner (plus loginctl/who/SUDO_USER when
+# present) and clear loopback GNOME proxy for each — headless CI only has
+# /home/runner and no login session.
+desktop_users() {
+  local -a users=()
+  local u home
   if command -v loginctl >/dev/null 2>&1; then
-    user="$(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $3}' | grep -v '^root$' | head -1 || true)"
+    while read -r u; do
+      [[ -n "$u" && "$u" != "root" ]] || continue
+      users+=("$u")
+    done < <(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $3}' || true)
   fi
-  if [[ -z "${user}" ]]; then
-    user="$(who 2>/dev/null | awk '{print $1}' | grep -v '^root$' | head -1 || true)"
+  while read -r u; do
+    [[ -n "$u" && "$u" != "root" ]] || continue
+    users+=("$u")
+  done < <(who 2>/dev/null | awk '{print $1}' || true)
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    users+=("${SUDO_USER}")
   fi
-  if [[ -z "${user}" ]]; then
-    user="${SUDO_USER:-}"
+  if [[ -d /home ]]; then
+    for home in /home/*; do
+      [[ -d "${home}" ]] || continue
+      u="$(basename "${home}")"
+      [[ "${u}" != "root" ]] || continue
+      users+=("${u}")
+    done
   fi
-  printf '%s' "${user}"
+  printf '%s\n' "${users[@]}" | awk 'NF && !seen[$0]++'
 }
 
-USER_NAME="$(desktop_user)"
-if [[ -n "${USER_NAME}" && -x "${EXE}" ]]; then
-  UID_NUM="$(id -u "${USER_NAME}" 2>/dev/null || true)"
-  if [[ -n "${UID_NUM}" && "$(id -u)" -eq 0 && "${USER_NAME}" != "root" ]]; then
-    RUNTIME="/run/user/${UID_NUM}"
-    # --clear-system-proxy already restores/clears loopback GNOME/KDE and blanks
-    # only loopback-valued session proxy env. Do not force mode 'none' or blank a
-    # corporate http_proxy the user configured themselves.
-    sudo -u "${USER_NAME}" \
-      env XDG_RUNTIME_DIR="${RUNTIME}" DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus" \
-      "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
-  else
-    "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+ensure_user_runtime_dir() {
+  local user="$1" uid_num="$2" runtime="$3"
+  # Headless CI often has no logind session; dconf needs a writable runtime dir.
+  if [[ -d "${runtime}" ]]; then
+    return 0
   fi
-fi
+  mkdir -p "${runtime}" 2>/dev/null || true
+  chown "${uid_num}:${uid_num}" "${runtime}" 2>/dev/null || chown "${user}" "${runtime}" 2>/dev/null || true
+  chmod 700 "${runtime}" 2>/dev/null || true
+}
+
+write_clear_helper() {
+  local path="$1"
+  cat > "${path}" <<'EOF'
+#!/usr/bin/env bash
+# Mirror LinuxSystemProxyBackend.ClearGnomeLoopbackManualProxy.
+set +e
+command -v gsettings >/dev/null 2>&1 || exit 0
+mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
+host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
+[[ "${mode}" == "manual" ]] || exit 0
+case "${host}" in
+  127.0.0.1|localhost|::1|"")
+    gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
+    gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
+    ;;
+esac
+EOF
+  chmod 755 "${path}"
+}
+
+clear_user_loopback_gnome() {
+  local user="$1" uid_num home runtime helper
+  uid_num="$(id -u "${user}" 2>/dev/null || true)"
+  home="$(getent passwd "${user}" | cut -d: -f6)"
+  if [[ -z "${uid_num}" || -z "${home}" ]]; then
+    return 0
+  fi
+  runtime="/run/user/${uid_num}"
+  ensure_user_runtime_dir "${user}" "${uid_num}" "${runtime}"
+  helper="$(mktemp)"
+  write_clear_helper "${helper}"
+  chown "${uid_num}:${uid_num}" "${helper}" 2>/dev/null || true
+
+  # Always use dbus-run-session so clears hit the same dconf writer path as the
+  # install-smoke driver (xvfb-run dbus-run-session). A stale /run/user/UID/bus
+  # can leave the smoke-visible mode=manual untouched.
+  if [[ -x "${EXE}" ]]; then
+    if command -v dbus-run-session >/dev/null 2>&1; then
+      sudo -u "${user}" -H \
+        env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+        dbus-run-session -- "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+    else
+      sudo -u "${user}" -H \
+        env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+        "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+    fi
+  fi
+  if command -v dbus-run-session >/dev/null 2>&1; then
+    sudo -u "${user}" -H \
+      env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+      dbus-run-session -- "${helper}" >/dev/null 2>&1 || true
+  else
+    sudo -u "${user}" -H \
+      env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+      "${helper}" >/dev/null 2>&1 || true
+  fi
+  rm -f "${helper}"
+}
+
+while read -r USER_NAME; do
+  [[ -n "${USER_NAME}" ]] || continue
+  clear_user_loopback_gnome "${USER_NAME}"
+done < <(desktop_users)
 
 # Machine Chromium policies are root-owned. The user-level clear uses sudo -n
 # and cannot prompt during package removal.
