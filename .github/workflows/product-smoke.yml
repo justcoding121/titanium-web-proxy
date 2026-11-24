@@ -166,7 +166,7 @@ jobs:
           ./tools/packaging/winget/test-links-symlink.ps1 -Zip $zip.FullName
           ./tools/packaging/smoke/cli-mitm.ps1 -Titanium (Join-Path $cli 'titanium.exe') -Out (Join-Path $log 'cli')
           ./tools/packaging/smoke/apply-plus.ps1 -CliDir $cli -PlusZip $plus.FullName -Titanium (Join-Path $cli 'titanium.exe')
-          bash tools/packaging/smoke/cli-update-ignores-proxy.sh "$cli" "$($zip.FullName)" "$(Join-Path $cli 'titanium.exe')"
+          ./tools/packaging/smoke/cli-update-ignores-proxy.ps1 -CliDir $cli -CliZip $zip.FullName -Titanium (Join-Path $cli 'titanium.exe')
           $tag = $env:RELEASE_TAG
           if (-not $tag) { $tag = 'v8.0.7-beta' }
           ./tools/packaging/smoke/pre-immutable-choco.ps1 -CliZip $zip.FullName -InspectorMsi $msi.FullName -Tag $tag
