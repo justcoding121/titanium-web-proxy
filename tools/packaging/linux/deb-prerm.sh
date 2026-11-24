@@ -28,33 +28,80 @@ desktop_user() {
   printf '%s' "${user}"
 }
 
-USER_NAME="$(desktop_user)"
-if [[ -n "${USER_NAME}" && -x "${EXE}" ]]; then
-  UID_NUM="$(id -u "${USER_NAME}" 2>/dev/null || true)"
-  if [[ -n "${UID_NUM}" && "$(id -u)" -eq 0 && "${USER_NAME}" != "root" ]]; then
-    RUNTIME="/run/user/${UID_NUM}"
-    BUS="${RUNTIME}/bus"
-    # --clear-system-proxy already restores/clears loopback GNOME/KDE and blanks
-    # only loopback-valued session proxy env. Do not force mode 'none' or blank a
-    # corporate http_proxy the user configured themselves.
-    # Prefer the login session bus; on headless CI that socket is often missing, so
-    # fall back to dbus-run-session so gsettings still commits the user dconf DB.
-    if [[ -S "${BUS}" ]]; then
-      sudo -u "${USER_NAME}" \
-        env XDG_RUNTIME_DIR="${RUNTIME}" DBUS_SESSION_BUS_ADDRESS="unix:path=${BUS}" \
-        "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
-    elif command -v dbus-run-session >/dev/null 2>&1; then
-      sudo -u "${USER_NAME}" \
-        env XDG_RUNTIME_DIR="${RUNTIME}" \
-        dbus-run-session -- "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
-    else
-      sudo -u "${USER_NAME}" \
-        env XDG_RUNTIME_DIR="${RUNTIME}" \
-        "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
-    fi
-  else
-    "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+# Mirror LinuxSystemProxyBackend.ClearGnomeLoopbackManualProxy for when the
+# managed EXE cannot talk to a session bus (headless CI). Only flips mode when
+# GNOME is still aimed at loopback — never blanks a corporate proxy host.
+clear_gnome_loopback_if_owned() {
+  command -v gsettings >/dev/null 2>&1 || return 0
+  local mode host
+  mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
+  host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
+  if [[ "${mode}" != "manual" ]]; then
+    return 0
   fi
+  case "${host}" in
+    127.0.0.1|localhost|::1|"")
+      gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
+      gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
+      ;;
+  esac
+}
+
+run_as_desktop_user() {
+  local user="$1"
+  shift
+  local uid_num runtime bus home
+  uid_num="$(id -u "${user}" 2>/dev/null || true)"
+  home="$(getent passwd "${user}" | cut -d: -f6)"
+  if [[ -z "${uid_num}" ]]; then
+    "$@" || true
+    return 0
+  fi
+  runtime="/run/user/${uid_num}"
+  bus="${runtime}/bus"
+  if [[ -S "${bus}" ]]; then
+    sudo -u "${user}" -H \
+      env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" DBUS_SESSION_BUS_ADDRESS="unix:path=${bus}" \
+      "$@" >/dev/null 2>&1 || true
+  elif command -v dbus-run-session >/dev/null 2>&1; then
+    sudo -u "${user}" -H \
+      env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+      dbus-run-session -- "$@" >/dev/null 2>&1 || true
+  else
+    sudo -u "${user}" -H \
+      env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+      "$@" >/dev/null 2>&1 || true
+  fi
+}
+
+USER_NAME="$(desktop_user)"
+if [[ -n "${USER_NAME}" && "$(id -u)" -eq 0 && "${USER_NAME}" != "root" ]]; then
+  # --clear-system-proxy restores/clears loopback GNOME/KDE and blanks only
+  # loopback-valued session proxy env. Shell fallback covers headless CI when
+  # the EXE clear cannot reach a usable session bus.
+  if [[ -x "${EXE}" ]]; then
+    run_as_desktop_user "${USER_NAME}" "${EXE}" --clear-system-proxy
+  fi
+  helper="$(mktemp)"
+  cat > "${helper}" <<'EOF'
+#!/usr/bin/env bash
+command -v gsettings >/dev/null 2>&1 || exit 0
+mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
+host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
+[[ "${mode}" == "manual" ]] || exit 0
+case "${host}" in
+  127.0.0.1|localhost|::1|"")
+    gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
+    gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
+    ;;
+esac
+EOF
+  chmod 755 "${helper}"
+  run_as_desktop_user "${USER_NAME}" "${helper}"
+  rm -f "${helper}"
+elif [[ -x "${EXE}" ]]; then
+  "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+  clear_gnome_loopback_if_owned
 fi
 
 # Machine Chromium policies are root-owned. The user-level clear uses sudo -n

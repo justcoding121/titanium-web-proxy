@@ -62,16 +62,17 @@ if [[ -n "$prev" ]]; then
   test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
   run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,firefox --out "$log" || true
   test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
-  # Stop any leftover Inspector under a session bus so RestoreOriginalSettings can
-  # run, then let prerm clear again on remove.
+  # Leave proxy armed so dpkg prerm must clear it (do not pre-clear here).
   pkill -TERM -f '^/opt/titanium-inspector/TitaniumInspector( |$)' >/dev/null 2>&1 || true
   sleep 1
   sudo dpkg -r titanium-inspector || true
   if command -v gsettings >/dev/null; then
     mode="$(dbus-run-session -- gsettings get org.gnome.system.proxy mode 2>/dev/null || true)"
+    host="$(dbus-run-session -- gsettings get org.gnome.system.proxy.http host 2>/dev/null || true)"
     mode="${mode//\'/}"
+    host="${host//\'/}"
     if [[ -n "${mode}" && "${mode}" != "none" ]]; then
-      echo "proxy mode still ${mode} after arm64 uninstall" >&2
+      echo "proxy mode still ${mode} (host=${host}) after arm64 uninstall" >&2
       exit 1
     fi
   fi
