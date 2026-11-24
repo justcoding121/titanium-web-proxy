@@ -71,7 +71,7 @@ Release asset names match the website loader: `Titanium.Cli-{rid}.{AppImage,deb,
 
 ### Homebrew (Mac CLI)
 
-Formula source of truth: [`homebrew/titanium.rb`](homebrew/titanium.rb). After a release, run [`homebrew/bump-formula-shas.sh`](homebrew/bump-formula-shas.sh) and push to the `justcoding121/homebrew-titanium` tap (`Formula/titanium.rb`).
+Formula source of truth: [`homebrew/titanium.rb`](homebrew/titanium.rb). Stable releases omit the `version` stanza and use literal `/vX.Y.Z/` download URLs (Homebrew infers the version); prereleases keep an explicit `version "X.Y.Z-beta"` line. After a release, run [`homebrew/bump-formula-from-sums.sh`](homebrew/bump-formula-from-sums.sh) (or the release workflow) and push to the `justcoding121/homebrew-titanium` tap (`Formula/titanium.rb`).
 
 ```shell
 brew tap justcoding121/titanium
