@@ -73,6 +73,8 @@ Release asset names match the website loader: `Titanium.Cli-{rid}.{AppImage,deb,
 
 Formula source of truth: [`homebrew/titanium.rb`](homebrew/titanium.rb). Stable releases omit the `version` stanza and use literal `/vX.Y.Z/` download URLs (Homebrew infers the version); prereleases keep an explicit `version "X.Y.Z-beta"` line. After a release, run [`homebrew/bump-formula-from-sums.sh`](homebrew/bump-formula-from-sums.sh) (or the release workflow) and push to the `justcoding121/homebrew-titanium` tap (`Formula/titanium.rb`).
 
+CLI update smoke: [`smoke/cli-update-ignores-proxy.sh`](smoke/cli-update-ignores-proxy.sh) runs in product-smoke primary package legs. It sets a loopback `HTTPS_PROXY` recorder and asserts `titanium update` records zero hits (update egress must not be MITM'd).
+
 ```shell
 brew tap justcoding121/titanium
 brew install titanium
