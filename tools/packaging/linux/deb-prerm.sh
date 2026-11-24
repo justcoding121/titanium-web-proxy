@@ -7,6 +7,7 @@
 set +e
 
 EXE="/opt/titanium-inspector/TitaniumInspector"
+PRERM_LOG="/tmp/titanium-inspector-prerm.log"
 
 if [[ -x "${EXE}" ]]; then
   pkill -TERM -f "^${EXE}( |$)" >/dev/null 2>&1 || true
@@ -42,34 +43,11 @@ desktop_users() {
       users+=("${u}")
     done
   fi
-  # Unique preserve order
   printf '%s\n' "${users[@]}" | awk 'NF && !seen[$0]++'
-}
-
-# Mirror LinuxSystemProxyBackend.ClearGnomeLoopbackManualProxy. Only flips mode
-# when GNOME is still aimed at loopback — never blanks a corporate proxy host.
-write_clear_helper() {
-  local path="$1"
-  cat > "${path}" <<'EOF'
-#!/usr/bin/env bash
-command -v gsettings >/dev/null 2>&1 || exit 0
-mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
-host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
-[[ "${mode}" == "manual" ]] || exit 0
-case "${host}" in
-  127.0.0.1|localhost|::1|"")
-    gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
-    gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
-    ;;
-esac
-EOF
-  chmod 755 "${path}"
 }
 
 ensure_user_runtime_dir() {
   local user="$1" uid_num="$2" runtime="$3"
-  # Headless CI (GitHub-hosted) often has no logind session, so /run/user/UID is
-  # missing. dconf/gsettings need a writable XDG_RUNTIME_DIR or writes no-op.
   if [[ -d "${runtime}" ]]; then
     return 0
   fi
@@ -78,56 +56,87 @@ ensure_user_runtime_dir() {
   chmod 700 "${runtime}" 2>/dev/null || true
 }
 
-run_as_desktop_user() {
-  local user="$1"
-  shift
-  local uid_num runtime bus home
+write_clear_helper() {
+  local path="$1"
+  cat > "${path}" <<'EOF'
+#!/usr/bin/env bash
+# Mirror LinuxSystemProxyBackend.ClearGnomeLoopbackManualProxy.
+set +e
+command -v gsettings >/dev/null 2>&1 || exit 0
+mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
+host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
+echo "before: mode=${mode} host=${host}" >> /tmp/titanium-inspector-prerm.log
+[[ "${mode}" == "manual" ]] || exit 0
+case "${host}" in
+  127.0.0.1|localhost|::1|"")
+    gsettings set org.gnome.system.proxy mode none
+    rc1=$?
+    gsettings set org.gnome.system.proxy.http enabled false
+    rc2=$?
+    echo "gsettings set rc=${rc1}/${rc2}" >> /tmp/titanium-inspector-prerm.log
+    ;;
+  *)
+    echo "skip host=${host}" >> /tmp/titanium-inspector-prerm.log
+    ;;
+esac
+mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null || true)"
+host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null || true)"
+echo "after: mode=${mode} host=${host}" >> /tmp/titanium-inspector-prerm.log
+EOF
+  chmod 755 "${path}"
+}
+
+clear_user_loopback_gnome() {
+  local user="$1" uid_num home runtime bus helper
   uid_num="$(id -u "${user}" 2>/dev/null || true)"
   home="$(getent passwd "${user}" | cut -d: -f6)"
   if [[ -z "${uid_num}" || -z "${home}" ]]; then
+    echo "skip ${user}: no home" >> "${PRERM_LOG}" 2>&1 || true
     return 0
   fi
   runtime="/run/user/${uid_num}"
   ensure_user_runtime_dir "${user}" "${uid_num}" "${runtime}"
   bus="${runtime}/bus"
+  helper="$(mktemp)"
+  write_clear_helper "${helper}"
+  chown "${uid_num}:${uid_num}" "${helper}" 2>/dev/null || true
+
+  # Prefer login bus; otherwise leave DBUS unset so gsettings auto-launches.
   if [[ -S "${bus}" ]]; then
+    if [[ -x "${EXE}" ]]; then
+      sudo -u "${user}" -H \
+        env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" DBUS_SESSION_BUS_ADDRESS="unix:path=${bus}" \
+        "${EXE}" --clear-system-proxy >>"${PRERM_LOG}" 2>&1 || true
+    fi
     sudo -u "${user}" -H \
       env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" DBUS_SESSION_BUS_ADDRESS="unix:path=${bus}" \
-      "$@" >/dev/null 2>&1 || true
-  elif command -v dbus-run-session >/dev/null 2>&1; then
-    sudo -u "${user}" -H \
-      env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
-      dbus-run-session -- "$@" >/dev/null 2>&1 || true
+      "${helper}" >>"${PRERM_LOG}" 2>&1 || true
   else
+    if [[ -x "${EXE}" ]]; then
+      sudo -u "${user}" -H \
+        env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
+        "${EXE}" --clear-system-proxy >>"${PRERM_LOG}" 2>&1 || true
+    fi
     sudo -u "${user}" -H \
       env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
-      "$@" >/dev/null 2>&1 || true
+      "${helper}" >>"${PRERM_LOG}" 2>&1 || true
   fi
+  rm -f "${helper}"
 }
 
-helper="$(mktemp)"
-write_clear_helper "${helper}"
-prerm_log="/tmp/titanium-inspector-prerm.log"
 {
   echo "prerm users: $(desktop_users | tr '\n' ' ')"
-  echo "runtime dirs:"
-  ls -ld /run/user/* 2>/dev/null || echo "(none)"
-} > "${prerm_log}" 2>&1 || true
+  echo "PATH=${PATH}"
+  command -v gsettings || echo "gsettings missing"
+  command -v sudo || echo "sudo missing"
+  ls -ld /run/user /run/user/* 2>&1 || echo "(no /run/user entries)"
+} > "${PRERM_LOG}" 2>&1 || true
 
 while read -r USER_NAME; do
   [[ -n "${USER_NAME}" ]] || continue
-  echo "clear for ${USER_NAME}" >> "${prerm_log}" 2>&1 || true
-  if [[ -x "${EXE}" ]]; then
-    # --clear-system-proxy restores/clears loopback GNOME/KDE and blanks only
-    # loopback-valued session proxy env.
-    run_as_desktop_user "${USER_NAME}" "${EXE}" --clear-system-proxy
-  fi
-  run_as_desktop_user "${USER_NAME}" "${helper}"
-  run_as_desktop_user "${USER_NAME}" bash -c \
-    'echo "after: mode=$(gsettings get org.gnome.system.proxy mode 2>/dev/null) host=$(gsettings get org.gnome.system.proxy.http host 2>/dev/null)" >> /tmp/titanium-inspector-prerm.log'
+  echo "clear for ${USER_NAME}" >> "${PRERM_LOG}" 2>&1 || true
+  clear_user_loopback_gnome "${USER_NAME}"
 done < <(desktop_users)
-
-rm -f "${helper}"
 
 # Machine Chromium policies are root-owned. The user-level clear uses sudo -n
 # and cannot prompt during package removal.
