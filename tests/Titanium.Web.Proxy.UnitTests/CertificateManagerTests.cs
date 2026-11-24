@@ -828,7 +828,7 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
-        public async Task ClearRootCertificate_DisposesPendingEvictionsImmediately()
+        public async Task ClearRootCertificate_DefersPendingEvictionsForCallerGrace()
         {
             using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance,
                 () => 1)
@@ -836,7 +836,10 @@ namespace Titanium.Web.Proxy.UnitTests
                 CertificateEngine = CertificateEngine.BouncyCastleFast
             };
             Assert.IsTrue(mgr.CreateRootCertificate(false));
-            await mgr.CreateServerCertificate("clear-pending-a.example");
+            // Hold a returned leaf across ClearRoot: immediate Dispose of pendingDisposals would
+            // race callers that still use the shared X509Certificate2 instance.
+            var handedOut = await mgr.CreateServerCertificate("clear-pending-a.example");
+            Assert.IsNotNull(handedOut);
             await mgr.CreateServerCertificate("clear-pending-b.example");
 
             var pendingField = typeof(CertificateManager).GetField("pendingDisposals",
@@ -847,9 +850,12 @@ namespace Titanium.Web.Proxy.UnitTests
 
             mgr.ClearRootCertificate();
 
-            Assert.AreEqual(0, (int)queue.GetType().GetProperty("Count")!.GetValue(queue)!,
-                "ClearRootCertificate should drain pending evictions immediately");
+            Assert.IsTrue((int)queue.GetType().GetProperty("Count")!.GetValue(queue)! > 0,
+                "ClearRootCertificate must leave pendingDisposals for DisposePendingEvictions grace");
+            Assert.AreEqual(handedOut!.Thumbprint, handedOut.Thumbprint);
+            Assert.IsTrue(handedOut.HasPrivateKey);
             Assert.IsNull(mgr.RootCertificate);
+            handedOut.Dispose();
         }
 
         [TestMethod]

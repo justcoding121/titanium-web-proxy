@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="22222222-2222-2222-2222-222222222222" name="selftest@host 2026-01-01 00:00:00" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-01-01T00:00:00.0000000Z" queuing="2026-01-01T00:00:00.0000000Z" start="2026-01-01T00:00:00.0000000Z" finish="2026-01-01T00:00:01.0000000Z" />
+  <TestDefinitions>
+    <UnitTest name="Fail1" storage="tests.dll" id="c0000001-0000-0000-0000-000000000001">
+      <Execution id="e1" />
+      <TestMethod codeBase="tests.dll" adapterTypeName="executor://mstestadapter/v2" className="Titanium.Web.Proxy.UnitTests.BulkFailTests, Titanium.Web.Proxy.UnitTests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" name="Fail1" />
+    </UnitTest>
+    <UnitTest name="Fail2" storage="tests.dll" id="c0000001-0000-0000-0000-000000000002">
+      <Execution id="e2" />
+      <TestMethod codeBase="tests.dll" adapterTypeName="executor://mstestadapter/v2" className="Titanium.Web.Proxy.UnitTests.BulkFailTests" name="Fail2" />
+    </UnitTest>
+    <UnitTest name="Fail3" storage="tests.dll" id="c0000001-0000-0000-0000-000000000003">
+      <Execution id="e3" />
+      <TestMethod codeBase="tests.dll" adapterTypeName="executor://mstestadapter/v2" className="Titanium.Web.Proxy.UnitTests.BulkFailTests" name="Fail3" />
+    </UnitTest>
+    <UnitTest name="Fail4" storage="tests.dll" id="c0000001-0000-0000-0000-000000000004">
+      <Execution id="e4" />
+      <TestMethod codeBase="tests.dll" adapterTypeName="executor://mstestadapter/v2" className="Titanium.Web.Proxy.UnitTests.BulkFailTests" name="Fail4" />
+    </UnitTest>
+    <UnitTest name="Fail5" storage="tests.dll" id="c0000001-0000-0000-0000-000000000005">
+      <Execution id="e5" />
+      <TestMethod codeBase="tests.dll" adapterTypeName="executor://mstestadapter/v2" className="Titanium.Web.Proxy.UnitTests.BulkFailTests" name="Fail5" />
+    </UnitTest>
+    <UnitTest name="Fail6" storage="tests.dll" id="c0000001-0000-0000-0000-000000000006">
+      <Execution id="e6" />
+      <TestMethod codeBase="tests.dll" adapterTypeName="executor://mstestadapter/v2" className="Titanium.Web.Proxy.UnitTests.BulkFailTests" name="Fail6" />
+    </UnitTest>
+  </TestDefinitions>
+  <Results>
+    <UnitTestResult executionId="e1" testId="c0000001-0000-0000-0000-000000000001" testName="Fail1" computerName="host" duration="00:00:00.0010000" startTime="2026-01-01T00:00:00.0000000Z" endTime="2026-01-01T00:00:00.0010000Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <UnitTestResult executionId="e2" testId="c0000001-0000-0000-0000-000000000002" testName="Fail2" computerName="host" duration="00:00:00.0010000" startTime="2026-01-01T00:00:00.0000000Z" endTime="2026-01-01T00:00:00.0010000Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <UnitTestResult executionId="e3" testId="c0000001-0000-0000-0000-000000000003" testName="Fail3" computerName="host" duration="00:00:00.0010000" startTime="2026-01-01T00:00:00.0000000Z" endTime="2026-01-01T00:00:00.0010000Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <UnitTestResult executionId="e4" testId="c0000001-0000-0000-0000-000000000004" testName="Fail4" computerName="host" duration="00:00:00.0010000" startTime="2026-01-01T00:00:00.0000000Z" endTime="2026-01-01T00:00:00.0010000Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <UnitTestResult executionId="e5" testId="c0000001-0000-0000-0000-000000000005" testName="Fail5" computerName="host" duration="00:00:00.0010000" startTime="2026-01-01T00:00:00.0000000Z" endTime="2026-01-01T00:00:00.0010000Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <UnitTestResult executionId="e6" testId="c0000001-0000-0000-0000-000000000006" testName="Fail6" computerName="host" duration="00:00:00.0010000" startTime="2026-01-01T00:00:00.0000000Z" endTime="2026-01-01T00:00:00.0010000Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </Results>
+  <ResultSummary outcome="Failed">
+    <Counters total="6" executed="6" passed="0" failed="6" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+  </ResultSummary>
+</TestRun>

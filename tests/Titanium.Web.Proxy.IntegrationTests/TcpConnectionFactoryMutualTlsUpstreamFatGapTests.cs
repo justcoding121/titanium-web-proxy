@@ -6,8 +6,10 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.IO;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -169,28 +171,48 @@ public class TcpConnectionFactoryMutualTlsUpstreamFatGapTests
         private async Task ServeAsync(TcpClient client)
         {
             using var _ = client;
-            await using var ssl = new SslStream(client.GetStream(), false);
-            var options = new SslServerAuthenticationOptions
+            try
             {
-                ClientCertificateRequired = requireClientCertificate,
-                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                ApplicationProtocols = [SslApplicationProtocol.Http11],
-                ServerCertificate = serverCertificate,
-                RemoteCertificateValidationCallback = (_, certificate, _, _) =>
+                await using var ssl = new SslStream(client.GetStream(), false);
+                var options = new SslServerAuthenticationOptions
                 {
-                    if (certificate == null) return !requireClientCertificate;
-                    return ChainsToClientRoot(certificate);
-                },
-            };
-            await ssl.AuthenticateAsServerAsync(options, stop.Token);
-            Interlocked.Increment(ref handshakes);
-            var clientSubject = ssl.RemoteCertificate?.Subject ?? "(none)";
-            var body = $"client={clientSubject}";
-            var response =
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + body.Length +
-                "\r\nConnection: close\r\n\r\n" + body;
-            var bytes = System.Text.Encoding.ASCII.GetBytes(response);
-            await ssl.WriteAsync(bytes, stop.Token);
+                    ClientCertificateRequired = requireClientCertificate,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    ApplicationProtocols = [SslApplicationProtocol.Http11],
+                    // Prefer selection callback so the leaf is presented even when the collection
+                    // path is empty on some hosts (matches UpstreamTlsTests.MtlsOrigin).
+                    ServerCertificateSelectionCallback = (_, _) => serverCertificate,
+                    RemoteCertificateValidationCallback = (_, certificate, _, _) =>
+                    {
+                        if (certificate == null) return !requireClientCertificate;
+                        return ChainsToClientRoot(certificate);
+                    },
+                };
+                await ssl.AuthenticateAsServerAsync(options, stop.Token);
+                Interlocked.Increment(ref handshakes);
+
+                // Read the request headers before writing the response. Closing after Authenticate
+                // without draining the request races the proxy's first write and yields 502.
+                using var reader = new StreamReader(ssl, Encoding.ASCII, detectEncodingFromByteOrderMarks: false,
+                    bufferSize: 1024, leaveOpen: true);
+                string? line;
+                while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(stop.Token)))
+                {
+                    // Drain until the blank line that ends headers.
+                }
+
+                var clientSubject = ssl.RemoteCertificate?.Subject ?? "(none)";
+                var body = $"client={clientSubject}";
+                var response =
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + body.Length +
+                    "\r\nConnection: close\r\n\r\n" + body;
+                var bytes = Encoding.ASCII.GetBytes(response);
+                await ssl.WriteAsync(bytes, stop.Token);
+            }
+            catch (Exception)
+            {
+                // Origin is best-effort; the client assertion covers handshake/HTTP failures.
+            }
         }
 
         private bool ChainsToClientRoot(X509Certificate certificate)
