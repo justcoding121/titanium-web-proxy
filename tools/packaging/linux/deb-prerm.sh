@@ -33,12 +33,25 @@ if [[ -n "${USER_NAME}" && -x "${EXE}" ]]; then
   UID_NUM="$(id -u "${USER_NAME}" 2>/dev/null || true)"
   if [[ -n "${UID_NUM}" && "$(id -u)" -eq 0 && "${USER_NAME}" != "root" ]]; then
     RUNTIME="/run/user/${UID_NUM}"
+    BUS="${RUNTIME}/bus"
     # --clear-system-proxy already restores/clears loopback GNOME/KDE and blanks
     # only loopback-valued session proxy env. Do not force mode 'none' or blank a
     # corporate http_proxy the user configured themselves.
-    sudo -u "${USER_NAME}" \
-      env XDG_RUNTIME_DIR="${RUNTIME}" DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus" \
-      "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+    # Prefer the login session bus; on headless CI that socket is often missing, so
+    # fall back to dbus-run-session so gsettings still commits the user dconf DB.
+    if [[ -S "${BUS}" ]]; then
+      sudo -u "${USER_NAME}" \
+        env XDG_RUNTIME_DIR="${RUNTIME}" DBUS_SESSION_BUS_ADDRESS="unix:path=${BUS}" \
+        "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+    elif command -v dbus-run-session >/dev/null 2>&1; then
+      sudo -u "${USER_NAME}" \
+        env XDG_RUNTIME_DIR="${RUNTIME}" \
+        dbus-run-session -- "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+    else
+      sudo -u "${USER_NAME}" \
+        env XDG_RUNTIME_DIR="${RUNTIME}" \
+        "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
+    fi
   else
     "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
   fi
