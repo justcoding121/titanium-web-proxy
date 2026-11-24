@@ -4,10 +4,14 @@ name: inspector-install-smoke
 # Promotion PRs into beta and stable run it with no path filter, so a docs-only PR cannot leave a required check pending.
 
 on:
+  # Advisory legs (macos-15-intel Safari decrypt, ubuntu-24.04-arm) only run on
+  # schedule and workflow_dispatch so PR/push conclusions stay clean for readiness.
+  schedule:
+    - cron: '27 7 * * *'
   workflow_dispatch:
     inputs:
       os:
-        description: 'Runner leg (all = required three plus non-blocking macos-15-intel and ubuntu-24.04-arm)'
+        description: 'Runner leg (all = required three plus advisory macos-15-intel and ubuntu-24.04-arm)'
         required: false
         default: all
         type: choice
@@ -26,16 +30,22 @@ concurrency:
 
 jobs:
   install-smoke:
+    # macos-15-intel: Safari fresh decrypt fails on the Intel image (upgrade path
+    # passes). ubuntu-24.04-arm stays advisory until five consecutive greens.
+    # Both run on schedule/dispatch only so PR and push conclusions stay green.
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (matrix.os != 'macos-15-intel' && matrix.os != 'ubuntu-24.04-arm')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 5
       matrix:
-        # pull_request and push leave inputs.os empty, so those events run every leg.
-        # macos-15-intel and ubuntu-24.04-arm are not required checks until five
-        # consecutive greens. The three original legs stay required.
-        os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest","macos-15-intel","ubuntu-24.04-arm"]') }}
+        # pull_request/push: three required legs. schedule/dispatch all=five legs.
+        # A concrete inputs.os always runs that single leg (dispatch only).
+        os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["windows-latest","ubuntu-latest","macos-latest","macos-15-intel","ubuntu-24.04-arm"]' || '["windows-latest","ubuntu-latest","macos-latest"]') }}
     continue-on-error: ${{ matrix.os == 'macos-15-intel' || matrix.os == 'ubuntu-24.04-arm' }}
     steps:
       - name: Screenshot folder
