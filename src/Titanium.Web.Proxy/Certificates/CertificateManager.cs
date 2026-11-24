@@ -1116,7 +1116,9 @@ public sealed class CertificateManager : IDisposable
         var deadHandleObserved = false;
 
         // check in cache first
-        if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
+        if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate)
+            && Volatile.Read(ref certificateCacheGeneration) == generationAtEntry
+            && IsCertificateHandleAlive(cachedCertificate))
             return cachedCertificate;
 
         // Disk hit must not wait behind Task.Run(MakeCertificate) stampede — load synchronously.
@@ -1129,12 +1131,19 @@ public sealed class CertificateManager : IDisposable
                         new CachedCertificate(fromDisk) { LastAccess = DateTime.UtcNow }))
                 {
                     EnforceCertificateCacheBound();
-                    return fromDisk;
+                    if (Volatile.Read(ref certificateCacheGeneration) == generationAtEntry
+                        && IsCertificateHandleAlive(fromDisk))
+                        return fromDisk;
+                    // Lost a ClearRoot race after TryAdd; fall through to mint/retry.
                 }
-
-                fromDisk.Dispose();
-                if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
-                    return cachedCertificate;
+                else
+                {
+                    fromDisk.Dispose();
+                    if (TryGetValidCachedCertificate(certificateName, out cachedCertificate)
+                        && Volatile.Read(ref certificateCacheGeneration) == generationAtEntry
+                        && IsCertificateHandleAlive(cachedCertificate))
+                        return cachedCertificate;
+                }
             }
         }
 
@@ -1144,7 +1153,9 @@ public sealed class CertificateManager : IDisposable
         try
         {
             // check in cache first
-            if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
+            if (TryGetValidCachedCertificate(certificateName, out cachedCertificate)
+                && Volatile.Read(ref certificateCacheGeneration) == generationAtEntry
+                && IsCertificateHandleAlive(cachedCertificate))
                 return cachedCertificate;
 
             // handle burst requests with same certificate name
@@ -1236,6 +1247,16 @@ public sealed class CertificateManager : IDisposable
             }
         }
 
+        // Final ownership check: ClearRoot may have evicted/disposed between the alive check and
+        // return. Never hand back a dead leaf; retry when the cache generation moved.
+        if (certificate != null
+            && (Volatile.Read(ref certificateCacheGeneration) != generationAtEntry
+                || !IsCertificateHandleAlive(certificate)))
+        {
+            certificate = null;
+            deadHandleObserved = true;
+        }
+
         // Retry only when this call lost a race (ClearRoot bumped the generation, or the handle died).
         // A mint that fails for any other reason (no root, engine error) is not repeated: that would
         // multiply expensive key generation per handshake while the failure persists.
@@ -1243,7 +1264,9 @@ public sealed class CertificateManager : IDisposable
             && (deadHandleObserved || Volatile.Read(ref certificateCacheGeneration) != generationAtEntry)
             && !clearCertificatesTokenSource.Token.IsCancellationRequested)
         {
-            if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
+            if (TryGetValidCachedCertificate(certificateName, out cachedCertificate)
+                && IsCertificateHandleAlive(cachedCertificate)
+                && Volatile.Read(ref certificateCacheGeneration) == generationAtEntry)
                 return cachedCertificate;
             return await CreateServerCertificateCore(certificateName, remainingRetries - 1).ConfigureAwait(false);
         }
@@ -2464,27 +2487,18 @@ public sealed class CertificateManager : IDisposable
 
         certificateCache.Clear();
 
-        // Dispose every cached leaf cert before clearing so native CAPI/OpenSSL handles
-        // are released promptly rather than waiting for GC finalization.
-        foreach (var pair in cachedCertificates)
-            if (cachedCertificates.TryRemove(pair.Key, out var entry))
-                try { entry.Certificate.Dispose(); }
-                catch
-                {
-                    // Best-effort cleanup; continue disposing the remaining cached certificates.
-                }
+        // Evict (do not Dispose) every cached leaf. CreateServerCertificate returns the same
+        // X509Certificate2 instance held in the cache; an immediate Dispose here races callers
+        // that already passed IsCertificateHandleAlive. pendingDisposals + DisposePendingEvictions
+        // give in-flight handshakes the same grace as ordinary cache eviction.
+        foreach (var pair in cachedCertificates.ToArray())
+            EvictCertificate(pair.Key);
 
         sslCertificateContexts.Clear();
         sslCertificateContextFailures.Clear();
 
-        // Also dispose anything already evicted but still waiting out its grace period: the root is
-        // changing, so leaves signed by the old root are not worth holding onto even briefly.
-        while (pendingDisposals.TryDequeue(out var pending))
-            try { pending.Certificate.Dispose(); }
-            catch
-            {
-                // Best-effort cleanup; continue disposing the remaining pending certificates.
-            }
+        // Leave already-queued pendingDisposals for DisposePendingEvictions; flushing them here
+        // would kill handles still held by callers that raced the previous ClearRoot/eviction.
 
         // Do not dispose rootCertificate: it may have been supplied by the caller and still
         // referenced outside this manager (e.g. shared test CA / persisted root reload).
