@@ -67,6 +67,27 @@ jobs:
           if missing:
               print("::error::required checks do not match a workflow job: " + ", ".join(missing))
               sys.exit(1)
+
+          # continue-on-error install-smoke legs must never appear in required contexts.
+          smoke = yaml.safe_load(pathlib.Path(".github/workflows/inspector-install-smoke.yml").read_text(encoding="utf-8")) or {}
+          smoke_job = (smoke.get("jobs") or {}).get("install-smoke") or {}
+          coe = smoke_job.get("continue-on-error")
+          advisory_os = []
+          if isinstance(coe, str) and "macos-15-intel" in coe:
+              advisory_os.append("macos-15-intel")
+          if isinstance(coe, str) and "ubuntu-24.04-arm" in coe:
+              advisory_os.append("ubuntu-24.04-arm")
+          # Also accept a literal mapping / expression listing those OS names.
+          coe_text = coe if isinstance(coe, str) else json.dumps(coe)
+          for os_name in ("macos-15-intel", "ubuntu-24.04-arm"):
+              if os_name in coe_text and os_name not in advisory_os:
+                  advisory_os.append(os_name)
+          required_contexts = set(beta)
+          leaked = [f"install-smoke ({os_name})" for os_name in advisory_os if f"install-smoke ({os_name})" in required_contexts]
+          if leaked:
+              print("::error::continue-on-error install-smoke legs must not be required checks: " + ", ".join(leaked))
+              sys.exit(1)
+
           print("Offline contract matches the ruleset file and workflow job names")
           PY
       - name: Live rules match the contract
