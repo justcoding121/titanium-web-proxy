@@ -185,7 +185,9 @@ jobs:
           PY
 
   gate-evidence:
-    needs: [resolve-version, release-readiness]
+    needs: [resolve-version]
+    # Dry-runs already have merge-gate on the PR merge ref; skip the cold re-test path.
+    if: needs.resolve-version.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -239,16 +241,17 @@ jobs:
 
   # Cold fallback when this SHA has no green develop/beta/stable push evidence.
   # Parallel layout matches develop; job name stays `test` for release-gate.
+  # Dry-runs skip this: the PR .NET merge-gate already covered the same tree.
   test:
-    needs: [resolve-version, release-readiness, gate-evidence]
-    if: needs.gate-evidence.outputs.green != 'true'
+    needs: [resolve-version, gate-evidence]
+    if: needs.resolve-version.outputs.dry_run != 'true' && needs.gate-evidence.outputs.green != 'true'
     uses: ./.github/workflows/windows-full-tests.yml
     with:
       include_playwright_product_ui: true
 
   cli-e2e:
-    needs: [resolve-version, release-readiness, gate-evidence]
-    if: needs.gate-evidence.outputs.green != 'true'
+    needs: [resolve-version, gate-evidence]
+    if: needs.resolve-version.outputs.dry_run != 'true' && needs.gate-evidence.outputs.green != 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
@@ -284,22 +287,34 @@ jobs:
 
   release-gate:
     name: release-gate
-    needs: [resolve-version, release-readiness, gate-evidence, test, cli-e2e]
+    needs: [resolve-version, gate-evidence, test, cli-e2e]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Accept a green push run or a green re-test
         env:
-          READY: ${{ needs.release-readiness.result }}
+          DRY: ${{ needs.resolve-version.outputs.dry_run }}
           EVIDENCE: ${{ needs.gate-evidence.result }}
           GREEN: ${{ needs.gate-evidence.outputs.green }}
           TEST: ${{ needs.test.result }}
           CLI: ${{ needs.cli-e2e.result }}
         run: |
           set -euo pipefail
-          echo "readiness=$READY evidence=$EVIDENCE green=$GREEN test=$TEST cli-e2e=$CLI"
-          if [[ "$READY" != "success" || "$EVIDENCE" != "success" ]]; then
-            echo "::error::release-readiness=$READY gate-evidence=$EVIDENCE"
+          if [[ "$DRY" == "true" ]]; then
+            {
+              echo "### release-gate path"
+              echo "dry-run: the same tree is proven by the .NET pull_request run (merge-gate) and tree evidence; skipping cold re-test"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "dry-run: the same tree is proven by the .NET pull_request run (merge-gate) and tree evidence; skipping cold re-test"
+            exit 0
+          fi
+          echo "evidence=$EVIDENCE green=$GREEN test=$TEST cli-e2e=$CLI"
+          {
+            echo "### release-gate path"
+            echo "live: require gate-evidence success and a green push or cold re-test"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$EVIDENCE" != "success" ]]; then
+            echo "::error::gate-evidence=$EVIDENCE"
             exit 1
           fi
           for result in "$TEST" "$CLI"; do
@@ -312,6 +327,25 @@ jobs:
             echo "::error::re-test finished as $result (push evidence green=$GREEN)"
             exit 1
           done
+
+  # Publish jobs wait here so builds and product-smoke can overlap soak/readiness.
+  publish-gate:
+    name: publish-gate
+    needs: [resolve-version, release-readiness]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require release-readiness before publish
+        env:
+          READY: ${{ needs.release-readiness.result }}
+          DRY: ${{ needs.resolve-version.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          echo "release-readiness=$READY dry_run=$DRY"
+          if [[ "$READY" != "success" ]]; then
+            echo "::error::publish-gate requires release-readiness success (got $READY)"
+            exit 1
+          fi
 
   # PR dry-runs use environment "signing". Fail here when the branch policy
   # is readable and rejects the ref, before the matrix spends a runner.
@@ -373,11 +407,18 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      # Cap concurrency — many self-contained publishes on shared ubuntu runners run out of disk.
-      # Musl + glibc matrix + Inspector/CLI together previously ENOSPCd even at 3.
-      max-parallel: 2
+      # Legs run on separate VMs; max-parallel does not change a leg's disk usage.
+      # Put macOS and Windows first: they are slowest to acquire and on the critical path.
+      max-parallel: 7
       matrix:
         include:
+          - rid: osx-arm64
+            os: macos-latest
+          # osx-x64 Lua is compiled on the host, so this leg needs Intel. macos-13 no longer has runners.
+          - rid: osx-x64
+            os: macos-15-intel
+          - rid: win-x64
+            os: windows-latest
           # Lua shim builds only on a matching OS/arch host; arm/musl use native or Alpine runners.
           - rid: linux-x64
             os: ubuntu-latest
@@ -387,13 +428,6 @@ jobs:
             os: ubuntu-latest
           - rid: linux-musl-arm64
             os: ubuntu-24.04-arm
-          - rid: win-x64
-            os: windows-latest
-          # osx-x64 Lua is compiled on the host, so this leg needs Intel. macos-13 no longer has runners.
-          - rid: osx-x64
-            os: macos-15-intel
-          - rid: osx-arm64
-            os: macos-latest
     steps:
       - uses: actions/checkout@v7
       - name: Free disk space (Linux)
@@ -654,9 +688,17 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      max-parallel: 2
+      # Legs run on separate VMs. Put macOS and Windows first on the critical path.
+      max-parallel: 7
       matrix:
         include:
+          - rid: osx-arm64
+            os: macos-latest
+            msi: false
+          - rid: osx-x64
+            # Same Intel runner as CLI osx-x64: Homebrew libmsquic must match the x86_64 apphost.
+            os: macos-15-intel
+            msi: false
           - rid: win-x64
             os: windows-latest
             msi: true
@@ -671,13 +713,6 @@ jobs:
             msi: false
           - rid: linux-musl-arm64
             os: ubuntu-latest
-            msi: false
-          - rid: osx-x64
-            # Same Intel runner as CLI osx-x64: Homebrew libmsquic must match the x86_64 apphost.
-            os: macos-15-intel
-            msi: false
-          - rid: osx-arm64
-            os: macos-latest
             msi: false
     steps:
       - uses: actions/checkout@v7
@@ -1116,12 +1151,13 @@ jobs:
     secrets: inherit
 
   publish-release:
-    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3, smoke-scripting, rps-product-smoke, product-smoke]
+    needs: [resolve-version, publish-gate, build-cli, build-plus, build-inspector, smoke-http3, smoke-scripting, rps-product-smoke, product-smoke]
     if: |
       always() &&
       (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true') &&
       needs.resolve-version.result == 'success' &&
+      needs.publish-gate.result == 'success' &&
       needs.build-cli.result == 'success' &&
       needs.build-plus.result == 'success' &&
       needs.build-inspector.result == 'success' &&
@@ -1318,10 +1354,11 @@ jobs:
   # Multi-arch container image on GHCR with an SBOM, provenance, and a keyless cosign signature.
   # Pull-request builds (no push) live in kubernetes-ci.yml.
   publish-image:
-    needs: [resolve-version, release-gate, product-smoke]
+    needs: [resolve-version, publish-gate, release-gate, product-smoke]
     # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
     if: |
       always() &&
+      needs.publish-gate.result == 'success' &&
       needs.release-gate.result == 'success' &&
       needs.product-smoke.result == 'success' &&
       needs.resolve-version.outputs.dry_run != 'true' &&
@@ -1382,10 +1419,11 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   # The Gateway API controller image, published the same way (SBOM, provenance, keyless signature).
   publish-gateway-image:
-    needs: [resolve-version, release-gate, product-smoke]
+    needs: [resolve-version, publish-gate, release-gate, product-smoke]
     # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
     if: |
       always() &&
+      needs.publish-gate.result == 'success' &&
       needs.release-gate.result == 'success' &&
       needs.product-smoke.result == 'success' &&
       needs.resolve-version.outputs.dry_run != 'true' &&
@@ -1446,10 +1484,11 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   # The Manager control-plane image, published the same way (SBOM, provenance, keyless signature).
   publish-manager-image:
-    needs: [resolve-version, release-gate, product-smoke]
+    needs: [resolve-version, publish-gate, release-gate, product-smoke]
     # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
     if: |
       always() &&
+      needs.publish-gate.result == 'success' &&
       needs.release-gate.result == 'success' &&
       needs.product-smoke.result == 'success' &&
       needs.resolve-version.outputs.dry_run != 'true' &&
