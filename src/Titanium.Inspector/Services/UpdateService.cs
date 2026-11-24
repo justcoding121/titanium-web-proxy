@@ -9,6 +9,9 @@ using Titanium.Web.Proxy.Abstractions.Updates;
 
 namespace Titanium.Inspector.Services;
 
+// Update HTTP: see UpdateHttp — bypass this app's own MITM proxy so Decrypt HTTPS
+// does not break in-app update downloads.
+
 public enum UpdateApplyKind
 {
     Msi,
@@ -57,11 +60,17 @@ public sealed class UpdateService
 
     private readonly SettingsService _settings;
     private readonly Func<HttpClient> _httpFactory;
+    private readonly Func<bool> _updateTrafficMayBeCaptured;
 
-    public UpdateService(SettingsService settings, Func<HttpClient>? httpFactory = null)
+    public UpdateService(
+        SettingsService settings,
+        Func<HttpClient>? httpFactory = null,
+        Func<bool>? updateTrafficMayBeCaptured = null)
     {
         _settings = settings;
-        _httpFactory = httpFactory ?? (() => new HttpClient { Timeout = TimeSpan.FromMinutes(5) });
+        _httpFactory = httpFactory
+            ?? (() => UpdateHttp.CreateClient(TimeSpan.FromMinutes(5)));
+        _updateTrafficMayBeCaptured = updateTrafficMayBeCaptured ?? (() => false);
     }
 
     public string ChannelDisplayName =>
@@ -176,7 +185,8 @@ public sealed class UpdateService
             return new UpdateCheckResult
             {
                 ChannelDisplay = channelDisplay,
-                Message = $"Update check failed: {ex.Message}",
+                Message = "Update check failed: "
+                    + UpdateHttp.FormatFailure(ex, _updateTrafficMayBeCaptured()),
             };
         }
     }
@@ -482,7 +492,8 @@ public sealed class UpdateService
         }
         catch (Exception ex)
         {
-            return (false, $"Update failed: {ex.Message}");
+            return (false, "Update failed: "
+                + UpdateHttp.FormatFailure(ex, _updateTrafficMayBeCaptured()));
         }
     }
 

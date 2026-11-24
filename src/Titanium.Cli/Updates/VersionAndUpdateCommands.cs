@@ -593,7 +593,9 @@ internal static partial class UpdateCommand
     {
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            using var http = UpdateHttp.CreateClient(
+                TimeSpan.FromMinutes(5),
+                UpdateHttp.IsLoopbackProxy);
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
             var bytes = await http.GetByteArrayAsync(asset.Url);
             AsyncConsole.WriteLine("Verifying SHA256…");
@@ -612,7 +614,8 @@ internal static partial class UpdateCommand
         }
         catch (Exception ex)
         {
-            AsyncConsole.WriteError($"Download failed: {ex.Message}");
+            AsyncConsole.WriteError(
+                "Download failed: " + UpdateHttp.FormatFailure(ex, updateTrafficMayBeCaptured: true));
             return 1;
         }
     }
@@ -1039,7 +1042,9 @@ internal sealed class UpdateFeedClient
 
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            using var http = UpdateHttp.CreateClient(
+                TimeSpan.FromSeconds(15),
+                UpdateHttp.IsLoopbackProxy);
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
 
             if (!string.IsNullOrEmpty(feed))
