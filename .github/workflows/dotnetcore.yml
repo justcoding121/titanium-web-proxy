@@ -140,7 +140,6 @@ jobs:
           is_infra() {
             local f="$1"
             case "$f" in
-              AGENTS.md) return 0 ;;
               .github/*.md|.github/*.json|.github/ISSUE_TEMPLATE/*|.github/actions/azure-artifact-sign/*) return 0 ;;
               .github/workflows/dotnetcore.yml|.github/workflows/release.yml|.github/workflows/kubernetes-ci.yml|.github/workflows/kubernetes-smoke.yml|.github/workflows/gateway-conformance.yml) return 1 ;;
               .github/workflows/*.yml) return 0 ;;
@@ -158,7 +157,6 @@ jobs:
                 ;;
               *.md)
                 case "$f" in
-                  AGENTS.md) infra=true ;;
                   */*) code=true ;;
                 esac
                 continue
