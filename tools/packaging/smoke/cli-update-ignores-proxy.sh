@@ -1,49 +1,78 @@
 #!/usr/bin/env bash
-# Prove titanium update does not use a loopback HTTPS_PROXY (own MITM / local interceptor).
-# Seeds an older install identity, serves a local candidate feed, points HTTPS_PROXY at a
-# recording listener, runs update, asserts zero proxy hits.
-# Usage: cli-update-ignores-proxy.sh <cli-dir> <cli-zip> <titanium-bin> [version]
+# Prove titanium update (CLI zip or --plus) does not use a loopback HTTPS_PROXY.
+# Seeds an older install identity, serves a local candidate feed on an ephemeral
+# port, points HTTPS_PROXY at a recording listener, runs update, asserts zero hits.
+#
+# Usage:
+#   cli-update-ignores-proxy.sh [--plus] <cli-dir> <asset-zip> <titanium-bin> [version]
+#   cli-update-ignores-proxy.sh --self-test
 set -euo pipefail
+
+self_test() {
+  # Dry parse + ephemeral bind (no titanium binary, no update network).
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ASSERT: python3 required for cli-update-ignores-proxy self-test" >&2
+    exit 1
+  fi
+  local ports
+  ports="$(python3 - <<'PY'
+import socket
+ports = []
+for _ in range(2):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("127.0.0.1", 0))
+    ports.append(str(s.getsockname()[1]))
+    s.close()
+print(" ".join(ports))
+PY
+)"
+  # shellcheck disable=SC2086
+  set -- $ports
+  local feed_port="$1" proxy_port="$2"
+  [[ -n "$feed_port" && -n "$proxy_port" ]] || {
+    echo "ASSERT: self-test ports missing" >&2
+    exit 1
+  }
+  echo "cli-update-ignores-proxy self-test ok (feed=$feed_port proxy=$proxy_port)"
+}
+
+if [[ "${1:-}" == "--self-test" ]]; then
+  self_test
+  exit 0
+fi
+
+plus=0
+if [[ "${1:-}" == "--plus" ]]; then
+  plus=1
+  shift
+fi
+
 cli_dir="${1:?cli dir}"
-cli_zip="${2:?cli zip}"
+asset_zip="${2:?asset zip}"
 bin="${3:?titanium}"
 version="${4:-8.0.9-smoke}"
 cli_dir="$(cd "$cli_dir" && pwd)"
-cli_zip="$(cd "$(dirname "$cli_zip")" && pwd)/$(basename "$cli_zip")"
+asset_zip="$(cd "$(dirname "$asset_zip")" && pwd)/$(basename "$asset_zip")"
 bin="$(cd "$(dirname "$bin")" && pwd)/$(basename "$bin")"
 
-if [[ ! -f "$cli_zip" || ! -x "$bin" && ! -f "$bin" ]]; then
-  echo "ASSERT: cli zip or binary missing" >&2
+if [[ ! -f "$asset_zip" || ! -x "$bin" && ! -f "$bin" ]]; then
+  echo "ASSERT: asset zip or binary missing" >&2
   exit 1
 fi
 chmod +x "$bin" || true
 
 feed="$(mktemp -d)"
 proxy_dir="$(mktemp -d)"
-cp "$cli_zip" "$feed/cli.zip"
-size="$(wc -c < "$feed/cli.zip" | tr -d ' ')"
-sha="$(sha256sum "$feed/cli.zip" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$feed/cli.zip" | awk '{print $1}')"
-asset_name="cli.zip"
-
-# RID keys must match UpdateFeedClient ResolveRid / SuggestRid.
-python3 - "$feed" "$size" "$sha" "$version" <<'PY'
-import json, sys
-feed, size, sha, version = sys.argv[1:]
-url = "http://127.0.0.1:9/cli.zip"
-asset = {"url": url, "sha256": sha, "size": int(size)}
-rids = ["linux-x64", "linux-arm64", "osx-arm64", "osx-x64", "win-x64",
-        "linux-musl-x64", "linux-musl-arm64"]
-manifest = {
-  "version": version,
-  "channel": "beta",
-  "products": {
-    "cli": {
-      "assets": {rid: dict(asset) for rid in rids},
-    }
-  },
-}
-open(feed + "/release-manifest.json", "w", encoding="utf-8").write(json.dumps(manifest))
-PY
+if [[ "$plus" -eq 1 ]]; then
+  asset_name="plus.zip"
+  cp "$asset_zip" "$feed/$asset_name"
+else
+  asset_name="cli.zip"
+  cp "$asset_zip" "$feed/$asset_name"
+fi
+size="$(wc -c < "$feed/$asset_name" | tr -d ' ')"
+sha="$(sha256sum "$feed/$asset_name" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$feed/$asset_name" | awk '{print $1}')"
 
 hits="$proxy_dir/hits"
 : >"$hits"
@@ -74,45 +103,92 @@ while True:
 PY
 proxy_py=$!
 
-feed_port=8766
-python3 -m http.server "$feed_port" --bind 127.0.0.1 --directory "$feed" >/tmp/update-feed.log 2>&1 &
+python3 - "$feed" <<'PY' >/tmp/update-feed.log 2>&1 &
+import sys, pathlib, http.server
+root = pathlib.Path(sys.argv[1])
+port_file = root / "feed-port"
+httpd = http.server.ThreadingHTTPServer(
+    ("127.0.0.1", 0),
+    lambda *a, **k: http.server.SimpleHTTPRequestHandler(*a, directory=str(root), **k),
+)
+port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
+httpd.serve_forever()
+PY
 httpd=$!
+
 cleanup() {
   kill "$httpd" "$proxy_py" 2>/dev/null || true
+  wait "$httpd" "$proxy_py" 2>/dev/null || true
   rm -rf "$feed" "$proxy_dir"
 }
 trap cleanup EXIT
 
 for _ in $(seq 1 50); do
-  [[ -f "$proxy_dir/port" ]] && break
+  [[ -f "$proxy_dir/port" && -f "$feed/feed-port" ]] && break
   sleep 0.1
 done
+if [[ ! -f "$proxy_dir/port" || ! -f "$feed/feed-port" ]]; then
+  echo "ASSERT: feed or proxy port file missing" >&2
+  exit 1
+fi
 proxy_port="$(cat "$proxy_dir/port")"
+feed_port="$(cat "$feed/feed-port")"
+
 for _ in $(seq 1 50); do
-  if curl -fsS "http://127.0.0.1:$feed_port/release-manifest.json" >/dev/null 2>&1; then
+  if curl -fsS --max-time 1 "http://127.0.0.1:$feed_port/" >/dev/null 2>&1; then
     break
   fi
   sleep 0.1
 done
 
-python3 - "$feed/release-manifest.json" "$feed_port" <<'PY'
+if [[ "$plus" -eq 1 ]]; then
+  python3 - "$feed/release-manifest.json" "$feed_port" "$size" "$sha" "$version" <<'PY'
 import json, sys
-path, port = sys.argv[1:]
-doc = json.load(open(path, encoding="utf-8"))
-url = f"http://127.0.0.1:{port}/cli.zip"
-for a in doc["products"]["cli"]["assets"].values():
-    a["url"] = url
-json.dump(doc, open(path, "w", encoding="utf-8"))
+path, port, size, sha, version = sys.argv[1:]
+url = f"http://127.0.0.1:{port}/plus.zip"
+manifest = {
+  "version": version,
+  "channel": "beta",
+  "products": {
+    "plus": {
+      "version": version,
+      "bundle": {"url": url, "sha256": sha, "size": int(size)},
+    }
+  },
+}
+open(path, "w", encoding="utf-8").write(json.dumps(manifest))
 PY
-
-# Seed an older installed identity so the feed is offered.
-if [[ -n "${LOCALAPPDATA:-}" ]]; then
-  identity_dir="$LOCALAPPDATA/TitaniumCli"
 else
-  identity_dir="${XDG_DATA_HOME:-$HOME/.local/share}/TitaniumCli"
+  python3 - "$feed" "$size" "$sha" "$version" "$feed_port" <<'PY'
+import json, sys
+feed, size, sha, version, port = sys.argv[1:]
+url = f"http://127.0.0.1:{port}/cli.zip"
+asset = {"url": url, "sha256": sha, "size": int(size)}
+rids = ["linux-x64", "linux-arm64", "osx-arm64", "osx-x64", "win-x64",
+        "linux-musl-x64", "linux-musl-arm64"]
+manifest = {
+  "version": version,
+  "channel": "beta",
+  "products": {
+    "cli": {
+      "assets": {rid: dict(asset) for rid in rids},
+    }
+  },
+}
+open(feed + "/release-manifest.json", "w", encoding="utf-8").write(json.dumps(manifest))
+PY
 fi
-mkdir -p "$identity_dir"
-printf '%s\n' '{"tag":"0.0.1","channel":"Beta"}' >"$identity_dir/installed-release.json"
+
+# Seed an older installed identity so the feed is offered (CLI path only).
+if [[ "$plus" -eq 0 ]]; then
+  if [[ -n "${LOCALAPPDATA:-}" ]]; then
+    identity_dir="$LOCALAPPDATA/TitaniumCli"
+  else
+    identity_dir="${XDG_DATA_HOME:-$HOME/.local/share}/TitaniumCli"
+  fi
+  mkdir -p "$identity_dir"
+  printf '%s\n' '{"tag":"0.0.1","channel":"Beta"}' >"$identity_dir/installed-release.json"
+fi
 
 export HTTP_PROXY="http://127.0.0.1:$proxy_port"
 export HTTPS_PROXY="http://127.0.0.1:$proxy_port"
@@ -121,8 +197,26 @@ export https_proxy="$HTTPS_PROXY"
 export NO_PROXY=""
 export no_proxy=""
 
-TITANIUM_UPDATE_FEED="http://127.0.0.1:$feed_port/release-manifest.json" \
-  "$bin" update --channel beta
+update_cmd=("$bin" update --channel beta)
+if [[ "$plus" -eq 1 ]]; then
+  update_cmd=("$bin" update --plus --channel beta)
+fi
+
+set +e
+if command -v timeout >/dev/null 2>&1; then
+  TITANIUM_UPDATE_FEED="http://127.0.0.1:$feed_port/release-manifest.json" \
+    timeout 120 "${update_cmd[@]}"
+  update_rc=$?
+else
+  TITANIUM_UPDATE_FEED="http://127.0.0.1:$feed_port/release-manifest.json" \
+    "${update_cmd[@]}"
+  update_rc=$?
+fi
+set -e
+if [[ "$update_rc" -ne 0 ]]; then
+  echo "ASSERT: titanium update exited $update_rc" >&2
+  exit 1
+fi
 
 hit_count="$(tr -d ' \r\n' <"$hits" 2>/dev/null || echo 0)"
 hit_count="${hit_count:-0}"
@@ -131,4 +225,8 @@ if [[ "$hit_count" != "0" ]]; then
   exit 1
 fi
 
-echo "cli update ignored loopback proxy ok (hits=0 version=$version)"
+if [[ "$plus" -eq 1 ]]; then
+  echo "plus update ignored loopback proxy ok (hits=0 version=$version)"
+else
+  echo "cli update ignored loopback proxy ok (hits=0 version=$version)"
+fi

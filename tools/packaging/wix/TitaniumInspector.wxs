@@ -27,6 +27,18 @@
                            RebootPrompt="no"
                            Timeout="10" />
 
+    <!-- Uninstall: clear leftover WinINET loopback proxy after CloseApplication.
+         Return ignore so a missing or already-cleared proxy never fails msiexec /x. -->
+    <CustomAction Id="ClearSystemProxy"
+                  FileRef="InspectorExe"
+                  ExeCommand="--clear-system-proxy"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="ClearSystemProxy" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+
     <!-- Launch the installed apphost (type 18). WixShellExec can reopen this MSI when the
          formatted path is empty or resolves to the source folder. -->
     <CustomAction Id="LaunchApplication"

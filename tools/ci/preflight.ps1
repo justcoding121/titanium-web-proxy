@@ -88,6 +88,27 @@ for path in sorted(root.glob("*.yml")):
         Write-Check 'bump-formula-from-sums --self-test' ($LASTEXITCODE -eq 0)
     }
 
+    $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (($IsWindows -or $env:OS -match 'Windows') -and (Test-Path $psExe)) {
+        if (Test-Path 'tools/packaging/smoke/cli-update-ignores-proxy.ps1') {
+            & $psExe -NoProfile -File tools/packaging/smoke/cli-update-ignores-proxy.ps1 -SelfTest
+            Write-Check 'cli-update-ignores-proxy -SelfTest' ($LASTEXITCODE -eq 0)
+        }
+        if (Test-Path 'tools/packaging/smoke/cli-upgrade-from-published.ps1') {
+            & $psExe -NoProfile -File tools/packaging/smoke/cli-upgrade-from-published.ps1 -SelfTest
+            Write-Check 'cli-upgrade-from-published -SelfTest' ($LASTEXITCODE -eq 0)
+        }
+    } else {
+        if (Test-Path 'tools/packaging/smoke/cli-update-ignores-proxy.sh') {
+            bash tools/packaging/smoke/cli-update-ignores-proxy.sh --self-test
+            Write-Check 'cli-update-ignores-proxy --self-test' ($LASTEXITCODE -eq 0)
+        }
+        if (Test-Path 'tools/packaging/smoke/cli-upgrade-from-published.sh') {
+            bash tools/packaging/smoke/cli-upgrade-from-published.sh --self-test
+            Write-Check 'cli-upgrade-from-published --self-test' ($LASTEXITCODE -eq 0)
+        }
+    }
+
     if ((Test-Path '.github/required-checks.json') -and (Test-Path '.github/workflows/required-checks.yml')) {
         Write-Host '[INFO] required-checks drift is enforced in CI lint-workflows'
     }

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Non-blocking install smoke for ubuntu-24.04-arm. The required linux leg stays
 # on x64 with its full browser set. This leg uses Firefox and Chrome only.
+# Covers fresh, upgrade (when a previous arm64 deb exists), uninstall, and
+# advisory update-under-decrypt.
 set -euo pipefail
 sudo apt-get update
 sudo apt-get install -y xvfb xdotool libnss3-tools curl ca-certificates wget gnupg rsync imagemagick libnuma1
@@ -21,17 +23,65 @@ cp -f tools/packaging/icons/titanium-inspector.png tools/packaging/icons/titaniu
 chmod +x tools/packaging/linux/build-deb-rpm.sh
 ./tools/packaging/linux/build-deb-rpm.sh inspector "$out" artifacts/candidate "$ver" linux-arm64
 cand="$(ls artifacts/candidate/TitaniumInspector-linux-arm64.deb)"
-sudo dpkg -i "$cand" || sudo apt-get install -y -f
-test -x /opt/titanium-inspector/TitaniumInspector
+
+# Prefer a previous published arm64 deb when available for upgrade coverage.
+mkdir -p artifacts/prev
+prev=""
+if [[ -n "${GH_TOKEN:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+  tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft==false and .prerelease==false)][0].tag_name' || true)"
+  if [[ -n "$tag" && "$tag" != "null" ]]; then
+    gh release download "$tag" --pattern 'TitaniumInspector-linux-arm64.deb' --dir artifacts/prev --clobber || true
+    prev="$(ls artifacts/prev/TitaniumInspector-linux-arm64.deb 2>/dev/null || true)"
+  fi
+fi
+
 log="${RUNNER_TEMP}/install-smoke"
 mkdir -p "$log"
 dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
 driver="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke"
 chmod +x "$driver"
-xvfb-run -a dbus-run-session -- "$driver" fresh --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,firefox --out "$log"
+run_driver() {
+  set +e
+  xvfb-run -a dbus-run-session -- "$driver" "$@" 2>&1 | tee -a "$log/driver.log"
+  local code=${PIPESTATUS[0]}
+  set -e
+  echo "driver-exit ${code} $*" | tee -a "$log/driver.log"
+  return "${code}"
+}
+
+if [[ -n "$prev" ]]; then
+  sudo dpkg -i "$prev" || sudo apt-get install -y -f
+  run_driver upgrade-seed --exe /opt/titanium-inspector/TitaniumInspector --browsers firefox --out "$log" || true
+  sudo dpkg -i "$cand" || sudo apt-get install -y -f
+  run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,firefox --out "$log" || true
+  sudo dpkg -r titanium-inspector || true
+  if command -v gsettings >/dev/null; then
+    mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null || true)"
+    mode="${mode//\'/}"
+    if [[ -n "${mode}" && "${mode}" != "none" ]]; then
+      echo "proxy mode still ${mode} after arm64 uninstall" >&2
+      exit 1
+    fi
+  fi
+  echo "pass linux-arm64 upgrade+uninstall"
+fi
+
+sudo dpkg -i "$cand" || sudo apt-get install -y -f
+test -x /opt/titanium-inspector/TitaniumInspector
+run_driver fresh --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,firefox --out "$log"
+if run_driver update-under-decrypt --exe /opt/titanium-inspector/TitaniumInspector --out "$log"; then
+  echo "update-under-decrypt=pass" | tee -a "$log/advisory.txt"
+else
+  echo "update-under-decrypt=fail (advisory)" | tee -a "$log/advisory.txt"
+fi
 dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r linux-arm64 --self-contained true -o artifacts/cli/linux-arm64
 ./tools/packaging/linux/build-deb-rpm.sh cli artifacts/cli/linux-arm64 artifacts/candidate "$ver" linux-arm64
 sudo dpkg -i artifacts/candidate/Titanium.Cli-linux-arm64.deb || sudo apt-get install -y -f
 "$driver" cli --titanium /usr/bin/titanium --out "$log/cli"
+sudo dpkg -r titanium-cli || true
+if [[ -x /opt/titanium-cli/titanium ]]; then
+  echo "ASSERT: CLI left after dpkg -r on arm64" >&2
+  exit 1
+fi
 echo "### install-smoke (ubuntu-24.04-arm)" >> "$GITHUB_STEP_SUMMARY"
-echo "fresh and cli passed" >> "$GITHUB_STEP_SUMMARY"
+echo "fresh, cli, uninstall passed" >> "$GITHUB_STEP_SUMMARY"

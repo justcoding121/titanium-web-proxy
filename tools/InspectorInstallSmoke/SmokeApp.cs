@@ -25,7 +25,8 @@ internal static class SmokeApp
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("commands: wipe | fresh | upgrade-seed | upgrade-verify | cli | local-windows");
+            Console.Error.WriteLine(
+                "commands: wipe | fresh | upgrade-seed | upgrade-verify | cli | local-windows | update-under-decrypt | uninstall-proxy-clear");
             return 2;
         }
 
@@ -41,6 +42,8 @@ internal static class SmokeApp
                 "upgrade-verify" => await UpgradeVerifyAsync(opt),
                 "cli" => await CliAsync(opt),
                 "local-windows" => await LocalWindowsAsync(opt),
+                "update-under-decrypt" => await UpdateUnderDecryptAsync(opt),
+                "uninstall-proxy-clear" => await UninstallProxyClearAsync(opt),
                 _ => Fail(2, "unknown command " + cmd),
             };
         }
@@ -1400,7 +1403,7 @@ internal static class SmokeApp
                 || dump.Contains("Policy OID", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static void WriteFreshSettings(int port, bool decrypt)
+    private static void WriteFreshSettings(int port, bool decrypt, bool checkUpdatesOnStartup = false)
     {
         Directory.CreateDirectory(ProfileDir());
         var settings = new InspectorSettings
@@ -1411,9 +1414,280 @@ internal static class SmokeApp
             EnableDecryptFailureBypass = false,
             AutoStartCapture = true,
             AutoSystemProxyOnStart = true,
-            CheckForUpdatesOnStartup = false,
+            CheckForUpdatesOnStartup = checkUpdatesOnStartup,
         };
         File.WriteAllText(Path.Combine(ProfileDir(), "settings.json"), JsonSerializer.Serialize(settings, SettingsJson));
+    }
+
+    /// <summary>
+    ///     Seed decrypt + system proxy + startup update check against a local HTTP feed.
+    ///     Pass when the feed is hit, the OS proxy still points at Inspector, the feed host is
+    ///     absent from HAR (loopback bypass), and ux-trace has no UntrustedRoot.
+    /// </summary>
+    private static async Task<int> UpdateUnderDecryptAsync(Options opt)
+    {
+        var exe = Require(opt.Exe, "--exe");
+        var port = FreePort();
+        WriteFreshSettings(port, decrypt: true, checkUpdatesOnStartup: true);
+
+        using var feed = LocalUpdateFeed.Start(version: "9.9.9-smoke");
+        var feedUrl = feed.ManifestUrl;
+        Console.WriteLine($"update-under-decrypt feed={feedUrl} bind={port}");
+
+        var app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feedUrl);
+        try
+        {
+            await TrustRootAsync();
+            if (!await app.CaptureIsListeningAsync())
+                return Fail(1, "update-under-decrypt: capture did not start");
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(25)))
+                return Fail(1, "update-under-decrypt: system proxy not on. " + ProxySnapshot());
+            if (!await WaitDecryptStableAsync(TimeSpan.FromSeconds(20), settle: TimeSpan.FromSeconds(8)))
+            {
+                // Seeded decrypt can flip off; re-enable without clearing the update feed.
+                await app.QuitAsync();
+                await app.DisposeAsync();
+                PatchDecrypt(true);
+                app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feedUrl);
+                if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(25)))
+                    return Fail(1, "update-under-decrypt: proxy off after relaunch. " + ProxySnapshot());
+                if (!await WaitDecryptStableAsync(TimeSpan.FromSeconds(12), settle: TimeSpan.FromSeconds(4)))
+                    return Fail(1, "update-under-decrypt: decryptHttps did not stay on");
+            }
+
+            // Proxy must still point at us when the feed is contacted.
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(5)))
+                return Fail(1, "update-under-decrypt: proxy cleared before feed check. " + ProxySnapshot());
+
+            var hitDeadline = DateTime.UtcNow.AddSeconds(45);
+            while (DateTime.UtcNow < hitDeadline && feed.Hits < 1)
+                await Task.Delay(250);
+            if (feed.Hits < 1)
+                return Fail(1, "update-under-decrypt: feed was never requested (hits=0)");
+
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(3)))
+                return Fail(1, "update-under-decrypt: proxy not on when feed was hit. " + ProxySnapshot());
+
+            await Task.Delay(1500);
+            if (HarMentionsHost(app.StartedUtc, "127.0.0.1:" + feed.Port) ||
+                HarMentionsHost(app.StartedUtc, "localhost:" + feed.Port))
+            {
+                return Fail(1, "update-under-decrypt: feed host appeared in HAR (loopback bypass failed)");
+            }
+
+            var ux = Path.Combine(ProfileDir(), "logs", "ux-trace.log");
+            if (File.Exists(ux))
+            {
+                var text = await File.ReadAllTextAsync(ux);
+                if (text.Contains("UntrustedRoot", StringComparison.OrdinalIgnoreCase) ||
+                    text.Contains("update traffic may be going through", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Fail(1, "update-under-decrypt: UntrustedRoot / MITM failure in ux-trace");
+                }
+            }
+
+            Console.WriteLine($"pass update-under-decrypt hits={feed.Hits} proxy=on bypass=ok");
+            return 0;
+        }
+        finally
+        {
+            await app.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    ///     Windows-only: start capturing, then either leave running (graceful) or kill (orphan)
+    ///     and require the caller to uninstall. This command only prepares state and prints the
+    ///     bind port; assertions live in the workflow after msiexec /x.
+    ///     Mode via --mode graceful|orphan (default graceful).
+    /// </summary>
+    private static async Task<int> UninstallProxyClearAsync(Options opt)
+    {
+        if (!OperatingSystem.IsWindows())
+            return Fail(2, "uninstall-proxy-clear is Windows-only");
+        var exe = Require(opt.Exe, "--exe");
+        var mode = opt.Mode ?? "graceful";
+        var port = FreePort();
+        WriteFreshSettings(port, decrypt: false);
+        var app = await InspectorProcess.StartAsync(exe, port);
+        try
+        {
+            if (!await app.CaptureIsListeningAsync())
+                return Fail(1, "uninstall-proxy-clear: capture did not start");
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
+                return Fail(1, "uninstall-proxy-clear: system proxy not on. " + ProxySnapshot());
+
+            if (string.Equals(mode, "orphan", StringComparison.OrdinalIgnoreCase))
+            {
+                // Hard-kill without CloseMainWindow so ForceClear does not run on quit.
+                try { Process.GetProcessById(app.Pid).Kill(entireProcessTree: true); }
+                catch { /* gone */ }
+                foreach (var p in Process.GetProcessesByName("TitaniumInspector"))
+                {
+                    try { p.Kill(entireProcessTree: true); } catch { /* gone */ }
+                }
+
+                await Task.Delay(1000);
+                if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(2)))
+                    return Fail(1, "uninstall-proxy-clear orphan: proxy cleared after kill; expected leftover");
+                Console.WriteLine($"uninstall-proxy-clear orphan ready port={port}");
+                return 0;
+            }
+
+            // Graceful: leave the process running for msiexec CloseApplication + ClearSystemProxy.
+            Console.WriteLine($"uninstall-proxy-clear graceful ready port={port} pid={app.Pid}");
+            return 0;
+        }
+        catch
+        {
+            await app.DisposeAsync();
+            throw;
+        }
+    }
+
+    private static bool HarMentionsHost(DateTime notBeforeUtc, string hostToken)
+    {
+        var root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TitaniumInspector",
+            "session-cache");
+        if (!Directory.Exists(root))
+            return false;
+        foreach (var file in Directory.EnumerateFiles(root, "*.har", SearchOption.AllDirectories))
+        {
+            DateTime write;
+            try { write = File.GetLastWriteTimeUtc(file); }
+            catch { continue; }
+            if (write < notBeforeUtc)
+                continue;
+            string text;
+            try
+            {
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var reader = new StreamReader(stream);
+                text = reader.ReadToEnd();
+            }
+            catch { continue; }
+            if (text.Contains(hostToken, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private sealed class LocalUpdateFeed : IDisposable
+    {
+        private readonly HttpListener _listener;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly string _dir;
+        private int _hits;
+
+        public int Port { get; }
+        public string ManifestUrl { get; }
+        public int Hits => Volatile.Read(ref _hits);
+
+        private LocalUpdateFeed(HttpListener listener, string dir, int port)
+        {
+            _listener = listener;
+            _dir = dir;
+            Port = port;
+            ManifestUrl = $"http://127.0.0.1:{port}/release-manifest.json";
+        }
+
+        public static LocalUpdateFeed Start(string version)
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "twp-insp-feed-" + Guid.NewGuid().ToString("n"));
+            Directory.CreateDirectory(dir);
+            var listener = new HttpListener();
+            var port = 0;
+            for (var p = 18700; p < 18900; p++)
+            {
+                try
+                {
+                    listener.Prefixes.Clear();
+                    listener.Prefixes.Add($"http://127.0.0.1:{p}/");
+                    listener.Start();
+                    port = p;
+                    break;
+                }
+                catch
+                {
+                    // try next
+                }
+            }
+
+            if (port == 0)
+                throw new InvalidOperationException("no free port for local update feed");
+
+            var url = $"http://127.0.0.1:{port}/inspector.zip";
+            var sha = new string('a', 64);
+            var asset = new Dictionary<string, object> { ["url"] = url, ["sha256"] = sha, ["size"] = 1 };
+            var assets = new Dictionary<string, object>
+            {
+                ["win-x64"] = asset,
+                ["osx-arm64"] = asset,
+                ["osx-x64"] = asset,
+                ["linux-x64"] = asset,
+                ["linux-arm64"] = asset,
+            };
+            var manifest = new Dictionary<string, object>
+            {
+                ["version"] = version,
+                ["channel"] = "beta",
+                ["products"] = new Dictionary<string, object>
+                {
+                    ["inspector"] = new Dictionary<string, object> { ["assets"] = assets },
+                },
+            };
+            File.WriteAllText(
+                Path.Combine(dir, "release-manifest.json"),
+                JsonSerializer.Serialize(manifest));
+            File.WriteAllBytes(Path.Combine(dir, "inspector.zip"), [0x50, 0x4B, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+            var feed = new LocalUpdateFeed(listener, dir, port);
+            _ = Task.Run(() => feed.ServeAsync());
+            return feed;
+        }
+
+        private async Task ServeAsync()
+        {
+            while (!_cts.IsCancellationRequested && _listener.IsListening)
+            {
+                HttpListenerContext ctx;
+                try { ctx = await _listener.GetContextAsync(); }
+                catch { break; }
+                Interlocked.Increment(ref _hits);
+                try
+                {
+                    var path = ctx.Request.Url?.AbsolutePath.TrimStart('/') ?? "release-manifest.json";
+                    if (string.IsNullOrEmpty(path))
+                        path = "release-manifest.json";
+                    var file = Path.Combine(_dir, path);
+                    if (File.Exists(file))
+                    {
+                        var bytes = await File.ReadAllBytesAsync(file);
+                        ctx.Response.StatusCode = 200;
+                        ctx.Response.ContentLength64 = bytes.Length;
+                        await ctx.Response.OutputStream.WriteAsync(bytes);
+                    }
+                    else
+                    {
+                        ctx.Response.StatusCode = 404;
+                    }
+
+                    ctx.Response.Close();
+                }
+                catch { /* client gone */ }
+            }
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            try { _listener.Stop(); } catch { /* */ }
+            try { _listener.Close(); } catch { /* */ }
+            try { Directory.Delete(_dir, true); } catch { /* */ }
+        }
     }
 
     private static void PatchDecrypt(bool value)
@@ -1986,7 +2260,7 @@ internal sealed class InspectorProcess : IAsyncDisposable
         StartedUtc = DateTime.UtcNow;
     }
 
-    public static Task<InspectorProcess> StartAsync(string exe, int port)
+    public static Task<InspectorProcess> StartAsync(string exe, int port, string? updateFeedUrl = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -1999,7 +2273,9 @@ internal sealed class InspectorProcess : IAsyncDisposable
             RedirectStandardError = true,
         };
         psi.Environment["TITANIUM_SKIP_ROOT_STORE_UI"] = "1";
-        psi.Environment["TITANIUM_UPDATE_FEED"] = "";
+        // Empty string disables the startup update check (default for install smokes).
+        // Pass a feed URL for update-under-decrypt.
+        psi.Environment["TITANIUM_UPDATE_FEED"] = updateFeedUrl ?? "";
         var proc = Process.Start(psi) ?? throw new InvalidOperationException("Inspector did not start: " + exe);
         proc.OutputDataReceived += static (_, _) => { };
         proc.ErrorDataReceived += static (_, _) => { };
@@ -2363,11 +2639,12 @@ internal readonly record struct Options(
     string? Out,
     string? Thumb,
     string? ExpectThumb,
-    string[]? Browsers)
+    string[]? Browsers,
+    string? Mode = null)
 {
     public static Options Parse(string[] args)
     {
-        string? exe = null, prev = null, titanium = null, output = null, thumb = null, expect = null;
+        string? exe = null, prev = null, titanium = null, output = null, thumb = null, expect = null, mode = null;
         string[]? browsers = null;
         for (var i = 0; i < args.Length; i++)
         {
@@ -2382,11 +2659,11 @@ internal readonly record struct Options(
                 case "--thumb": thumb = Next(); break;
                 case "--expect-thumb": expect = Next(); break;
                 case "--browsers": browsers = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
-                case "--mode": Next(); break;
+                case "--mode": mode = Next(); break;
                 default: throw new InvalidOperationException("unknown option " + a);
             }
         }
 
-        return new Options(exe, prev, titanium, output, thumb, expect, browsers);
+        return new Options(exe, prev, titanium, output, thumb, expect, browsers, mode);
     }
 }
