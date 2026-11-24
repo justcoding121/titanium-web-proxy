@@ -8,14 +8,9 @@
   If LIFECYCLE_ENFORCE is not "true", failures become a warning + step summary row + exit 0.
   If LIFECYCLE_ENFORCE=true, failures exit non-zero.
 
-  Note: PowerShell treats bare "--" as end-of-parameters and strips it before the script
-  runs when invoked without --%. Accept either "<name> -- <cmd>..." or "<name> <cmd>...".
+  Uses $args only (no param block). PowerShell may strip a bare "--" before the
+  script runs; both "<name> -- <cmd>..." and "<name> <cmd>..." are accepted.
 #>
-param(
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]] $RemainingArgs
-)
-
 $ErrorActionPreference = 'Stop'
 
 function Write-LifecycleSummary {
@@ -96,8 +91,7 @@ function Invoke-EnforceSelfTest {
     Write-Host 'enforce self-test ok'
 }
 
-$argv = @($RemainingArgs)
-if ($argv.Count -eq 0) { $argv = @($args) }
+$argv = @($args)
 
 if ($argv.Count -ge 1 -and $argv[0] -eq '--self-test') {
     Invoke-EnforceSelfTest
