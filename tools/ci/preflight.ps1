@@ -83,7 +83,7 @@ for path in sorted(root.glob("*.yml")):
         Write-Check 'bump-formula-from-sums --self-test' ($LASTEXITCODE -eq 0)
     }
 
-    if (Test-Path '.github/required-checks.json' -and (Test-Path '.github/workflows/required-checks.yml')) {
+    if ((Test-Path '.github/required-checks.json') -and (Test-Path '.github/workflows/required-checks.yml')) {
         Write-Host '[INFO] required-checks drift is enforced in CI lint-workflows'
     }
 }
