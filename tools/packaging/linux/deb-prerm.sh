@@ -14,37 +14,56 @@ if [[ -x "${EXE}" ]]; then
   pkill -KILL -f "^${EXE}( |$)" >/dev/null 2>&1 || true
 fi
 
-desktop_user() {
-  local user=""
+# dpkg runs maintainer scripts with a cleaned environment, so SUDO_USER is often
+# missing. Collect every interactive home owner (plus loginctl/who/SUDO_USER when
+# present) and clear loopback GNOME proxy for each — headless CI only has
+# /home/runner and no login session.
+desktop_users() {
+  local -a users=()
+  local u home
   if command -v loginctl >/dev/null 2>&1; then
-    user="$(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $3}' | grep -v '^root$' | head -1 || true)"
+    while read -r u; do
+      [[ -n "$u" && "$u" != "root" ]] || continue
+      users+=("$u")
+    done < <(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $3}' || true)
   fi
-  if [[ -z "${user}" ]]; then
-    user="$(who 2>/dev/null | awk '{print $1}' | grep -v '^root$' | head -1 || true)"
+  while read -r u; do
+    [[ -n "$u" && "$u" != "root" ]] || continue
+    users+=("$u")
+  done < <(who 2>/dev/null | awk '{print $1}' || true)
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    users+=("${SUDO_USER}")
   fi
-  if [[ -z "${user}" ]]; then
-    user="${SUDO_USER:-}"
+  if [[ -d /home ]]; then
+    for home in /home/*; do
+      [[ -d "${home}" ]] || continue
+      u="$(basename "${home}")"
+      [[ "${u}" != "root" ]] || continue
+      users+=("${u}")
+    done
   fi
-  printf '%s' "${user}"
+  # Unique preserve order
+  printf '%s\n' "${users[@]}" | awk 'NF && !seen[$0]++'
 }
 
-# Mirror LinuxSystemProxyBackend.ClearGnomeLoopbackManualProxy for when the
-# managed EXE cannot talk to a session bus (headless CI). Only flips mode when
-# GNOME is still aimed at loopback — never blanks a corporate proxy host.
-clear_gnome_loopback_if_owned() {
-  command -v gsettings >/dev/null 2>&1 || return 0
-  local mode host
-  mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
-  host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
-  if [[ "${mode}" != "manual" ]]; then
-    return 0
-  fi
-  case "${host}" in
-    127.0.0.1|localhost|::1|"")
-      gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
-      gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
-      ;;
-  esac
+# Mirror LinuxSystemProxyBackend.ClearGnomeLoopbackManualProxy. Only flips mode
+# when GNOME is still aimed at loopback — never blanks a corporate proxy host.
+write_clear_helper() {
+  local path="$1"
+  cat > "${path}" <<'EOF'
+#!/usr/bin/env bash
+command -v gsettings >/dev/null 2>&1 || exit 0
+mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
+host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
+[[ "${mode}" == "manual" ]] || exit 0
+case "${host}" in
+  127.0.0.1|localhost|::1|"")
+    gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
+    gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
+    ;;
+esac
+EOF
+  chmod 755 "${path}"
 }
 
 run_as_desktop_user() {
@@ -53,8 +72,7 @@ run_as_desktop_user() {
   local uid_num runtime bus home
   uid_num="$(id -u "${user}" 2>/dev/null || true)"
   home="$(getent passwd "${user}" | cut -d: -f6)"
-  if [[ -z "${uid_num}" ]]; then
-    "$@" || true
+  if [[ -z "${uid_num}" || -z "${home}" ]]; then
     return 0
   fi
   runtime="/run/user/${uid_num}"
@@ -74,35 +92,20 @@ run_as_desktop_user() {
   fi
 }
 
-USER_NAME="$(desktop_user)"
-if [[ -n "${USER_NAME}" && "$(id -u)" -eq 0 && "${USER_NAME}" != "root" ]]; then
-  # --clear-system-proxy restores/clears loopback GNOME/KDE and blanks only
-  # loopback-valued session proxy env. Shell fallback covers headless CI when
-  # the EXE clear cannot reach a usable session bus.
+helper="$(mktemp)"
+write_clear_helper "${helper}"
+
+while read -r USER_NAME; do
+  [[ -n "${USER_NAME}" ]] || continue
   if [[ -x "${EXE}" ]]; then
+    # --clear-system-proxy restores/clears loopback GNOME/KDE and blanks only
+    # loopback-valued session proxy env.
     run_as_desktop_user "${USER_NAME}" "${EXE}" --clear-system-proxy
   fi
-  helper="$(mktemp)"
-  cat > "${helper}" <<'EOF'
-#!/usr/bin/env bash
-command -v gsettings >/dev/null 2>&1 || exit 0
-mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'\"" || true)"
-host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\"" || true)"
-[[ "${mode}" == "manual" ]] || exit 0
-case "${host}" in
-  127.0.0.1|localhost|::1|"")
-    gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
-    gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
-    ;;
-esac
-EOF
-  chmod 755 "${helper}"
   run_as_desktop_user "${USER_NAME}" "${helper}"
-  rm -f "${helper}"
-elif [[ -x "${EXE}" ]]; then
-  "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
-  clear_gnome_loopback_if_owned
-fi
+done < <(desktop_users)
+
+rm -f "${helper}"
 
 # Machine Chromium policies are root-owned. The user-level clear uses sudo -n
 # and cannot prompt during package removal.
