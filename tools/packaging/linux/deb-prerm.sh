@@ -66,6 +66,18 @@ EOF
   chmod 755 "${path}"
 }
 
+ensure_user_runtime_dir() {
+  local user="$1" uid_num="$2" runtime="$3"
+  # Headless CI (GitHub-hosted) often has no logind session, so /run/user/UID is
+  # missing. dconf/gsettings need a writable XDG_RUNTIME_DIR or writes no-op.
+  if [[ -d "${runtime}" ]]; then
+    return 0
+  fi
+  mkdir -p "${runtime}" 2>/dev/null || true
+  chown "${uid_num}:${uid_num}" "${runtime}" 2>/dev/null || chown "${user}" "${runtime}" 2>/dev/null || true
+  chmod 700 "${runtime}" 2>/dev/null || true
+}
+
 run_as_desktop_user() {
   local user="$1"
   shift
@@ -76,6 +88,7 @@ run_as_desktop_user() {
     return 0
   fi
   runtime="/run/user/${uid_num}"
+  ensure_user_runtime_dir "${user}" "${uid_num}" "${runtime}"
   bus="${runtime}/bus"
   if [[ -S "${bus}" ]]; then
     sudo -u "${user}" -H \
@@ -94,15 +107,24 @@ run_as_desktop_user() {
 
 helper="$(mktemp)"
 write_clear_helper "${helper}"
+prerm_log="/tmp/titanium-inspector-prerm.log"
+{
+  echo "prerm users: $(desktop_users | tr '\n' ' ')"
+  echo "runtime dirs:"
+  ls -ld /run/user/* 2>/dev/null || echo "(none)"
+} > "${prerm_log}" 2>&1 || true
 
 while read -r USER_NAME; do
   [[ -n "${USER_NAME}" ]] || continue
+  echo "clear for ${USER_NAME}" >> "${prerm_log}" 2>&1 || true
   if [[ -x "${EXE}" ]]; then
     # --clear-system-proxy restores/clears loopback GNOME/KDE and blanks only
     # loopback-valued session proxy env.
     run_as_desktop_user "${USER_NAME}" "${EXE}" --clear-system-proxy
   fi
   run_as_desktop_user "${USER_NAME}" "${helper}"
+  run_as_desktop_user "${USER_NAME}" bash -c \
+    'echo "after: mode=$(gsettings get org.gnome.system.proxy mode 2>/dev/null) host=$(gsettings get org.gnome.system.proxy.http host 2>/dev/null)" >> /tmp/titanium-inspector-prerm.log'
 done < <(desktop_users)
 
 rm -f "${helper}"

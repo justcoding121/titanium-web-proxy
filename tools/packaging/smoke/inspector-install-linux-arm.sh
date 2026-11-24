@@ -73,6 +73,10 @@ if [[ -n "$prev" ]]; then
     host="${host//\'/}"
     if [[ -n "${mode}" && "${mode}" != "none" ]]; then
       echo "proxy mode still ${mode} (host=${host}) after arm64 uninstall" >&2
+      if [[ -f /tmp/titanium-inspector-prerm.log ]]; then
+        echo "--- prerm log ---" >&2
+        cat /tmp/titanium-inspector-prerm.log >&2 || true
+      fi
       exit 1
     fi
   fi
