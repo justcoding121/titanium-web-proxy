@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 5
       matrix:
         # pull_request and push leave inputs.os empty, so those events run every leg.
         # macos-15-intel and ubuntu-24.04-arm are not required checks until five
