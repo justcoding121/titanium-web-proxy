@@ -54,8 +54,12 @@ jobs:
     # NuGet-only dispatches skip the test graph; publish-nuget runs alone.
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       code: ${{ steps.paths.outputs.code }}
+      skipped_by_evidence: ${{ steps.paths.outputs.skipped_by_evidence }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -63,10 +67,49 @@ jobs:
       - id: paths
         name: Classify the diff
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TREE_EVIDENCE_ENFORCE: ${{ vars.TREE_EVIDENCE_ENFORCE }}
         run: |
           set -euo pipefail
+          skipped_by_evidence=false
+          emit() {
+            echo "code=$code" >> "$GITHUB_OUTPUT"
+            echo "skipped_by_evidence=$skipped_by_evidence" >> "$GITHUB_OUTPUT"
+            echo "code=$code skipped_by_evidence=$skipped_by_evidence"
+          }
+          if [[ "${{ github.event_name }}" == "push" && ( "${{ github.ref }}" == "refs/heads/beta" || "${{ github.ref }}" == "refs/heads/stable" ) ]]; then
+            code=true
+            {
+              echo "### tree evidence (shadow)"
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+            if pwsh -NoProfile -File tools/ci/assert-tree-evidence.ps1 \
+                -Commit "$GITHUB_SHA" -Live -Soft \
+                -Workflow dotnetcore.yml \
+                -Events pull_request \
+                -Job merge-gate \
+                -Artifact tree-dotnet; then
+              echo "would have skipped .NET push tests (same-tree merge-gate evidence)"
+              echo "- .NET push tests: would have skipped (same-tree merge-gate evidence)" >> "$GITHUB_STEP_SUMMARY"
+              if [[ "${TREE_EVIDENCE_ENFORCE:-}" == "true" ]]; then
+                code=false
+                skipped_by_evidence=true
+                echo "TREE_EVIDENCE_ENFORCE=true: skipping code jobs"
+                emit
+                exit 0
+              fi
+              echo "TREE_EVIDENCE_ENFORCE unset: falling back to live .NET push tests"
+              echo "- decision: fall back to live (shadow mode)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- .NET push tests: no same-tree evidence; live path" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            emit
+            exit 0
+          fi
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
+            code=true
+            emit
             exit 0
           fi
           git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
@@ -86,8 +129,7 @@ jobs:
               break
             fi
           done < changed.txt
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "code=$code"
+          emit
 
   # Sonar begin + instrumented compile only. Coverage finishes end after tests upload.
   sonar-build:
@@ -919,10 +961,14 @@ jobs:
     if: always()
     needs: [changes, sonar-build, lint-build, unit, heavy-suites, regression, integration, coverage, redis-fleet, ui-portable, cli-e2e]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     steps:
       - name: Require the code jobs, or a docs-only skip
         env:
           CODE: ${{ needs.changes.outputs.code }}
+          SKIPPED_BY_EVIDENCE: ${{ needs.changes.outputs.skipped_by_evidence }}
           CHANGES: ${{ needs.changes.result }}
           SONAR_BUILD: ${{ needs.sonar-build.result }}
           LINT_BUILD: ${{ needs.lint-build.result }}
@@ -937,7 +983,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "changes=$CHANGES sonar-build=$SONAR_BUILD lint-build=$LINT_BUILD unit=$UNIT heavy-suites=$HEAVY regression=$REGRESSION integration=$INTEGRATION coverage=$COVERAGE redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE"
+          echo "changes=$CHANGES sonar-build=$SONAR_BUILD lint-build=$LINT_BUILD unit=$UNIT heavy-suites=$HEAVY regression=$REGRESSION integration=$INTEGRATION coverage=$COVERAGE redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE skipped_by_evidence=$SKIPPED_BY_EVIDENCE"
+          if [[ "$SKIPPED_BY_EVIDENCE" == "true" ]]; then
+            echo "merge-gate passed (skipped by tree evidence)"
+            exit 0
+          fi
           for result in "$CHANGES" "$SONAR_BUILD" "$LINT_BUILD" "$UNIT" "$HEAVY" "$REGRESSION" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::a required job finished as $result"
@@ -953,6 +1003,15 @@ jobs:
             done
           fi
           echo "merge-gate passed"
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request' && success()
+        with:
+          fetch-depth: 0
+      - name: Record tested tree
+        if: github.event_name == 'pull_request' && success()
+        uses: ./.github/actions/record-tree
+        with:
+          name: tree-dotnet
 
   # Full CLI + CLI Plus process E2E on all three OS (command tree, services, control plane).
   # Does not pre-install libmsquic so http3-deps install can exercise the real leaf when Quic is false.
@@ -1039,65 +1098,9 @@ jobs:
           tests/Titanium.E2E.Tests/TestResults/**
         if-no-files-found: ignore
 
-  # Tiered RPS gates for beta/stable publish (parallel) â€” wall clock ~max of the two).
-  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs the reference peer so a
-  # uniform Core slowdown cannot hide behind green edition ratios.
-  rps-publish-gate:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    permissions:
-      contents: read
-    steps:
-    - uses: actions/checkout@v7
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
-      with:
-        # Same host as rps-saturation: net10.0 IL on the .NET 11 shared framework.
-        dotnet-version: |
-          10.0.x
-          11.0.x
-    - name: compare-editions (publish gate)
-      shell: pwsh
-      run: |
-        # Stable GitHub Release additionally requires Linux compare-product-smoke via release.yml.
-        pwsh tools/RpsLoadProbe/run-rps.ps1 `
-          -Mode compare-editions `
-          -Concurrency '8,16,32,64' `
-          -WarmupSec 2 `
-          -DurationSec 8 `
-          -Repeats 1 `
-          -ResultsDir tools/RpsLoadProbe/results `
-          -BombardierCheck
-        $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
-          Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if (-not $csv) { throw 'No CSV found for edition gate validation' }
-        pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
-
-  # Parallel with rps-publish-gate: Core vs the reference peer on the release SHA (c=64 spot).
-  # Same validator as PR compare-spot / run-spot-matrix.ps1; does not extend wall clock
-  # past editions (~60m).
-  rps-peer-gate:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    steps:
-    - uses: actions/checkout@v7
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
-      with:
-        # Same host as rps-saturation: net10.0 IL on the .NET 11 shared framework.
-        dotnet-version: |
-          10.0.x
-          11.0.x
-    - name: Ensure MsQuic
-      uses: ./.github/actions/ensure-msquic
-    - name: compare-spot (Core and reference peer)
-      shell: pwsh
-      run: |
-        pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
+  # RPS edition/peer gates live in rps-edition-gate.yml (nightly + dispatch + push
+  # fallback). cut-product-tag / publish-nuget require same-tree evidence or a live
+  # same-SHA rps-publish-gate before tagging/publishing.
 
   # NuGet trusted publishing policies are bound to this workflow file name. Keep
   # MIT pack/push here (not release.yml). Product zips stay on release.yml.
@@ -1106,8 +1109,8 @@ jobs:
   # release.yml also packs/pushes Chocolatey after the GitHub Release exists —
   # skipped while vars.SKIP_CATALOG_PUBLISH=true.
   publish-nuget:
-    needs: [merge-gate, rps-publish-gate, rps-peer-gate]
-    # always(): workflow_dispatch skips the test graph; push still requires green gates.
+    needs: [merge-gate]
+    # always(): workflow_dispatch skips the test graph; push still requires green merge-gate.
     if: |
       always() &&
       (
@@ -1115,21 +1118,83 @@ jobs:
         (
           github.event_name == 'push' &&
           (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable') &&
-          needs.merge-gate.result == 'success' &&
-          needs.rps-publish-gate.result == 'success' &&
-          needs.rps-peer-gate.result == 'success'
+          needs.merge-gate.result == 'success'
         )
       )
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
       contents: read
+      actions: read
       id-token: write
       issues: write
     steps:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0
+
+    - name: Require RPS publish-gate evidence or live same-SHA
+      if: github.event_name == 'push'
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TREE_EVIDENCE_ENFORCE: ${{ vars.TREE_EVIDENCE_ENFORCE }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $summary = @('### tree evidence (shadow)', '')
+        # Subprocess: Soft miss uses exit 1, which would end this step if call-operated.
+        $shell = (Get-Process -Id $PID).Path
+        & $shell -NoProfile -File tools/ci/assert-tree-evidence.ps1 -Commit $env:GITHUB_SHA -Live -Soft `
+          -Workflow rps-edition-gate.yml -Job rps-publish-gate `
+          -Events schedule,push,workflow_dispatch -MaxAgeHours 48
+        $found = ($LASTEXITCODE -eq 0)
+        if ($found) {
+          Write-Host 'would have skipped live rps-publish-gate wait (same-tree evidence)'
+          $summary += '- rps-publish-gate: would have skipped live wait (same-tree evidence)'
+          if ($env:TREE_EVIDENCE_ENFORCE -eq 'true') {
+            Write-Host 'TREE_EVIDENCE_ENFORCE=true: accepting tree evidence'
+            $summary += '- decision: enforce skip'
+            if ($env:GITHUB_STEP_SUMMARY) { Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($summary -join "`n") }
+            exit 0
+          }
+          $summary += '- decision: fall back to live same-SHA (shadow mode)'
+        } else {
+          $summary += '- rps-publish-gate: no same-tree evidence; live same-SHA'
+        }
+        if ($env:GITHUB_STEP_SUMMARY) { Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($summary -join "`n") }
+
+        $repo = $env:GITHUB_REPOSITORY
+        $sha = $env:GITHUB_SHA
+        $started = Get-Date
+        $deadline = $started.AddMinutes(150)
+        while ($true) {
+          $json = & gh api "repos/$repo/actions/workflows/rps-edition-gate.yml/runs?head_sha=$sha&per_page=20"
+          if ($LASTEXITCODE -ne 0) { throw 'could not list rps-edition-gate runs' }
+          $runs = @(($json | ConvertFrom-Json).workflow_runs | Where-Object { $_.head_sha -eq $sha } |
+            Sort-Object created_at -Descending)
+          $run = if ($runs.Count -gt 0) { $runs[0] } else { $null }
+          $now = Get-Date
+          if (-not $run) {
+            if (($now - $started).TotalMinutes -ge 10) { throw 'no rps-edition-gate.yml run on this SHA' }
+            Write-Host 'waiting for rps-edition-gate.yml dispatch'
+            Start-Sleep -Seconds 30
+            continue
+          }
+          if ($run.status -ne 'completed') {
+            if ($now -ge $deadline) { throw 'rps-edition-gate.yml still running after 150 minutes' }
+            Write-Host "waiting: $($run.html_url) status=$($run.status)"
+            Start-Sleep -Seconds 30
+            continue
+          }
+          $jobsJson = & gh api "repos/$repo/actions/runs/$($run.id)/jobs?per_page=100"
+          $jobs = ($jobsJson | ConvertFrom-Json).jobs
+          $foundJob = $jobs | Where-Object { $_.name -eq 'rps-publish-gate' } | Select-Object -First 1
+          if (-not $foundJob -or $foundJob.conclusion -ne 'success') {
+            throw "rps-publish-gate conclusion=$($foundJob.conclusion) run=$($run.html_url)"
+          }
+          Write-Host "rps-publish-gate green: $($run.html_url)"
+          break
+        }
 
     - name: Require a green release-dry-run for this tree
       shell: pwsh
@@ -1211,13 +1276,11 @@ jobs:
         (
           github.event_name == 'push' &&
           (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable') &&
-          needs.merge-gate.result == 'success' &&
-          needs.rps-publish-gate.result == 'success' &&
-          needs.rps-peer-gate.result == 'success'
+          needs.merge-gate.result == 'success'
         ) ||
         (github.event_name == 'workflow_dispatch' && inputs.evidence_override == true)
       )
-    needs: [merge-gate, rps-publish-gate, rps-peer-gate]
+    needs: [merge-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1227,6 +1290,86 @@ jobs:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0
+    - name: Require RPS publish-gate evidence or live same-SHA
+      if: github.event_name == 'push'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TREE_EVIDENCE_ENFORCE: ${{ vars.TREE_EVIDENCE_ENFORCE }}
+      run: |
+        set -euo pipefail
+        {
+          echo "### tree evidence (shadow)"
+          echo
+        } >> "$GITHUB_STEP_SUMMARY"
+        if pwsh -NoProfile -File tools/ci/assert-tree-evidence.ps1 \
+            -Commit "$GITHUB_SHA" -Live -Soft \
+            -Workflow rps-edition-gate.yml \
+            -Job rps-publish-gate \
+            -Events schedule,push,workflow_dispatch \
+            -MaxAgeHours 48; then
+          echo "would have skipped live rps-publish-gate wait (same-tree evidence)"
+          echo "- rps-publish-gate: would have skipped live wait (same-tree evidence)" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${TREE_EVIDENCE_ENFORCE:-}" == "true" ]]; then
+            echo "TREE_EVIDENCE_ENFORCE=true: accepting tree evidence"
+            echo "- decision: enforce skip" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "- decision: fall back to live same-SHA (shadow mode)" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "- rps-publish-gate: no same-tree evidence; live same-SHA" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        python3 - <<'PY'
+        import json, os, sys, time, urllib.request
+        token = os.environ["GH_TOKEN"]
+        repo = os.environ["GITHUB_REPOSITORY"]
+        sha = os.environ["GITHUB_SHA"]
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        def get(url):
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req) as resp:
+                return json.load(resp)
+        started = time.time()
+        deadline = started + 150 * 60
+        while True:
+            data = get(
+                f"https://api.github.com/repos/{repo}/actions/workflows/rps-edition-gate.yml/runs"
+                f"?head_sha={sha}&per_page=20"
+            )
+            runs = [r for r in data.get("workflow_runs", []) if r.get("head_sha") == sha]
+            runs.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+            run = runs[0] if runs else None
+            now = time.time()
+            if run is None:
+                if now - started >= 10 * 60:
+                    print("::error::no rps-edition-gate.yml run on this SHA")
+                    sys.exit(1)
+                print("waiting for rps-edition-gate.yml dispatch")
+                time.sleep(30)
+                continue
+            if run.get("status") != "completed":
+                if now >= deadline:
+                    print("::error::rps-edition-gate.yml still running after 150 minutes")
+                    sys.exit(1)
+                print(f"waiting: {run.get('html_url')} status={run.get('status')}")
+                time.sleep(30)
+                continue
+            jobs = get(f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100")
+            found = None
+            for job in jobs.get("jobs", []):
+                if job.get("name") == "rps-publish-gate":
+                    found = job.get("conclusion")
+                    break
+            if found != "success":
+                print(f"::error::rps-publish-gate conclusion={found} run={run.get('html_url')}")
+                sys.exit(1)
+            print(f"rps-publish-gate green: {run.get('html_url')}")
+            break
+        PY
     - name: Require a green release-dry-run for this tree
       shell: pwsh
       env:
