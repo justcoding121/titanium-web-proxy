@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="11111111-1111-1111-1111-111111111111" name="selftest@host 2026-01-01 00:00:00" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-01-01T00:00:00.0000000Z" queuing="2026-01-01T00:00:00.0000000Z" start="2026-01-01T00:00:00.0000000Z" finish="2026-01-01T00:00:01.0000000Z" />
+  <TestDefinitions>
+    <UnitTest name="Passes" storage="tests.dll" id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa">
+      <Execution id="e1" />
+      <TestMethod codeBase="tests.dll" adapterTypeName="executor://mstestadapter/v2" className="Titanium.Web.Proxy.UnitTests.StableTests" name="Passes" />
+    </UnitTest>
+    <UnitTest name="FlakyOnce" storage="tests.dll" id="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb">
+      <Execution id="e2" />
+      <TestMethod codeBase="tests.dll" adapterTypeName="executor://mstestadapter/v2" className="Titanium.Web.Proxy.UnitTests.FlakyTests" name="FlakyOnce" />
+    </UnitTest>
+  </TestDefinitions>
+  <Results>
+    <UnitTestResult executionId="e1" testId="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" testName="Passes" computerName="host" duration="00:00:00.0100000" startTime="2026-01-01T00:00:00.0000000Z" endTime="2026-01-01T00:00:00.0100000Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <UnitTestResult executionId="e2" testId="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" testName="FlakyOnce" computerName="host" duration="00:00:00.0200000" startTime="2026-01-01T00:00:00.0100000Z" endTime="2026-01-01T00:00:00.0300000Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.AreEqual failed.</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+  </ResultSummary>
+</TestRun>

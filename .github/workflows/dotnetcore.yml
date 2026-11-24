@@ -326,7 +326,16 @@ jobs:
       run: |
         $settings = 'tests/test.runsettings'
         # UnitTests touches the current-user certificate store and a shared cert disk cache.
-        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory!=Fuzz-Nightly" --collect:"Code Coverage" --results-directory coverage/unit
+        # WP7: retry only failed tests (and report them) instead of re-running the whole assembly.
+        # Call in-process so -Arguments stays an array (pwsh -File would flatten it).
+        & tools/ci/Invoke-DotnetTestRetry.ps1 -Arguments @(
+          'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj',
+          '--configuration', 'Release',
+          '--no-build', '--no-restore',
+          '--settings', $settings,
+          '--filter', 'TestCategory!=Fuzz-Nightly',
+          '--collect:Code Coverage'
+        ) -ResultsDir coverage/unit
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/xds
