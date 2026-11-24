@@ -27,13 +27,14 @@
                            RebootPrompt="no"
                            Timeout="10" />
 
-    <!-- Uninstall: clear leftover WinINET loopback proxy after CloseApplication.
-         Return ignore so a missing or already-cleared proxy never fails msiexec /x. -->
+    <!-- Uninstall: clear leftover WinINET loopback proxy (HKCU) after CloseApplication.
+         Must impersonate the interactive user — ForceClear writes CurrentUser, not SYSTEM.
+         Immediate so the exe is still on disk before RemoveFiles. Return ignore. -->
     <CustomAction Id="ClearSystemProxy"
                   FileRef="InspectorExe"
                   ExeCommand="--clear-system-proxy"
-                  Execute="deferred"
-                  Impersonate="no"
+                  Execute="immediate"
+                  Impersonate="yes"
                   Return="ignore" />
     <InstallExecuteSequence>
       <Custom Action="ClearSystemProxy" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />

@@ -107,10 +107,14 @@ python3 - "$feed" <<'PY' >/tmp/update-feed.log 2>&1 &
 import sys, pathlib, http.server
 root = pathlib.Path(sys.argv[1])
 port_file = root / "feed-port"
-httpd = http.server.ThreadingHTTPServer(
-    ("127.0.0.1", 0),
-    lambda *a, **k: http.server.SimpleHTTPRequestHandler(*a, directory=str(root), **k),
-)
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(root), **kwargs)
+    def log_message(self, fmt, *args):
+        pass
+
+httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
 port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
 httpd.serve_forever()
 PY
