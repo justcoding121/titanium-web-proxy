@@ -171,6 +171,8 @@ public class UpdateHttpBehaviorTests
         }
     }
 
+    // Bug class: CreateClientForUrl(loopback) must keep UseProxy=false via HttpClientHandler
+    // (SocketsHttpHandler+Proxy=null regressed musl alpine update under HTTPS_PROXY).
     [TestMethod]
     public void CreateClientForUrl_LoopbackIgnoresClosedHttpsProxy()
     {
