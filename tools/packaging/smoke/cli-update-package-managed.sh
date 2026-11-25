@@ -30,7 +30,7 @@ fi
 deb="${1:?candidate deb}"
 zip="${2:?candidate zip}"
 appimage="${3:?candidate AppImage}"
-version="${4:-8.0.9-smoke}"
+version="${4:-99.0.0-smoke}"
 
 deb="$(cd "$(dirname "$deb")" && pwd)/$(basename "$deb")"
 zip="$(cd "$(dirname "$zip")" && pwd)/$(basename "$zip")"

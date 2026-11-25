@@ -35,7 +35,7 @@ fi
 published_zip="${1:?published cli zip}"
 candidate_zip="${2:?candidate cli zip}"
 work="${3:?work dir}"
-version="${4:-8.0.9-smoke}"
+version="${4:-99.0.0-smoke}"
 
 published_zip="$(cd "$(dirname "$published_zip")" && pwd)/$(basename "$published_zip")"
 candidate_zip="$(cd "$(dirname "$candidate_zip")" && pwd)/$(basename "$candidate_zip")"

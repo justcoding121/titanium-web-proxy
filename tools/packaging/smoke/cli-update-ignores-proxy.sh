@@ -51,7 +51,7 @@ fi
 cli_dir="${1:?cli dir}"
 asset_zip="${2:?asset zip}"
 bin="${3:?titanium}"
-version="${4:-8.0.9-smoke}"
+version="${4:-99.0.0-smoke}"
 cli_dir="$(cd "$cli_dir" && pwd)"
 asset_zip="$(cd "$(dirname "$asset_zip")" && pwd)/$(basename "$asset_zip")"
 bin="$(cd "$(dirname "$bin")" && pwd)/$(basename "$bin")"
