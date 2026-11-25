@@ -104,22 +104,27 @@ fi
 if cli_zip="$(first "${zips[@]}")"; then
   if [[ "$rid" == linux-musl-* ]]; then
     stage="$(mktemp -d)"
-    cp -f "$cli_zip" "$stage/"
+    # Distinct names: PREV and candidate share basename Titanium.Cli-<rid>.zip;
+    # copying both as basename overwrote the candidate with the published 8.0.8 zip
+    # and alpine ran the old binary (Update feed network error under HTTPS_PROXY).
+    cand_zip_name="candidate-$(basename "$cli_zip")"
+    cp -f "$cli_zip" "$stage/$cand_zip_name"
     prev_zip_arg=""
     upgrade_cmd="echo 'skip musl cli-upgrade-from-published (PREV_CLI_ZIP unset)'"
     if [[ -n "${PREV_CLI_ZIP:-}" && -f "$PREV_CLI_ZIP" ]]; then
-      cp -f "$PREV_CLI_ZIP" "$stage/"
-      prev_zip_arg="/pkg/$(basename "$PREV_CLI_ZIP")"
-      upgrade_cmd="bash tools/packaging/smoke/cli-upgrade-from-published.sh '$prev_zip_arg' '/pkg/$(basename "$cli_zip")' /tmp/cli-musl-upgrade"
+      prev_zip_name="prev-$(basename "$PREV_CLI_ZIP")"
+      cp -f "$PREV_CLI_ZIP" "$stage/$prev_zip_name"
+      prev_zip_arg="/pkg/$prev_zip_name"
+      upgrade_cmd="bash tools/packaging/smoke/cli-upgrade-from-published.sh '$prev_zip_arg' '/pkg/$cand_zip_name' /tmp/cli-musl-upgrade"
     fi
-    # alpine/arm64 HttpClient still black-holes loopback feeds when HTTPS_PROXY is set
-    # even with UseProxy=false; glibc arm64 host package leg covers the bypass proof.
-    update_in_alpine="bash tools/packaging/smoke/cli-update-ignores-proxy.sh /cli '/pkg/$(basename "$cli_zip")' /cli/titanium"
+    # alpine/arm64 HttpClient still black-holes loopback feeds when HTTPS_PROXY is set;
+    # glibc arm64 host package leg covers the bypass proof.
+    update_in_alpine="bash tools/packaging/smoke/cli-update-ignores-proxy.sh /cli '/pkg/$cand_zip_name' /cli/titanium"
     if [[ "$rid" == "linux-musl-arm64" ]]; then
       update_in_alpine="echo 'skip musl-arm64 alpine cli-update-ignores-proxy (alpine/arm64 HttpClient+HTTPS_PROXY; glibc arm64 host covers bypass)'"
     fi
     docker run --rm -v "$root:/src" -v "$stage:/pkg:ro" -w /src "alpine:3.24" \
-      sh -c "apk add --no-cache bash unzip && bash tools/packaging/smoke/alpine-deps.sh && unzip -q '/pkg/$(basename "$cli_zip")' -d /cli && chmod +x /cli/titanium && /cli/titanium version && bash tools/packaging/smoke/openssl-leftover.sh /cli /cli/titanium && $update_in_alpine && $upgrade_cmd"
+      sh -c "apk add --no-cache bash unzip && bash tools/packaging/smoke/alpine-deps.sh && unzip -q '/pkg/$cand_zip_name' -d /cli && chmod +x /cli/titanium && /cli/titanium version && bash tools/packaging/smoke/openssl-leftover.sh /cli /cli/titanium && $update_in_alpine && $upgrade_cmd"
     if [[ -n "${LIFECYCLE_PROOF:-}" && -n "$prev_zip_arg" ]]; then
       bash "$here/append-lifecycle-proof.sh" "$LIFECYCLE_PROOF" cli "$rid" zip upgrade \
         "published" "${RELEASE_VERSION:-candidate}" "${RELEASE_VERSION:-candidate}" false
