@@ -1002,7 +1002,11 @@ internal static class CliUpdateApplyHelper
             sb.AppendLine("fi");
         }
 
-        sb.AppendLine("cp -a \"$tmp\"/. \"$install_dir\"/");
+        // Homebrew-sourced dylibs often unpack as 0444. Plain `cp -a` cannot
+        // overwrite a read-only destination file (macOS and Linux), so make the
+        // install dir writable first and force the overlay.
+        sb.AppendLine("chmod -R u+w \"$install_dir\" 2>/dev/null || true");
+        sb.AppendLine("cp -af \"$tmp\"/. \"$install_dir\"/");
         sb.AppendLine("rm -rf \"$tmp\"");
         sb.AppendLine("chmod +x \"$install_dir/titanium\" \"$install_dir/twp\" 2>/dev/null || true");
         sb.AppendLine($"echo 'Updated to {version} ({channel}).'");

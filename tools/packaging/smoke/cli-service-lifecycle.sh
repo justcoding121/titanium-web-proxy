@@ -235,14 +235,17 @@ if [[ "$uname_s" == Linux && "$user_mode" -eq 0 ]]; then
 fi
 
 # Optional: update while service runs (service warning + CLI still runnable).
-# Darwin: LaunchAgent holds dylibs; in-place update prints Permission denied, may
-# spawn a background updater (SIGKILL later steps), and is skipped here.
+# Darwin ACCEPTED_GAP (owner: packaging): with LaunchAgent still running, the
+# apply script overlays successfully (0444 dylib fix) but the subsequent
+# `$relaunch version` / `$bin version` are SIGKILL'd (dry-run 45684155226).
+# Linux covers the probe. Do not re-enable without a stop/restart of the agent
+# around the overlay, or an updater that replaces via a new path.
 cli_zip="${SMOKE_CLI_ZIP:-}"
 if [[ -z "$cli_zip" ]]; then
   cli_zip="$(find "${RUNNER_TEMP:-/tmp}" -maxdepth 4 -name 'Titanium.Cli-*.zip' 2>/dev/null | head -1 || true)"
 fi
 if [[ "$uname_s" == Darwin ]]; then
-  echo "NOTE: skip in-place update-while-service on Darwin (LaunchAgent holds dylibs; Linux covers the probe)"
+  echo "ACCEPTED_GAP: skip update-while-service on Darwin (LaunchAgent SIGKILL after overlay; Linux covers the probe)"
 elif [[ -n "$cli_zip" && -f "$cli_zip" ]]; then
   feed="$(mktemp -d)"
   cp "$cli_zip" "$feed/cli.zip"
