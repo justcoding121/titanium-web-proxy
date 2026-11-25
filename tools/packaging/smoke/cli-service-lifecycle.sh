@@ -235,15 +235,11 @@ if [[ "$uname_s" == Linux && "$user_mode" -eq 0 ]]; then
 fi
 
 # Optional: update while service runs (service warning + CLI still runnable).
-# Darwin: LaunchAgent holds dylibs; in-place update prints Permission denied, may
-# spawn a background updater (SIGKILL later steps), and is skipped here.
 cli_zip="${SMOKE_CLI_ZIP:-}"
 if [[ -z "$cli_zip" ]]; then
   cli_zip="$(find "${RUNNER_TEMP:-/tmp}" -maxdepth 4 -name 'Titanium.Cli-*.zip' 2>/dev/null | head -1 || true)"
 fi
-if [[ "$uname_s" == Darwin ]]; then
-  echo "NOTE: skip in-place update-while-service on Darwin (LaunchAgent holds dylibs; Linux covers the probe)"
-elif [[ -n "$cli_zip" && -f "$cli_zip" ]]; then
+if [[ -n "$cli_zip" && -f "$cli_zip" ]]; then
   feed="$(mktemp -d)"
   cp "$cli_zip" "$feed/cli.zip"
   size="$(wc -c <"$feed/cli.zip" | tr -d ' ')"

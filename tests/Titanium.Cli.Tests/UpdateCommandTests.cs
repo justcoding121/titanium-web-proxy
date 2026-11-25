@@ -149,6 +149,8 @@ public class UpdateCommandTests
             "beta");
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "beta");
+        StringAssert.Contains(script, "chmod -R u+w \"$install_dir\"");
+        StringAssert.Contains(script, "cp -af \"$tmp\"/. \"$install_dir\"/");
         Assert.IsFalse(script.Contains("libssl", StringComparison.Ordinal));
         Assert.IsFalse(script.Contains("libcrypto", StringComparison.Ordinal));
     }
@@ -165,12 +167,93 @@ public class UpdateCommandTests
             "stable",
             removeBundledOpenSsl: true);
         var remove = script.IndexOf("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*", StringComparison.Ordinal);
-        var copy = script.IndexOf("cp -a \"$tmp\"/. \"$install_dir\"/", StringComparison.Ordinal);
+        var chmod = script.IndexOf("chmod -R u+w \"$install_dir\"", StringComparison.Ordinal);
+        var copy = script.IndexOf("cp -af \"$tmp\"/. \"$install_dir\"/", StringComparison.Ordinal);
         var guard = script.IndexOf("compgen -G \"$install_dir\"/libmsquic.so*", StringComparison.Ordinal);
         Assert.IsTrue(guard >= 0 && remove > guard, "OpenSSL removal must be limited to a directory that contains libmsquic.");
         Assert.IsTrue(remove >= 0, "Linux update must delete bundled OpenSSL before overlaying the zip.");
-        Assert.IsTrue(copy > remove, "OpenSSL files must be removed before the new zip is copied in.");
+        Assert.IsTrue(chmod > remove, "Install dir must be made writable after OpenSSL removal.");
+        Assert.IsTrue(copy > chmod, "OpenSSL files must be removed before the new zip is copied in.");
         Assert.IsFalse(script.Contains("libssl.3.dylib", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void CliHelper_UnixScript_OverwritesReadOnlyDestinationFiles()
+    {
+        // Reproduces the macOS zip mode trap (Homebrew dylibs at 0444) on Linux
+        // with GNU cp: plain `cp -a` fails; the fixed script must succeed.
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("bash, chmod, and zip are required.");
+        }
+
+        var root = Path.Combine(Path.GetTempPath(), "twp-ro-update-" + Guid.NewGuid().ToString("N"));
+        var installDir = Path.Combine(root, "install");
+        var packageDir = Path.Combine(root, "pkg");
+        var zipPath = Path.Combine(root, "candidate.zip");
+        var scriptPath = Path.Combine(root, "apply.sh");
+        var relaunch = Path.Combine(installDir, "titanium");
+        Directory.CreateDirectory(installDir);
+        Directory.CreateDirectory(packageDir);
+        try
+        {
+            var destPayload = Path.Combine(installDir, "payload.txt");
+            File.WriteAllText(destPayload, "old");
+            RunBash($"chmod 444 '{destPayload.Replace("'", "'\\''", StringComparison.Ordinal)}'");
+
+            File.WriteAllText(Path.Combine(packageDir, "payload.txt"), "new");
+            File.WriteAllText(Path.Combine(packageDir, "titanium"), "#!/bin/sh\necho ok\n");
+            if (File.Exists(zipPath))
+            {
+                File.Delete(zipPath);
+            }
+
+            ZipFile.CreateFromDirectory(packageDir, zipPath);
+
+            // pid 1 stays alive on Unix; use a definitely-dead pid so the wait loop exits.
+            var script = CliUpdateApplyHelper.BuildUnixScript(
+                pid: 2147483646,
+                zipPath: zipPath,
+                installDir: installDir,
+                relaunchPath: relaunch,
+                version: "99.0.0-smoke",
+                channel: "beta");
+            File.WriteAllText(scriptPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            RunBash($"chmod +x '{scriptPath.Replace("'", "'\\''", StringComparison.Ordinal)}' && bash '{scriptPath.Replace("'", "'\\''", StringComparison.Ordinal)}'");
+
+            Assert.AreEqual("new", File.ReadAllText(destPayload));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    RunBash($"chmod -R u+w '{root.Replace("'", "'\\''", StringComparison.Ordinal)}' || true");
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup of 0444 trees.
+            }
+        }
+    }
+
+    private static void RunBash(string command)
+    {
+        using var process = new System.Diagnostics.Process();
+        process.StartInfo.FileName = "bash";
+        process.StartInfo.ArgumentList.Add("-lc");
+        process.StartInfo.ArgumentList.Add(command);
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.Start();
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit(60_000);
+        Assert.AreEqual(0, process.ExitCode, $"bash failed: {stderr}\n{stdout}");
     }
 
     [TestMethod]

@@ -488,6 +488,16 @@ function Bundle-Homebrew {
         }
     }
 
+    # Homebrew cellar files are often mode 0444. Shipping them that way makes
+    # every later in-place CLI update fail: the updater's `cp -a` cannot
+    # overwrite a read-only destination file. Normalize before the zip.
+    foreach ($name in $needed) {
+        $p = Join-Path $PublishDir $name
+        if (Test-Path $p) {
+            Invoke-Native "chmod" @("644", $p)
+        }
+    }
+
     Assert-RequiredFiles @("libmsquic.dylib", "libssl.3.dylib", "libcrypto.3.dylib")
     Assert-MachOCpuMatchesRid @("libmsquic.dylib", "libssl.3.dylib", "libcrypto.3.dylib")
 }

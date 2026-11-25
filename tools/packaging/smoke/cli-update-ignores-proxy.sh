@@ -78,19 +78,6 @@ echo "cli-update-ignores-proxy candidate zip=${asset_zip} bytes=$(wc -c <"$asset
 echo "cli-update-ignores-proxy candidate version:"
 "$bin" version || true
 
-# Darwin: unzip a pristine CLI from the zip (not a copy of a dir that already
-# ran service/mitm). In-place update was Permission denied even after ditto.
-if [[ "$(uname -s)" == Darwin ]]; then
-  pkill -f "${cli_dir}/titanium" 2>/dev/null || true
-  sleep 1
-  fresh_cli="$(mktemp -d)"
-  unzip -qo "$asset_zip" -d "$fresh_cli"
-  chmod +x "$fresh_cli/titanium" 2>/dev/null || true
-  cli_dir="$fresh_cli"
-  bin="$fresh_cli/titanium"
-  echo "cli-update-ignores-proxy Darwin pristine CLI dir=${cli_dir}"
-fi
-
 feed="$(mktemp -d)"
 proxy_dir="$(mktemp -d)"
 if [[ "$plus" -eq 1 ]]; then
