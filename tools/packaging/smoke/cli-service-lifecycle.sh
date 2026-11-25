@@ -39,6 +39,12 @@ if [[ ! -x "$bin" ]]; then
   chmod +x "$bin" 2>/dev/null || true
 fi
 
+echo "cli-service-lifecycle candidate:"
+"$bin" version || true
+if [[ -n "${SMOKE_CLI_ZIP:-}" && -f "${SMOKE_CLI_ZIP}" ]]; then
+  echo "cli-service-lifecycle SMOKE_CLI_ZIP=${SMOKE_CLI_ZIP} bytes=$(wc -c <"$SMOKE_CLI_ZIP" | tr -d ' ')"
+fi
+
 uname_s="$(uname -s)"
 user_mode=0
 case "$uname_s" in
@@ -167,6 +173,20 @@ for _ in $(seq 1 40); do
 done
 if [[ "$http_ok" -ne 1 ]]; then
   echo "ASSERT: proxy port ${listen_port} not accepting HTTP after service start" >&2
+  echo "---- service smoke config ----" >&2
+  cat "$cfg" >&2 || true
+  echo "---- listeners / curl ----" >&2
+  (ss -ltnp 2>/dev/null || netstat -ltn 2>/dev/null || true) | grep -E "${listen_port}|${origin_port}" >&2 || true
+  curl -v --max-time 2 "http://127.0.0.1:${listen_port}/svc" >&2 || true
+  if [[ "$uname_s" == Linux && "$user_mode" -eq 0 ]]; then
+    echo "---- systemctl status ----" >&2
+    sudo systemctl status "${name}.service" --no-pager -l >&2 || true
+    echo "---- journalctl ----" >&2
+    sudo journalctl -u "${name}.service" -n 80 --no-pager >&2 || true
+  elif [[ "$uname_s" == Darwin ]]; then
+    echo "---- launchctl print ----" >&2
+    launchctl print "gui/$(id -u)/${label}" >&2 || true
+  fi
   exit 1
 fi
 

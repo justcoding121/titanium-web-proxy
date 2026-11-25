@@ -62,6 +62,10 @@ if [[ ! -f "$asset_zip" || ! -x "$bin" && ! -f "$bin" ]]; then
 fi
 chmod +x "$bin" || true
 
+echo "cli-update-ignores-proxy candidate zip=${asset_zip} bytes=$(wc -c <"$asset_zip" | tr -d ' ') plus=${plus}"
+echo "cli-update-ignores-proxy candidate version:"
+"$bin" version || true
+
 feed="$(mktemp -d)"
 proxy_dir="$(mktemp -d)"
 if [[ "$plus" -eq 1 ]]; then
