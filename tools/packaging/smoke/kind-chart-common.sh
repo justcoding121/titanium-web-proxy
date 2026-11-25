@@ -213,19 +213,29 @@ kind_chart_assert_no_instance_leftovers() {
   else
     scope=(-n "$ns")
   fi
-  local leftovers=""
-  for kind in all secrets configmaps serviceaccounts role rolebindings poddisruptionbudget; do
-    local chunk
-    chunk="$(kubectl get "$kind" -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" -o name 2>/dev/null || true)"
-    if [[ -n "$chunk" ]]; then
-      leftovers+="${chunk}"$'\n'
+  # helm uninstall --wait can still leave terminating pods briefly; wait then force-delete.
+  local attempt leftovers=""
+  for attempt in $(seq 1 30); do
+    leftovers=""
+    for kind in all secrets configmaps serviceaccounts role rolebindings poddisruptionbudget; do
+      local chunk
+      chunk="$(kubectl get "$kind" -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" -o name 2>/dev/null || true)"
+      if [[ -n "$chunk" ]]; then
+        leftovers+="${chunk}"$'\n'
+      fi
+    done
+    if [[ -z "$leftovers" ]]; then
+      return 0
     fi
+    if [[ "$attempt" -eq 10 || "$attempt" -eq 20 ]]; then
+      kubectl delete pods -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" \
+        --force --grace-period=0 >/dev/null 2>&1 || true
+    fi
+    sleep 2
   done
-  if [[ -n "$leftovers" ]]; then
-    echo "ASSERT: resources still labeled app.kubernetes.io/instance=${rel} after uninstall:" >&2
-    printf '%s' "$leftovers" >&2
-    return 1
-  fi
+  echo "ASSERT: resources still labeled app.kubernetes.io/instance=${rel} after uninstall:" >&2
+  printf '%s' "$leftovers" >&2
+  return 1
 }
 
 kind_chart_assert_gateway_crds() {

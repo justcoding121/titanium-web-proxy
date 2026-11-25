@@ -11,15 +11,21 @@ log="${RUNNER_TEMP:-/tmp}/pkg-$rid"
 mkdir -p "$log"
 allow_missing="${ALLOW_MISSING:-0}"
 
-shopt -s nullglob
-debs=("$dist"/Titanium.Cli-"$rid".deb "$dist"/*/"Titanium.Cli-$rid".deb)
-rpms=("$dist"/Titanium.Cli-"$rid".rpm "$dist"/*/"Titanium.Cli-$rid".rpm)
-images=("$dist"/Titanium.Cli-"$rid".AppImage "$dist"/*/"Titanium.Cli-$rid".AppImage)
-zips=("$dist"/Titanium.Cli-"$rid".zip "$dist"/*/"Titanium.Cli-$rid".zip)
-idebs=("$dist"/TitaniumInspector-"$rid".deb "$dist"/*/"TitaniumInspector-$rid".deb)
-irpms=("$dist"/TitaniumInspector-"$rid".rpm "$dist"/*/"TitaniumInspector-$rid".rpm)
-iimages=("$dist"/TitaniumInspector-"$rid".AppImage "$dist"/*/"TitaniumInspector-$rid".AppImage)
-izips=("$dist"/TitaniumInspector-"$rid".zip "$dist"/*/"TitaniumInspector-$rid".zip)
+# download-artifact v4+ with a pattern nests as dist/<dir>/<artifact-name>/file,
+# so search the whole tree (not only one directory level).
+find_pkgs() {
+  local name="$1"
+  find "$dist" -type f -name "$name" 2>/dev/null | sort
+}
+
+mapfile -t debs < <(find_pkgs "Titanium.Cli-$rid.deb")
+mapfile -t rpms < <(find_pkgs "Titanium.Cli-$rid.rpm")
+mapfile -t images < <(find_pkgs "Titanium.Cli-$rid.AppImage")
+mapfile -t zips < <(find_pkgs "Titanium.Cli-$rid.zip")
+mapfile -t idebs < <(find_pkgs "TitaniumInspector-$rid.deb")
+mapfile -t irpms < <(find_pkgs "TitaniumInspector-$rid.rpm")
+mapfile -t iimages < <(find_pkgs "TitaniumInspector-$rid.AppImage")
+mapfile -t izips < <(find_pkgs "TitaniumInspector-$rid.zip")
 
 first() { for f in "$@"; do [[ -f "$f" ]] && echo "$f" && return 0; done; return 1; }
 
