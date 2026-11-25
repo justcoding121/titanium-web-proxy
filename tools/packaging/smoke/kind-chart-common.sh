@@ -228,7 +228,7 @@ kind_chart_assert_no_instance_leftovers() {
       return 0
     fi
     if [[ "$attempt" -eq 1 || "$attempt" -eq 5 || "$attempt" -eq 15 ]]; then
-      kubectl delete pods,rs,deploy,sts,pvc -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" \
+      kubectl delete pods,rs,deploy,sts,pvc,configmap,secret -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" \
         --force --grace-period=0 >/dev/null 2>&1 || true
     fi
     sleep 2

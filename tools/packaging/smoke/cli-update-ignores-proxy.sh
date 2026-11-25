@@ -207,7 +207,8 @@ if [[ "$plus" -eq 1 ]]; then
 fi
 
 # Prove the loopback feed answers before blaming titanium / proxy bypass.
-if ! curl -fsS --max-time 2 "http://127.0.0.1:$feed_port/release-manifest.json" >/dev/null; then
+# Must bypass HTTP(S)_PROXY — the recording listener black-holes curl otherwise.
+if ! curl --noproxy '*' -fsS --max-time 2 "http://127.0.0.1:$feed_port/release-manifest.json" >/dev/null; then
   echo "ASSERT: loopback update feed not reachable before titanium update" >&2
   exit 1
 fi
@@ -226,7 +227,7 @@ set -e
 if [[ "$update_rc" -ne 0 ]]; then
   echo "ASSERT: titanium update exited $update_rc" >&2
   echo "feed-port=$feed_port proxy-port=$proxy_port" >&2
-  curl -fsS --max-time 2 "http://127.0.0.1:$feed_port/release-manifest.json" >&2 || true
+  curl --noproxy '*' -fsS --max-time 2 "http://127.0.0.1:$feed_port/release-manifest.json" >&2 || true
   exit 1
 fi
 

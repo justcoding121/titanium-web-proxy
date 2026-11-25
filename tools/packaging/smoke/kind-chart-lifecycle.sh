@@ -234,8 +234,13 @@ helm uninstall "$rel" --namespace "$ns" --ignore-not-found --wait --timeout 180s
 # Gateway bootstrap ConfigMap/TLS Secret use helm.sh/resource-policy: keep so
 # helm uninstall leaves them; remove them explicitly for uninstall hygiene.
 if [[ "$which" == gateway ]]; then
-  kubectl delete configmap,secret -l "app.kubernetes.io/instance=${rel}" -A \
-    --ignore-not-found >/dev/null 2>&1 || true
+  kubectl delete configmap,secret -l "app.kubernetes.io/instance=${rel}" \
+    -n "$ns" --ignore-not-found --wait=true --timeout=60s >/dev/null 2>&1 || true
+  # Gateway may also place labeled keep resources outside $ns.
+  while read -r obj; do
+    [[ -z "$obj" ]] && continue
+    kubectl delete "$obj" --ignore-not-found --wait=true --timeout=30s >/dev/null 2>&1 || true
+  done < <(kubectl get configmap,secret -A -l "app.kubernetes.io/instance=${rel}" -o name 2>/dev/null || true)
 fi
 kind_chart_assert_no_instance_leftovers
 if [[ "$which" == gateway ]]; then
