@@ -68,8 +68,8 @@ host="$(gsettings get org.gnome.system.proxy.http host 2>/dev/null | tr -d "'\""
 [[ "${mode}" == "manual" ]] || exit 0
 case "${host}" in
   127.0.0.1|localhost|::1|"")
-    # MUTATION: skip gsettings clear
-    # MUTATION: skip gsettings clear
+    gsettings set org.gnome.system.proxy mode none >/dev/null 2>&1 || true
+    gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
     ;;
 esac
 EOF
@@ -96,11 +96,11 @@ clear_user_loopback_gnome() {
     if command -v dbus-run-session >/dev/null 2>&1; then
       sudo -u "${user}" -H \
         env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
-        # MUTATION: skip EXE --clear-system-proxy
+        dbus-run-session -- "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
     else
       sudo -u "${user}" -H \
         env HOME="${home}" XDG_RUNTIME_DIR="${runtime}" \
-        # MUTATION: skip EXE --clear-system-proxy
+        "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
     fi
   fi
   if command -v dbus-run-session >/dev/null 2>&1; then
