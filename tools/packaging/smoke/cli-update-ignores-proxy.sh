@@ -62,6 +62,16 @@ if [[ ! -f "$asset_zip" || ! -x "$bin" && ! -f "$bin" ]]; then
 fi
 chmod +x "$bin" || true
 
+# Prior machine-service update (sudo) can leave root-owned workdirs that make
+# this user-mode update fail with "Access to the path … is denied".
+if [[ "$(id -u)" -eq 0 ]]; then
+  rm -rf /tmp/TitaniumCli-update "${TMPDIR:-/tmp}/TitaniumCli-update" 2>/dev/null || true
+elif command -v sudo >/dev/null 2>&1; then
+  sudo rm -rf /tmp/TitaniumCli-update "${TMPDIR:-/tmp}/TitaniumCli-update" 2>/dev/null || true
+else
+  rm -rf /tmp/TitaniumCli-update "${TMPDIR:-/tmp}/TitaniumCli-update" 2>/dev/null || true
+fi
+
 echo "cli-update-ignores-proxy candidate zip=${asset_zip} bytes=$(wc -c <"$asset_zip" | tr -d ' ') plus=${plus}"
 echo "cli-update-ignores-proxy candidate version:"
 "$bin" version || true
