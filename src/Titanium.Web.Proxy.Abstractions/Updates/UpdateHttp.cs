@@ -39,14 +39,9 @@ public static class UpdateHttp
             && Uri.TryCreate(url, UriKind.Absolute, out var uri)
             && (uri.IsLoopback || IsLoopbackProxy(uri)))
         {
-            // SocketsHttpHandler + Proxy=null: musl HttpClientHandler has been observed to
-            // still honor HTTPS_PROXY when only UseProxy=false is set (arm64 alpine smoke).
-            return new HttpClient(new SocketsHttpHandler
-            {
-                UseProxy = false,
-                Proxy = null,
-            })
-            { Timeout = timeout };
+            // Prefer HttpClientHandler here: SocketsHttpHandler with Proxy=null regressed
+            // musl-x64 alpine update smoke (feed network error under HTTPS_PROXY).
+            return new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = timeout };
         }
 
         return CreateClient(timeout, bypassResolvedProxy ?? IsLoopbackProxy);

@@ -221,8 +221,16 @@ fi
 # --- rollback ---
 if [[ "$upgrade_ok" == "1" ]]; then
   if [[ "$which" == gateway ]]; then
-    kind_chart_ensure_gateway_tls_secret
-    helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m
+    # Published charts may create the bootstrap TLS Secret without keep. Candidate
+    # templates omit it via lookup, so upgrade can delete it and leave Helm's rev1
+    # rollback unable to find it. Delete any orphan/keep copy first so rollback
+    # recreates the Secret from the rev1 chart; retry once if needed.
+    kubectl -n "$ns" delete secret "${rel}-data-tls" --ignore-not-found --wait=true --timeout=30s >/dev/null 2>&1 || true
+    if ! helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m; then
+      echo "gateway helm rollback failed once; ensuring TLS Secret and retrying" >&2
+      kind_chart_ensure_gateway_tls_secret
+      helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m
+    fi
   else
     helm rollback "$rel" 1 -n "$ns" --wait --timeout 180s
   fi
