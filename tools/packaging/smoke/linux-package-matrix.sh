@@ -117,12 +117,9 @@ if cli_zip="$(first "${zips[@]}")"; then
       prev_zip_arg="/pkg/$prev_zip_name"
       upgrade_cmd="bash tools/packaging/smoke/cli-upgrade-from-published.sh '$prev_zip_arg' '/pkg/$cand_zip_name' /tmp/cli-musl-upgrade"
     fi
-    # alpine/arm64 HttpClient still black-holes loopback feeds when HTTPS_PROXY is set;
-    # glibc arm64 host package leg covers the bypass proof.
+    # Same alpine update proof for musl-x64 and musl-arm64. Earlier arm64 skips chased an
+    # HttpClient+HTTPS_PROXY theory that was actually PREV/candidate zip basename overwrite.
     update_in_alpine="bash tools/packaging/smoke/cli-update-ignores-proxy.sh /cli '/pkg/$cand_zip_name' /cli/titanium"
-    if [[ "$rid" == "linux-musl-arm64" ]]; then
-      update_in_alpine="echo 'skip musl-arm64 alpine cli-update-ignores-proxy (alpine/arm64 HttpClient+HTTPS_PROXY; glibc arm64 host covers bypass)'"
-    fi
     docker run --rm -v "$root:/src" -v "$stage:/pkg:ro" -w /src "alpine:3.24" \
       sh -c "apk add --no-cache bash unzip && bash tools/packaging/smoke/alpine-deps.sh && unzip -q '/pkg/$cand_zip_name' -d /cli && chmod +x /cli/titanium && /cli/titanium version && bash tools/packaging/smoke/openssl-leftover.sh /cli /cli/titanium && $update_in_alpine && $upgrade_cmd"
     if [[ -n "${LIFECYCLE_PROOF:-}" && -n "$prev_zip_arg" ]]; then
