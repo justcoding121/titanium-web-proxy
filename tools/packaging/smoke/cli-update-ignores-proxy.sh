@@ -78,6 +78,13 @@ echo "cli-update-ignores-proxy candidate zip=${asset_zip} bytes=$(wc -c <"$asset
 echo "cli-update-ignores-proxy candidate version:"
 "$bin" version || true
 
+# Prior service/mitm can leave titanium holding native libs in $cli_dir so the
+# in-place updater hits "Permission denied" on libssl/libmsquic (macOS).
+if [[ "$(uname -s)" == Darwin ]]; then
+  pkill -f "${cli_dir}/titanium" 2>/dev/null || true
+  sleep 1
+fi
+
 feed="$(mktemp -d)"
 proxy_dir="$(mktemp -d)"
 if [[ "$plus" -eq 1 ]]; then
@@ -92,9 +99,12 @@ sha="$(sha256sum "$feed/$asset_name" 2>/dev/null | awk '{print $1}' || shasum -a
 
 hits="$proxy_dir/hits"
 : >"$hits"
-python3 - "$proxy_dir" <<'PY' >/tmp/update-proxy.log 2>&1 &
+# Write helper scripts to disk (macOS bash + heredoc background has been flaky
+# on intel runners: python stays alive but never creates the port file).
+cat >"$proxy_dir/proxy_helper.py" <<'PY'
 import socket, sys, pathlib, threading
 root = pathlib.Path(sys.argv[1])
+(root / "starting").write_text("1", encoding="utf-8")
 hits = root / "hits"
 port_file = root / "port"
 srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -117,11 +127,10 @@ while True:
     c, _ = srv.accept()
     threading.Thread(target=one, args=(c,), daemon=True).start()
 PY
-proxy_py=$!
-
-python3 - "$feed" <<'PY' >/tmp/update-feed.log 2>&1 &
+cat >"$feed/feed_helper.py" <<'PY'
 import sys, pathlib, http.server
 root = pathlib.Path(sys.argv[1])
+(root / "starting").write_text("1", encoding="utf-8")
 port_file = root / "feed-port"
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -134,6 +143,9 @@ httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
 port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
 httpd.serve_forever()
 PY
+python3 "$proxy_dir/proxy_helper.py" "$proxy_dir" >/tmp/update-proxy.log 2>&1 &
+proxy_py=$!
+python3 "$feed/feed_helper.py" "$feed" >/tmp/update-feed.log 2>&1 &
 httpd=$!
 
 cleanup() {
@@ -143,12 +155,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for _ in $(seq 1 50); do
+for _ in $(seq 1 100); do
   [[ -f "$proxy_dir/port" && -f "$feed/feed-port" ]] && break
-  sleep 0.1
+  sleep 0.2
 done
 if [[ ! -f "$proxy_dir/port" || ! -f "$feed/feed-port" ]]; then
   echo "ASSERT: feed or proxy port file missing" >&2
+  echo "---- dirs ----" >&2
+  ls -la "$proxy_dir" "$feed" >&2 || true
   echo "---- update-proxy.log ----" >&2
   cat /tmp/update-proxy.log >&2 || true
   echo "---- update-feed.log ----" >&2
