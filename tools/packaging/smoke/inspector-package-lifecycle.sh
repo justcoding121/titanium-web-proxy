@@ -150,13 +150,15 @@ case "$kind" in
       exit 1
     fi
     stage="$(mktemp -d)"
-    cp -f "$prev" "$candidate" "$stage/"
+    # Distinct names: prev and candidate share basename TitaniumInspector-<rid>.rpm.
+    cp -f "$prev" "$stage/prev.rpm"
+    cp -f "$candidate" "$stage/candidate.rpm"
     docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
       bash -c "set -euo pipefail
-        dnf install -y -q libicu \"/pkg/$(basename "$prev")\"
+        dnf install -y -q libicu /pkg/prev.rpm
         prev_i=\$(rpm -q --queryformat '%{VERSION}' titanium-inspector)
         test -n \"\$prev_i\"
-        dnf install -y -q \"/pkg/$(basename "$candidate")\"
+        dnf install -y -q /pkg/candidate.rpm
         want='$to_v'
         got=\$(rpm -q --queryformat '%{VERSION}' titanium-inspector)
         test \"\$got\" = \"\$want\"
@@ -212,15 +214,17 @@ case "$kind" in
       exit 1
     fi
     stage="$(mktemp -d)"
-    cp -f "$prev" "$candidate" "$stage/"
+    # Distinct names: prev and candidate share basename TitaniumInspector-<rid>.zip.
+    cp -f "$prev" "$stage/prev.zip"
+    cp -f "$candidate" "$stage/candidate.zip"
     docker run --rm -v "$stage:/pkg:ro" "alpine:3.24" \
       sh -c "set -e
         apk add --no-cache unzip
         rm -rf /opt/inspector
         mkdir -p /opt/inspector
-        unzip -q \"/pkg/$(basename "$prev")\" -d /opt/inspector
+        unzip -q /pkg/prev.zip -d /opt/inspector
         test -f /opt/inspector/TitaniumInspector
-        unzip -oq \"/pkg/$(basename "$candidate")\" -d /opt/inspector
+        unzip -oq /pkg/candidate.zip -d /opt/inspector
         test -f /opt/inspector/TitaniumInspector
         chmod +x /opt/inspector/TitaniumInspector
         rm -rf /opt/inspector
