@@ -172,7 +172,7 @@ public class UpdateHttpBehaviorTests
     }
 
     // Bug class: CreateClientForUrl must reach loopback feeds under HTTPS_PROXY via
-    // SelectiveBypassWebProxy (UseProxy=false / SocketsHttpHandler Proxy=null both failed on musl).
+    // SelectiveBypassWebProxy (keeps corporate proxy for remote; bypasses loopback).
     [TestMethod]
     public void CreateClientForUrl_LoopbackIgnoresClosedHttpsProxy()
     {

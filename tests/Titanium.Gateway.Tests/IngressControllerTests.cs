@@ -157,6 +157,9 @@ public sealed class IngressControllerTests
         await SettleAsync(f, 1);
         await f.Reconciler.ReconcileOnceAsync(CancellationToken.None);
         await ClusterFixture.WaitForAsync(() => f.Cache.Snapshot().Ingresses.Single().Status?.LoadBalancer?.Ingress?.Count > 0);
+        // Let any in-flight status patches settle before counting writes; otherwise
+        // the "nothing changed" reconcile can race a late status write (Expected 0, Actual 3).
+        await SettleAsync(f, 1);
         var before = f.Api.Writes.Count;
 
         var outcome = await f.Reconciler.ReconcileOnceAsync(CancellationToken.None);

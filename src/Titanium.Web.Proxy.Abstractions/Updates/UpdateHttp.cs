@@ -27,12 +27,15 @@ public static class UpdateHttp
     }
 
     /// <summary>
-    /// Like <see cref="CreateClient"/>, preferring loopback-aware selective bypass for
-    /// <paramref name="url"/>. Do not short-circuit with <c>UseProxy=false</c> or
-    /// <c>SocketsHttpHandler</c>+<c>Proxy=null</c>: both still honor <c>HTTPS_PROXY</c>
-    /// on musl alpine under product-smoke (feed network error while curl --noproxy works).
-    /// <see cref="SelectiveBypassWebProxy"/> returns the destination from
-    /// <c>GetProxy</c> for loopback, which is the path that works on musl.
+    /// Like <see cref="CreateClient"/> with loopback-aware selective bypass for
+    /// <paramref name="url"/>. Keeps the default proxy for remote destinations
+    /// (corporate HTTPS_PROXY) and returns the destination from
+    /// <see cref="SelectiveBypassWebProxy.GetProxy"/> for loopback feeds so
+    /// product-smoke update checks are not MITM'd by a local proxy listener.
+    /// Musl alpine smoke failures that looked like "HttpClient still honors
+    /// HTTPS_PROXY" were caused by the harness staging PREV and candidate zips
+    /// under one basename (fixed); this API keeps SelectiveBypass because it is
+    /// the path covered by unit tests and the green musl update proof.
     /// </summary>
     public static HttpClient CreateClientForUrl(
         TimeSpan timeout,

@@ -89,19 +89,30 @@ cleanup() {
 }
 trap cleanup EXIT
 
-ports="$(python3 - <<'PY'
+# Print one port per line. Do not use ${ports##*} — that pattern matches the
+# whole string and left origin_port empty (forwardPort blank → product defaulted
+# to :80; origin python died on int('')).
+listen_port="$(python3 - <<'PY'
 import socket
-def pick():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-print(pick(), pick())
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
 PY
 )"
-listen_port="${ports%% *}"
-origin_port="${ports##*}"
+origin_port="$(python3 - <<'PY'
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)"
+[[ "$listen_port" =~ ^[0-9]+$ && "$origin_port" =~ ^[0-9]+$ ]] || {
+  echo "ASSERT: failed to pick listen/origin ports (listen='$listen_port' origin='$origin_port')" >&2
+  exit 1
+}
+echo "cli-service-lifecycle ports listen=${listen_port} origin=${origin_port}"
 
 cfg="$work/twp-service-smoke.yaml"
 cat >"$cfg" <<YAML
@@ -127,6 +138,23 @@ class H(BaseHTTPRequestHandler):
 HTTPServer(("127.0.0.1", port), H).serve_forever()
 PY
 origin_pid=$!
+# Fail fast if the origin helper did not bind (empty port / crash).
+for _ in $(seq 1 20); do
+  if curl -fsS "http://127.0.0.1:${origin_port}/svc" >/dev/null 2>&1; then
+    break
+  fi
+  if ! kill -0 "$origin_pid" 2>/dev/null; then
+    echo "ASSERT: origin helper exited before bind" >&2
+    cat /tmp/twp-origin-smoke.log >&2 || true
+    exit 1
+  fi
+  sleep 0.1
+done
+curl -fsS "http://127.0.0.1:${origin_port}/svc" >/dev/null || {
+  echo "ASSERT: origin helper not accepting HTTP on ${origin_port}" >&2
+  cat /tmp/twp-origin-smoke.log >&2 || true
+  exit 1
+}
 
 run_svc() {
   if [[ "$user_mode" -eq 1 ]]; then
