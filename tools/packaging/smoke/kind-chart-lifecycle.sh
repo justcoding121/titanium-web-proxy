@@ -231,9 +231,13 @@ if [[ "$upgrade_ok" == "1" ]]; then
       kind_chart_ensure_gateway_tls_secret
       helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m
     fi
-    # Recreated empty TLS Secret is enough for helm; published dataplane often will
-    # not pass HTTP probes until uninstall+reinstall below. Upgrade already probed.
-    echo "chart gateway rollback ok (probes deferred to uninstall hygiene reinstall)"
+    kind_chart_ensure_gateway_tls_secret
+    # Accepted gap (owner: chart smoke): published rev1 dataplane with an empty
+    # bootstrap TLS Secret does not pass HTTP probes on 28080. Candidate chart
+    # templates already use lookup + helm.sh/resource-policy: keep; upgrade
+    # probes above already passed. Helm rollback success + Secret present is
+    # the rollback proof until a published chart with keep is the PREV.
+    echo "chart gateway rollback ok (HTTP probes accepted-gap vs published rev1; upgrade already probed)"
   else
     helm rollback "$rel" 1 -n "$ns" --wait --timeout 180s
     kind_chart_assert_probes "$which"

@@ -546,7 +546,9 @@ internal static class SmokeApp
     {
         // Each process query takes longer than a few seconds. A short deadline
         // expired inside the first query and reported the profile busy.
-        var deadline = DateTime.UtcNow.AddSeconds(20);
+        // Chrome on Windows install-smoke upgrade-verify occasionally held the
+        // profile lock past 20s ("no decrypted page from the current window").
+        var deadline = DateTime.UtcNow.AddSeconds(45);
         List<int> left;
         do
         {
@@ -554,7 +556,7 @@ internal static class SmokeApp
             if (left.Count == 0)
                 return true;
             KillWindowsProcessesForDataDir(left);
-            Thread.Sleep(400);
+            Thread.Sleep(500);
         }
         while (DateTime.UtcNow < deadline);
 

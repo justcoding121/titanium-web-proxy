@@ -128,9 +128,10 @@ if [[ ! -f "$plus_zip" ]]; then
 fi
 
 work="$(mktemp -d)"
-plus_a="$(mktemp --suffix=.zip)"
-plus_b="$(mktemp --suffix=.zip)"
-trap 'rm -f "$plus_a" "$plus_b"; rm -rf "$work"' EXIT
+# BSD mktemp (macOS) has no --suffix; keep a portable .zip path under $work.
+plus_a="$work/plus-a.zip"
+plus_b="$work/plus-b.zip"
+trap 'rm -rf "$work"' EXIT
 
 cp "$plus_zip" "$plus_a"
 

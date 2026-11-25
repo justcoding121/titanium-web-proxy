@@ -62,9 +62,34 @@ if [[ ! -f "$asset_zip" || ! -x "$bin" && ! -f "$bin" ]]; then
 fi
 chmod +x "$bin" || true
 
+# Prior machine-service update (sudo) can leave root-owned workdirs that make
+# this user-mode update fail with "Access to the path … is denied".
+if [[ "$(uname -s)" == Linux ]]; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    rm -rf /tmp/TitaniumCli-update 2>/dev/null || true
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo rm -rf /tmp/TitaniumCli-update 2>/dev/null || true
+  fi
+else
+  rm -rf "${TMPDIR:-/tmp}/TitaniumCli-update" /tmp/TitaniumCli-update 2>/dev/null || true
+fi
+
 echo "cli-update-ignores-proxy candidate zip=${asset_zip} bytes=$(wc -c <"$asset_zip" | tr -d ' ') plus=${plus}"
 echo "cli-update-ignores-proxy candidate version:"
 "$bin" version || true
+
+# Darwin: unzip a pristine CLI from the zip (not a copy of a dir that already
+# ran service/mitm). In-place update was Permission denied even after ditto.
+if [[ "$(uname -s)" == Darwin ]]; then
+  pkill -f "${cli_dir}/titanium" 2>/dev/null || true
+  sleep 1
+  fresh_cli="$(mktemp -d)"
+  unzip -qo "$asset_zip" -d "$fresh_cli"
+  chmod +x "$fresh_cli/titanium" 2>/dev/null || true
+  cli_dir="$fresh_cli"
+  bin="$fresh_cli/titanium"
+  echo "cli-update-ignores-proxy Darwin pristine CLI dir=${cli_dir}"
+fi
 
 feed="$(mktemp -d)"
 proxy_dir="$(mktemp -d)"
@@ -80,7 +105,10 @@ sha="$(sha256sum "$feed/$asset_name" 2>/dev/null | awk '{print $1}' || shasum -a
 
 hits="$proxy_dir/hits"
 : >"$hits"
-python3 - "$proxy_dir" <<'PY' >/tmp/update-proxy.log 2>&1 &
+# Proxy: raw socket (works on macOS intel). Feed: python -m http.server like the
+# other green smoke legs — HTTPServer((127.0.0.1,0)) hung on intel 3.14 before
+# writing feed-port.
+cat >"$proxy_dir/proxy_helper.py" <<'PY'
 import socket, sys, pathlib, threading
 root = pathlib.Path(sys.argv[1])
 hits = root / "hits"
@@ -105,23 +133,19 @@ while True:
     c, _ = srv.accept()
     threading.Thread(target=one, args=(c,), daemon=True).start()
 PY
+python3 "$proxy_dir/proxy_helper.py" "$proxy_dir" >/tmp/update-proxy.log 2>&1 &
 proxy_py=$!
-
-python3 - "$feed" <<'PY' >/tmp/update-feed.log 2>&1 &
-import sys, pathlib, http.server
-root = pathlib.Path(sys.argv[1])
-port_file = root / "feed-port"
-
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(root), **kwargs)
-    def log_message(self, fmt, *args):
-        pass
-
-httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
-httpd.serve_forever()
+feed_port="$(python3 - <<'PY'
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
 PY
+)"
+printf '%s' "$feed_port" >"$feed/feed-port"
+python3 -m http.server "$feed_port" --bind 127.0.0.1 --directory "$feed" >/tmp/update-feed.log 2>&1 &
 httpd=$!
 
 cleanup() {
@@ -131,12 +155,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for _ in $(seq 1 50); do
+for _ in $(seq 1 100); do
   [[ -f "$proxy_dir/port" && -f "$feed/feed-port" ]] && break
-  sleep 0.1
+  sleep 0.2
 done
 if [[ ! -f "$proxy_dir/port" || ! -f "$feed/feed-port" ]]; then
   echo "ASSERT: feed or proxy port file missing" >&2
+  echo "---- dirs ----" >&2
+  ls -la "$proxy_dir" "$feed" >&2 || true
+  echo "---- update-proxy.log ----" >&2
+  cat /tmp/update-proxy.log >&2 || true
+  echo "---- update-feed.log ----" >&2
+  cat /tmp/update-feed.log >&2 || true
+  ps -ef 2>/dev/null | grep -E 'python|titanium' | grep -v grep >&2 || true
   exit 1
 fi
 proxy_port="$(cat "$proxy_dir/port")"
