@@ -84,13 +84,15 @@ case "$kind" in
       exit 1
     fi
     stage="$(mktemp -d)"
-    cp -f "$prev" "$candidate" "$stage/"
+    # Distinct names: prev and candidate share basename Titanium.Cli-<rid>.rpm.
+    cp -f "$prev" "$stage/prev.rpm"
+    cp -f "$candidate" "$stage/candidate.rpm"
     docker run --rm -v "$stage:/pkg:ro" "fedora:41" \
       bash -c "set -euo pipefail
-        dnf install -y -q libicu \"/pkg/$(basename "$prev")\"
+        dnf install -y -q libicu /pkg/prev.rpm
         prev_i=\$(rpm -q --queryformat '%{VERSION}' titanium-cli)
         test -n \"\$prev_i\"
-        dnf install -y -q \"/pkg/$(basename "$candidate")\"
+        dnf install -y -q /pkg/candidate.rpm
         want='$to_v'
         got=\$(rpm -q --queryformat '%{VERSION}' titanium-cli)
         test \"\$got\" = \"\$want\"
