@@ -110,9 +110,8 @@ sha="$(sha256sum "$feed/$asset_name" 2>/dev/null | awk '{print $1}' || shasum -a
 
 hits="$proxy_dir/hits"
 : >"$hits"
-# On-disk helpers (heredoc+background was flaky on macOS intel). Bind the socket
-# ourselves — ThreadingHTTPServer((127.0.0.1,0)) hung on intel before writing
-# feed-port (starting existed, feed-port never appeared).
+# On-disk helpers (heredoc+background was flaky on macOS intel). Use plain
+# HTTPServer — ThreadingHTTPServer hung on intel before writing feed-port.
 cat >"$proxy_dir/proxy_helper.py" <<'PY'
 import socket, sys, pathlib, threading
 root = pathlib.Path(sys.argv[1])
@@ -140,7 +139,7 @@ while True:
     threading.Thread(target=one, args=(c,), daemon=True).start()
 PY
 cat >"$feed/feed_helper.py" <<'PY'
-import socket, sys, pathlib, http.server
+import sys, pathlib, http.server
 root = pathlib.Path(sys.argv[1])
 (root / "starting").write_text("1", encoding="utf-8")
 port_file = root / "feed-port"
@@ -151,14 +150,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-sock.bind(("127.0.0.1", 0))
-port = sock.getsockname()[1]
-port_file.write_text(str(port), encoding="utf-8")
-httpd = http.server.HTTPServer(("127.0.0.1", port), Handler, bind_and_activate=False)
-httpd.socket = sock
-httpd.server_address = ("127.0.0.1", port)
+httpd = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
 httpd.serve_forever()
 PY
 python3 "$proxy_dir/proxy_helper.py" "$proxy_dir" >/tmp/update-proxy.log 2>&1 &
