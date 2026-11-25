@@ -112,7 +112,7 @@ if cli_zip="$(first "${zips[@]}")"; then
       prev_zip_arg="/pkg/$(basename "$PREV_CLI_ZIP")"
       upgrade_cmd="bash tools/packaging/smoke/cli-upgrade-from-published.sh '$prev_zip_arg' '/pkg/$(basename "$cli_zip")' /tmp/cli-musl-upgrade"
     fi
-    docker run --rm -v "$root:/src" -v "$stage:/pkg:ro" -w /src "alpine:3.24" \
+    docker run --rm --network host -v "$root:/src" -v "$stage:/pkg:ro" -w /src "alpine:3.24" \
       sh -c "apk add --no-cache bash unzip && bash tools/packaging/smoke/alpine-deps.sh && unzip -q '/pkg/$(basename "$cli_zip")' -d /cli && chmod +x /cli/titanium && /cli/titanium version && bash tools/packaging/smoke/openssl-leftover.sh /cli /cli/titanium && bash tools/packaging/smoke/cli-update-ignores-proxy.sh /cli '/pkg/$(basename "$cli_zip")' /cli/titanium && $upgrade_cmd"
     if [[ -n "${LIFECYCLE_PROOF:-}" && -n "$prev_zip_arg" ]]; then
       bash "$here/append-lifecycle-proof.sh" "$LIFECYCLE_PROOF" cli "$rid" zip upgrade \
