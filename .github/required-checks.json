@@ -28,6 +28,7 @@
         "install-smoke (windows-latest)",
         "install-smoke (ubuntu-latest)",
         "install-smoke (macos-latest)",
+        "install-smoke (ubuntu-24.04-arm)",
         "release-dry-run"
       ]
     },
@@ -45,6 +46,7 @@
         "install-smoke (windows-latest)",
         "install-smoke (ubuntu-latest)",
         "install-smoke (macos-latest)",
+        "install-smoke (ubuntu-24.04-arm)",
         "release-dry-run"
       ]
     }

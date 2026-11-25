@@ -36,21 +36,33 @@ RUN case "${TARGETARCH}" in \
          -p:DebugType=None -p:DebugSymbols=false \
          -o /out
 
-# Build Lua on BUILDPLATFORM (cross-compile for arm64). Wasmtime is a prebuilt per-RID download.
-# Avoid QEMU for the C compile: RuntimeInformation/uname under buildx often still report the host arch.
+# Build Lua on BUILDPLATFORM (cross-compile for arm64 only when the builder is not arm64).
+# Wasmtime is a prebuilt per-RID download. Avoid QEMU for the C compile:
+# RuntimeInformation/uname under buildx often still report the host arch.
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/powershell:lts-ubuntu-22.04 AS scripting
 ARG TARGETARCH
+ARG BUILDARCH
 WORKDIR /work
 COPY tools/packaging tools/packaging
 COPY tools/scripting tools/scripting
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
          build-essential ca-certificates curl \
-         gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
+    && if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
+         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+           gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
+       fi \
     && rm -rf /var/lib/apt/lists/* \
     && case "${TARGETARCH}" in \
          amd64) RID=linux-x64; export CC=gcc ;; \
-         arm64) RID=linux-arm64; export CC=aarch64-linux-gnu-gcc; export TITANIUM_SCRIPTING_ALLOW_CROSS=1 ;; \
+         arm64) \
+           RID=linux-arm64; \
+           if [ "${BUILDARCH}" = "arm64" ]; then \
+             export CC=gcc; \
+           else \
+             export CC=aarch64-linux-gnu-gcc; \
+             export TITANIUM_SCRIPTING_ALLOW_CROSS=1; \
+           fi ;; \
          *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
        esac \
     && mkdir -p /natives \

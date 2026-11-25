@@ -39,6 +39,7 @@
           { "context": "install-smoke (windows-latest)", "integration_id": 15368 },
           { "context": "install-smoke (ubuntu-latest)", "integration_id": 15368 },
           { "context": "install-smoke (macos-latest)", "integration_id": 15368 },
+          { "context": "install-smoke (ubuntu-24.04-arm)", "integration_id": 15368 },
           { "context": "release-dry-run", "integration_id": 15368 }
         ]
       }

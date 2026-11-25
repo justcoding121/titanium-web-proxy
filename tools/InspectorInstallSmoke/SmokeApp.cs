@@ -1512,7 +1512,9 @@ internal static class SmokeApp
         var port = FreePort();
         var fromVersion = ReadExeProductVersion(exe);
         var remoteVersion = BumpVersionForFeed(fromVersion);
-        WriteInAppApplySettings(port);
+        // Seed InstalledReleaseTag to the harness-visible version so the offer uses the
+        // same baseline the remote bump was computed from (not a stale hardcoded 0.0.1).
+        WriteInAppApplySettings(port, fromVersion);
 
         using var feed = LocalUpdateFeed.StartFromPackage(remoteVersion, package);
         Console.WriteLine($"in-app-apply feed={feed.ManifestUrl} package={package} remote={remoteVersion} from={fromVersion}");
@@ -1568,7 +1570,7 @@ internal static class SmokeApp
             {
                 return Fail(
                     1,
-                    $"in-app-apply: timed out (hits={feed.Hits} assetHits={feed.AssetHits} applyScript={ApplyHelperScriptExists()})");
+                    $"in-app-apply: timed out (from={fromVersion} remote={remoteVersion} hits={feed.Hits} assetHits={feed.AssetHits} applyScript={ApplyHelperScriptExists()})");
             }
 
             WriteInAppApplyLifecycleProof(opt, fromVersion, remoteVersion, outcome, feed.Hits, feed.AssetHits);
@@ -1635,22 +1637,83 @@ internal static class SmokeApp
         }
         catch
         {
-            // fall through
+            // fall through — common on Linux/macOS single-file publishes
         }
+
+        var fromPlist = TryReadMacBundleShortVersion(exe);
+        if (!string.IsNullOrEmpty(fromPlist))
+            return fromPlist;
 
         return "0.0.0";
     }
 
-    private static string BumpVersionForFeed(string localVersion)
+    /// <summary>
+    /// macOS .app bundles store the marketing version in Info.plist; FileVersionInfo is empty there.
+    /// </summary>
+    private static string? TryReadMacBundleShortVersion(string exe)
     {
-        if (Version.TryParse(localVersion.Split('-')[0], out var v))
+        try
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(exe));
+            while (!string.IsNullOrEmpty(dir))
+            {
+                if (dir.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
+                {
+                    var plist = Path.Combine(dir, "Contents", "Info.plist");
+                    if (!File.Exists(plist))
+                        return null;
+                    var text = File.ReadAllText(plist);
+                    // Prefer CFBundleShortVersionString; fall back to CFBundleVersion.
+                    foreach (var key in new[] { "CFBundleShortVersionString", "CFBundleVersion" })
+                    {
+                        var marker = $"<key>{key}</key>";
+                        var idx = text.IndexOf(marker, StringComparison.Ordinal);
+                        if (idx < 0)
+                            continue;
+                        var stringOpen = text.IndexOf("<string>", idx, StringComparison.Ordinal);
+                        var stringClose = text.IndexOf("</string>", stringOpen, StringComparison.Ordinal);
+                        if (stringOpen < 0 || stringClose < 0)
+                            continue;
+                        var value = text[(stringOpen + 8)..stringClose].Trim().Split('+')[0].Trim();
+                        if (!string.IsNullOrEmpty(value))
+                            return value;
+                    }
+
+                    return null;
+                }
+
+                dir = Path.GetDirectoryName(dir);
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Remote feed version that UpdateService will classify as <see cref="UpdateOfferKind.Upgrade"/>.
+    /// When FileVersionInfo/plist cannot read the binary (Linux single-file), the running assembly
+    /// still reports the real VersionPrefix (e.g. 8.0.9) via InformationalVersion — so a naïve
+    /// 0.0.0→0.0.1 bump is rejected as older. Use a high sentinel in that case.
+    /// </summary>
+    internal static string BumpVersionForFeed(string localVersion)
+    {
+        if (Version.TryParse(localVersion.Split('-')[0], out var v)
+            && (v.Major > 0 || v.Minor > 0 || Math.Max(v.Build, 0) > 0))
+        {
             return $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0) + 1}-smoke-in-app";
+        }
+
         return "99.0.0-smoke-in-app";
     }
 
-    private static void WriteInAppApplySettings(int port)
+    private static void WriteInAppApplySettings(int port, string installedTag)
     {
         Directory.CreateDirectory(ProfileDir());
+        var tag = string.IsNullOrWhiteSpace(installedTag) ? "0.0.0" : installedTag.Trim();
         var settings = new InspectorSettings
         {
             BindPort = port,
@@ -1660,7 +1723,7 @@ internal static class SmokeApp
             AutoStartCapture = true,
             AutoSystemProxyOnStart = true,
             CheckForUpdatesOnStartup = true,
-            InstalledReleaseTag = "0.0.1",
+            InstalledReleaseTag = tag,
             InstalledReleaseChannel = "Stable",
         };
         File.WriteAllText(Path.Combine(ProfileDir(), "settings.json"), JsonSerializer.Serialize(settings, SettingsJson));

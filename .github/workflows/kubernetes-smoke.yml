@@ -48,7 +48,10 @@ jobs:
           build-args: |
             VERSION=0.0.0-ci
             COMMIT=${{ github.sha }}
-          cache-from: type=gha
+          # Scope the GHA cache per arch so an amd64 cache cannot feed arm64 layers
+          # (that produced "exec /bin/sh: exec format error" on ubuntu-24.04-arm).
+          cache-from: type=gha,scope=k8s-titanium-arm64
+          cache-to: type=gha,mode=min,scope=k8s-titanium-arm64
       - uses: helm/kind-action@v1
         with:
           cluster_name: twp-arm
