@@ -49,7 +49,8 @@ COPY tools/packaging tools/packaging
 COPY tools/scripting tools/scripting
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-         build-essential ca-certificates curl libicu74 \
+         build-essential ca-certificates curl \
+
     && if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
            gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
