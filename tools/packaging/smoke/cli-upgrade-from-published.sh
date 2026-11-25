@@ -67,21 +67,21 @@ cp "$candidate_zip" "$feed/cli.zip"
 size="$(wc -c < "$feed/cli.zip" | tr -d ' ')"
 sha="$(sha256sum "$feed/cli.zip" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$feed/cli.zip" | awk '{print $1}')"
 
-python3 - "$feed" <<'PY' >/tmp/upgrade-feed.log 2>&1 &
-import sys, pathlib, http.server
-root = pathlib.Path(sys.argv[1])
-port_file = root / "feed-port"
-
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(root), **kwargs)
-    def log_message(self, fmt, *args):
-        pass
-
-httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
-httpd.serve_forever()
+# Pick the port in the parent, then python -m http.server. Binding via
+# ThreadingHTTPServer((127.0.0.1, 0)) hung on macos-15-intel (same class as the
+# update-ignores-proxy feed hang before that switch).
+feed_port="$(python3 - <<'PY'
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
 PY
+)"
+[[ -n "$feed_port" ]] || { echo "ASSERT: feed port missing" >&2; exit 1; }
+printf '%s' "$feed_port" >"$feed/feed-port"
+python3 -m http.server "$feed_port" --bind 127.0.0.1 --directory "$feed" >/tmp/upgrade-feed.log 2>&1 &
 httpd=$!
 cleanup() {
   kill "$httpd" 2>/dev/null || true
@@ -91,10 +91,16 @@ cleanup() {
 trap cleanup EXIT
 
 for _ in $(seq 1 50); do
-  [[ -f "$feed/feed-port" ]] && break
+  if curl -fsS --max-time 1 "http://127.0.0.1:$feed_port/" >/dev/null 2>&1; then
+    break
+  fi
   sleep 0.1
 done
-feed_port="$(cat "$feed/feed-port")"
+if ! curl -fsS --max-time 2 "http://127.0.0.1:$feed_port/" >/dev/null 2>&1; then
+  echo "ASSERT: upgrade feed not reachable on $feed_port" >&2
+  cat /tmp/upgrade-feed.log >&2 || true
+  exit 1
+fi
 
 python3 - "$feed" "$size" "$sha" "$version" "$feed_port" <<'PY'
 import json, sys
