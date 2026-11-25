@@ -195,6 +195,44 @@ public class VersionAndUpdateCommandBehaviorTests
         StringAssert.Contains(stderr, "Update feed network error");
     }
 
+    // Bug class: musl HttpClient still routes loopback TITANIUM_UPDATE_FEED through HTTPS_PROXY
+    // (recording proxy black-holes the request → "Update feed network error").
+    [TestMethod]
+    [Timeout(30000)]
+    public async Task Version_Check_LoopbackFeed_IgnoresHttpsProxyEnv()
+    {
+        var priorHttp = Environment.GetEnvironmentVariable("HTTP_PROXY");
+        var priorHttps = Environment.GetEnvironmentVariable("HTTPS_PROXY");
+        var priorNo = Environment.GetEnvironmentVariable("NO_PROXY");
+        try
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("NO_PROXY", "");
+
+            await using var feed = await FeedServer.StartAsync();
+            feed.Json("/feed.json", """{"version":"99.0.0-smoke","channel":"beta","products":{"cli":{"assets":{}}}}""");
+            Environment.SetEnvironmentVariable(FeedEnv, feed.Url("/feed.json"));
+
+            var (code, stdout, stderr) = await RunAsync(
+                () => VersionCommand.ExecuteAsync(["version", "--check", "--channel", "beta"]));
+
+            Assert.AreNotEqual(1, code, stderr);
+            Assert.IsFalse(
+                stderr.Contains("Update feed network error", StringComparison.OrdinalIgnoreCase),
+                stderr);
+            Assert.IsTrue(
+                stdout.Length > 0 || code is 0 or 2,
+                $"unexpected empty output code={code} stderr={stderr}");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", priorHttp);
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", priorHttps);
+            Environment.SetEnvironmentVariable("NO_PROXY", priorNo);
+        }
+    }
+
     // Bug class: a malformed or null manifest crashes with a stack trace instead of a one-line error.
     [TestMethod]
     [DataRow("{not json", "Update feed JSON error")]
