@@ -205,6 +205,8 @@ elif [[ "$PREV_CHART_VERSION" == "$chart_version" ]]; then
 else
   helm uninstall "$rel" -n "$ns" --ignore-not-found >/dev/null 2>&1 || true
   helm uninstall "$rel" --namespace "$ns" --ignore-not-found >/dev/null 2>&1 || true
+  # Wait out terminating PVCs from the candidate install so install_prev can recreate them.
+  kind_chart_assert_no_instance_leftovers
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
   install_prev_oci
   upgrade_to_candidate

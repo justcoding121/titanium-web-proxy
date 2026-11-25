@@ -593,8 +593,9 @@ internal static partial class UpdateCommand
     {
         try
         {
-            using var http = UpdateHttp.CreateClient(
+            using var http = UpdateHttp.CreateClientForUrl(
                 TimeSpan.FromMinutes(5),
+                asset.Url,
                 UpdateHttp.IsLoopbackProxy);
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
             var bytes = await http.GetByteArrayAsync(asset.Url);
@@ -1042,8 +1043,9 @@ internal sealed class UpdateFeedClient
 
         try
         {
-            using var http = UpdateHttp.CreateClient(
+            using var http = UpdateHttp.CreateClientForUrl(
                 TimeSpan.FromSeconds(15),
+                feed,
                 UpdateHttp.IsLoopbackProxy);
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
 
@@ -1081,7 +1083,7 @@ internal sealed class UpdateFeedClient
         }
         catch (HttpRequestException ex)
         {
-            return (null, $"Update feed network error: {ex.Message}");
+            return (null, $"Update feed network error: {UpdateHttp.FormatFailure(ex, updateTrafficMayBeCaptured: false)}");
         }
         catch (TaskCanceledException)
         {

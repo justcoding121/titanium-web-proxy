@@ -26,6 +26,12 @@ fi
 docker rm -f mgr-prev mgr-cand smoke-manager >/dev/null 2>&1 || true
 docker volume rm -f "$vol" >/dev/null 2>&1 || true
 
+# Manager images run as UID 1654; a fresh named volume is root-owned and
+# SQLite then fails with "unable to open database file".
+docker volume create "$vol" >/dev/null
+docker run --rm -v "${vol}:/var/lib/titanium-manager" busybox:1.37 \
+  chown -R 1654:1654 /var/lib/titanium-manager
+
 # Match image-health.sh: writable rootfs + tmpfs for state/tmp. --read-only
 # breaks older published manager images that write outside /var/lib.
 docker run -d --name mgr-prev -p 17701:7700 \

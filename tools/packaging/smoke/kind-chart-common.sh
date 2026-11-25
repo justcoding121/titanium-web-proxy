@@ -217,7 +217,7 @@ kind_chart_assert_no_instance_leftovers() {
   local attempt leftovers=""
   for attempt in $(seq 1 30); do
     leftovers=""
-    for kind in all secrets configmaps serviceaccounts role rolebindings poddisruptionbudget; do
+    for kind in all secrets configmaps serviceaccounts role rolebindings poddisruptionbudget pvc; do
       local chunk
       chunk="$(kubectl get "$kind" -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" -o name 2>/dev/null || true)"
       if [[ -n "$chunk" ]]; then
@@ -228,7 +228,7 @@ kind_chart_assert_no_instance_leftovers() {
       return 0
     fi
     if [[ "$attempt" -eq 1 || "$attempt" -eq 5 || "$attempt" -eq 15 ]]; then
-      kubectl delete pods,rs,deploy,sts -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" \
+      kubectl delete pods,rs,deploy,sts,pvc -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" \
         --force --grace-period=0 >/dev/null 2>&1 || true
     fi
     sleep 2
