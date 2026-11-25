@@ -4,9 +4,8 @@ name: inspector-install-smoke
 # Promotion PRs into beta and stable run it with no path filter, so a docs-only PR cannot leave a required check pending.
 
 on:
-  # All five legs run on pull_request/push so arch contexts can become required later.
-  # macos-15-intel and ubuntu-24.04-arm stay continue-on-error until three clean runs,
-  # then required-checks.json / ruleset are updated (explicit go-ahead).
+  # All five legs run on pull_request/push. ubuntu-24.04-arm is required;
+  # macos-15-intel stays continue-on-error (Intel Safari decrypt GET miss + runner scarcity).
   # macos-15-intel: fresh Safari decrypt GET is flaky on the Intel image even when
   # trust settings and other browsers pass (driver.log: "no decrypted GET … safari").
   # Fresh on intel therefore omits Safari; upgrade-verify still includes it.
@@ -15,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       os:
-        description: 'Runner leg (all = five OS legs; intel and arm stay advisory until promoted)'
+        description: 'Runner leg (all = five OS legs; macos-15-intel stays advisory)'
         required: false
         default: all
         type: choice
@@ -34,7 +33,7 @@ concurrency:
 
 jobs:
   install-smoke:
-    # All five legs on every event. intel/arm stay continue-on-error until promoted.
+    # All five legs on every event. Only macos-15-intel stays continue-on-error.
     # Do not gate with `if: matrix.os...` — actionlint rejects matrix in that context.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -44,7 +43,7 @@ jobs:
       matrix:
         # A concrete inputs.os always runs that single leg (dispatch only).
         os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest","macos-15-intel","ubuntu-24.04-arm"]') }}
-    continue-on-error: ${{ matrix.os == 'macos-15-intel' || matrix.os == 'ubuntu-24.04-arm' }}
+    continue-on-error: ${{ matrix.os == 'macos-15-intel' }}
     steps:
       - name: Screenshot folder
         shell: bash
@@ -165,31 +164,28 @@ jobs:
           Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\fresh-install.log`""
           & $driver fresh --exe $installed --browsers chrome,edge,brave,firefox,opera --out $log
           if ($LASTEXITCODE -ne 0) { throw "fresh failed $LASTEXITCODE" }
-          # Advisory until three clean runs: update under decrypt + in-app apply.
+          # Hard gates: update under decrypt + in-app apply (still logged to advisory.txt for summaries).
           # Avoid markdown table lines that start with "|" in this YAML block (breaks PyYAML).
-          function Write-AdvisoryRow([string]$Name, [string]$Result) {
-            if (-not $script:AdvisoryHeader) {
-              Add-Content $env:GITHUB_STEP_SUMMARY '### install-smoke advisory (windows)'
+          function Write-GateRow([string]$Name, [string]$Result) {
+            if (-not $script:GateHeader) {
+              Add-Content $env:GITHUB_STEP_SUMMARY '### install-smoke gates (windows)'
               Add-Content $env:GITHUB_STEP_SUMMARY ''
               Add-Content $env:GITHUB_STEP_SUMMARY ('|' + ' step | result |')
               Add-Content $env:GITHUB_STEP_SUMMARY ('|' + ' --- | --- |')
-              $script:AdvisoryHeader = $true
+              $script:GateHeader = $true
             }
             Add-Content $env:GITHUB_STEP_SUMMARY ('|' + " $Name | $Result |")
             Add-Content "$log\advisory.txt" "$Name=$Result"
-            if ($Result -eq 'fail') {
-              Write-Host "::warning title=Lifecycle advisory ($Name)::failed (advisory until promoted)"
-            }
           }
           & $driver update-under-decrypt --exe $installed --out $log
-          if ($LASTEXITCODE -ne 0) { Write-AdvisoryRow 'update-under-decrypt' 'fail' }
-          else { Write-AdvisoryRow 'update-under-decrypt' 'pass' }
+          if ($LASTEXITCODE -ne 0) { Write-GateRow 'update-under-decrypt' 'fail'; throw "update-under-decrypt failed $LASTEXITCODE" }
+          Write-GateRow 'update-under-decrypt' 'pass'
           if (Test-Path $cand) {
             & $driver in-app-apply --exe $installed --package $cand --out $log
-            if ($LASTEXITCODE -ne 0) { Write-AdvisoryRow 'in-app-apply' 'fail' }
-            else { Write-AdvisoryRow 'in-app-apply' 'pass' }
+            if ($LASTEXITCODE -ne 0) { Write-GateRow 'in-app-apply' 'fail'; throw "in-app-apply failed $LASTEXITCODE" }
+            Write-GateRow 'in-app-apply' 'pass'
           } else {
-            Write-AdvisoryRow 'in-app-apply' 'skip'
+            Write-GateRow 'in-app-apply' 'skip'
           }
           function Assert-WinInetCleared {
             $en = (Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -Name ProxyEnable -ErrorAction SilentlyContinue).ProxyEnable
@@ -439,20 +435,22 @@ jobs:
           run_driver wipe --out "$log"
           sudo dpkg -i "$cand" || sudo apt-get install -y -f
           run_driver fresh --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
-          # Advisory until three clean runs.
+          # Hard gates: update under decrypt + in-app apply.
           if run_driver update-under-decrypt --exe /opt/titanium-inspector/TitaniumInspector --out "$log"; then
             echo "update-under-decrypt=pass" | tee -a "$log/advisory.txt"
           else
-            echo "update-under-decrypt=fail (advisory)" | tee -a "$log/advisory.txt"
+            echo "update-under-decrypt=fail" | tee -a "$log/advisory.txt"
+            exit 1
           fi
           if [[ -f "$cand" ]]; then
             if run_driver in-app-apply --exe /opt/titanium-inspector/TitaniumInspector --package "$cand" --out "$log"; then
               echo "in-app-apply=pass" | tee -a "$log/advisory.txt"
             else
-              echo "in-app-apply=fail (advisory)" | tee -a "$log/advisory.txt"
+              echo "in-app-apply=fail" | tee -a "$log/advisory.txt"
+              exit 1
             fi
           else
-            echo "in-app-apply=skip (advisory)" | tee -a "$log/advisory.txt"
+            echo "in-app-apply=skip" | tee -a "$log/advisory.txt"
           fi
           dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r linux-x64 --self-contained true -o artifacts/cli/linux-x64
           ./tools/packaging/linux/build-deb-rpm.sh cli artifacts/cli/linux-x64 artifacts/candidate "$ver" linux-x64
@@ -629,10 +627,12 @@ jobs:
             echo "macos-15-intel: omitting Safari from fresh (known decrypt GET miss)"
           fi
           run_driver fresh --exe "$installed" --browsers "$fresh_browsers" --out "$log"
+          # Hard gates: update under decrypt + in-app apply.
           if run_driver update-under-decrypt --exe "$installed" --out "$log"; then
             echo "update-under-decrypt=pass" | tee -a "$log/advisory.txt"
           else
-            echo "update-under-decrypt=fail (advisory)" | tee -a "$log/advisory.txt"
+            echo "update-under-decrypt=fail" | tee -a "$log/advisory.txt"
+            exit 1
           fi
           in_app_zip="artifacts/candidate/TitaniumInspector-${RID}-in-app.zip"
           rm -f "$in_app_zip"
@@ -641,10 +641,11 @@ jobs:
             if run_driver in-app-apply --exe "$installed" --package "$in_app_zip" --out "$log"; then
               echo "in-app-apply=pass" | tee -a "$log/advisory.txt"
             else
-              echo "in-app-apply=fail (advisory)" | tee -a "$log/advisory.txt"
+              echo "in-app-apply=fail" | tee -a "$log/advisory.txt"
+              exit 1
             fi
           else
-            echo "in-app-apply=skip (advisory)" | tee -a "$log/advisory.txt"
+            echo "in-app-apply=skip" | tee -a "$log/advisory.txt"
           fi
           detach
           trap - EXIT
