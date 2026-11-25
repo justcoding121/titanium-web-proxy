@@ -229,6 +229,12 @@ fi
 # --- uninstall hygiene ---
 helm uninstall "$rel" -n "$ns" --ignore-not-found --wait --timeout 120s >/dev/null 2>&1 || true
 helm uninstall "$rel" --namespace "$ns" --ignore-not-found --wait --timeout 180s >/dev/null 2>&1 || true
+# Gateway bootstrap ConfigMap/TLS Secret use helm.sh/resource-policy: keep so
+# helm uninstall leaves them; remove them explicitly for uninstall hygiene.
+if [[ "$which" == gateway ]]; then
+  kubectl delete configmap,secret -l "app.kubernetes.io/instance=${rel}" -A \
+    --ignore-not-found >/dev/null 2>&1 || true
+fi
 kind_chart_assert_no_instance_leftovers
 if [[ "$which" == gateway ]]; then
   kind_chart_assert_gateway_crds

@@ -9,8 +9,8 @@ $ErrorActionPreference = 'Stop'
 
 $StaleName = 'Titanium.Xds.NOTICE'
 $MarkerName = 'smoke-plus-upgrade.marker'
-$PlusVersionA = '0.0.0-smoke-plus-a'
-$PlusVersionB = '0.0.0-smoke-plus-b'
+$PlusVersionA = '99.0.0-smoke-plus-a'
+$PlusVersionB = '99.0.0-smoke-plus-b'
 
 function Invoke-SelfTest {
     $listener = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::Loopback, 0)
@@ -111,9 +111,9 @@ $plusA = Join-Path $env:TEMP ("plus-a-" + [guid]::NewGuid().ToString('n') + '.zi
 $plusB = Join-Path $env:TEMP ("plus-b-" + [guid]::NewGuid().ToString('n') + '.zip')
 Copy-Item $PlusZip $plusA -Force
 
-if (-not (Test-Path (Join-Path $CliDir 'Titanium.Plus.dll'))) {
-    Invoke-ApplyPlusFeed -ZipPath $plusA -Version $PlusVersionA
-}
+# Always (re)apply A at a sentinel newer than any shipped Plus so the B prune
+# path is deterministic under LIFECYCLE_ENFORCE.
+Invoke-ApplyPlusFeed -ZipPath $plusA -Version $PlusVersionA
 
 New-PlusUpgradeZip -SourceZip $plusA -DestZip $plusB
 Invoke-ApplyPlusFeed -ZipPath $plusB -Version $PlusVersionB

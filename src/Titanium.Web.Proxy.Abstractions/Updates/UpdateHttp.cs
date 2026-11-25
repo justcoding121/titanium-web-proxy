@@ -101,6 +101,13 @@ public static class UpdateHttp
 
         public bool IsBypassed(Uri host)
         {
+            // Loopback feeds must never traverse a proxy — the CLI/Inspector smoke
+            // recorder is itself on loopback and would black-hole the request.
+            if (host.IsLoopback || IsLoopbackProxy(host))
+            {
+                return true;
+            }
+
             if (_inner.IsBypassed(host))
             {
                 return true;

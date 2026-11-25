@@ -14,7 +14,7 @@ param(
     [string] $CliZip,
     [string] $PlusZip,
     [string] $Titanium,
-    [string] $Version = '8.0.9-smoke'
+    [string] $Version = '99.0.0-smoke'
 )
 
 $ErrorActionPreference = 'Stop'

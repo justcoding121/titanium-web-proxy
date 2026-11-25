@@ -22,11 +22,11 @@ python3 - "$feed" "$size" "$sha" <<'PY'
 import json, sys
 feed, size, sha = sys.argv[1:]
 manifest = {
-  "version": "0.0.0-smoke",
+  "version": "99.0.0-smoke",
   "channel": "beta",
   "products": {
     "plus": {
-      "version": "0.0.0-smoke",
+      "version": "99.0.0-smoke",
       "bundle": {
         "url": "http://127.0.0.1:9/plus.zip",
         "sha256": sha,

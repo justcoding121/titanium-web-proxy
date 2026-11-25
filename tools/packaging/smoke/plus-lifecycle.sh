@@ -10,8 +10,8 @@ set -euo pipefail
 
 STALE_NAME="Titanium.Xds.NOTICE"
 MARKER_NAME="smoke-plus-upgrade.marker"
-PLUS_VERSION_A="0.0.0-smoke-plus-a"
-PLUS_VERSION_B="0.0.0-smoke-plus-b"
+PLUS_VERSION_A="99.0.0-smoke-plus-a"
+PLUS_VERSION_B="99.0.0-smoke-plus-b"
 
 self_test() {
   bash -n "$0"
@@ -134,9 +134,9 @@ trap 'rm -f "$plus_a" "$plus_b"; rm -rf "$work"' EXIT
 
 cp "$plus_zip" "$plus_a"
 
-if [[ ! -f "$cli_dir/Titanium.Plus.dll" ]]; then
-  apply_plus_feed "$cli_dir" "$plus_a" "$bin" "$PLUS_VERSION_A"
-fi
+# Always (re)apply A at a sentinel newer than any shipped Plus so the B prune
+# path is deterministic under LIFECYCLE_ENFORCE (local 8.0.9 > 0.0.0-* used to soft-skip).
+apply_plus_feed "$cli_dir" "$plus_a" "$bin" "$PLUS_VERSION_A"
 
 if [[ ! -f "$cli_dir/$STALE_NAME" ]]; then
   echo "NOTE: $STALE_NAME not in initial Plus bundle; stale-drop upgrade still validated when file was present" >&2
