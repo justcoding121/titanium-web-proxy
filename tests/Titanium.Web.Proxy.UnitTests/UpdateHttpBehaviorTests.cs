@@ -49,6 +49,32 @@ public class UpdateHttpBehaviorTests
     }
 
     [TestMethod]
+    public void CreateClientForUrl_DisablesProxyForLoopbackAndKeepsItForRemote()
+    {
+        using var loopback = UpdateHttp.CreateClientForUrl(
+            TimeSpan.FromSeconds(5),
+            "http://127.0.0.1:9/feed.json");
+        Assert.AreEqual(TimeSpan.FromSeconds(5), loopback.Timeout);
+
+        using var localhost = UpdateHttp.CreateClientForUrl(
+            TimeSpan.FromSeconds(4),
+            "http://localhost:9/feed.json");
+        Assert.AreEqual(TimeSpan.FromSeconds(4), localhost.Timeout);
+
+        using var remote = UpdateHttp.CreateClientForUrl(
+            TimeSpan.FromSeconds(3),
+            "https://example.com/feed.json",
+            UpdateHttp.IsLoopbackProxy);
+        Assert.AreEqual(TimeSpan.FromSeconds(3), remote.Timeout);
+
+        using var missing = UpdateHttp.CreateClientForUrl(
+            TimeSpan.FromSeconds(2),
+            null,
+            UpdateHttp.IsLoopbackProxy);
+        Assert.AreEqual(TimeSpan.FromSeconds(2), missing.Timeout);
+    }
+
+    [TestMethod]
     public void CreateClient_NonLoopbackDestination_RoutesViaEnvProxy()
     {
         var priorHttp = Environment.GetEnvironmentVariable("HTTP_PROXY");
@@ -72,7 +98,7 @@ public class UpdateHttpBehaviorTests
             {
                 // Closed proxy port — proves GetProxy returned the env proxy, not direct.
             }
-            catch (TaskCanceledException)
+            catch (System.Threading.Tasks.TaskCanceledException)
             {
                 // Some stacks surface the refused proxy as a timeout.
             }

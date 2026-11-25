@@ -25,6 +25,25 @@ public static class UpdateHttp
         return new HttpClient(handler) { Timeout = timeout };
     }
 
+    /// <summary>
+    /// Like <see cref="CreateClient"/>, but disables the proxy entirely when
+    /// <paramref name="url"/> is loopback (smoke feeds / local assets).
+    /// </summary>
+    public static HttpClient CreateClientForUrl(
+        TimeSpan timeout,
+        string? url,
+        Func<Uri?, bool>? bypassResolvedProxy = null)
+    {
+        if (!string.IsNullOrEmpty(url)
+            && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && (uri.IsLoopback || IsLoopbackProxy(uri)))
+        {
+            return new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = timeout };
+        }
+
+        return CreateClient(timeout, bypassResolvedProxy ?? IsLoopbackProxy);
+    }
+
     /// <summary>True when the resolved proxy URI points at a loopback host.</summary>
     public static bool IsLoopbackProxy(Uri? proxyUri)
     {
