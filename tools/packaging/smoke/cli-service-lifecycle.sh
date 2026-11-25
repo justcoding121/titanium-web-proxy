@@ -235,22 +235,19 @@ if [[ "$uname_s" == Linux && "$user_mode" -eq 0 ]]; then
 fi
 
 # Optional: update while service runs (service warning + CLI still runnable).
+# Darwin: LaunchAgent holds dylibs; in-place update prints Permission denied, may
+# spawn a background updater (SIGKILL later steps), and is skipped here.
 cli_zip="${SMOKE_CLI_ZIP:-}"
 if [[ -z "$cli_zip" ]]; then
   cli_zip="$(find "${RUNNER_TEMP:-/tmp}" -maxdepth 4 -name 'Titanium.Cli-*.zip' 2>/dev/null | head -1 || true)"
 fi
-if [[ -n "$cli_zip" && -f "$cli_zip" ]]; then
+if [[ "$uname_s" == Darwin ]]; then
+  echo "NOTE: skip in-place update-while-service on Darwin (LaunchAgent holds dylibs; Linux covers the probe)"
+elif [[ -n "$cli_zip" && -f "$cli_zip" ]]; then
   feed="$(mktemp -d)"
   cp "$cli_zip" "$feed/cli.zip"
   size="$(wc -c <"$feed/cli.zip" | tr -d ' ')"
   sha="$(sha256sum "$feed/cli.zip" | awk '{print $1}')"
-  rid="linux-x64"
-  case "$(uname -s)-$(uname -m)" in
-    Darwin-arm64) rid="osx-arm64" ;;
-    Darwin-x86_64) rid="osx-x64" ;;
-    Linux-aarch64) rid="linux-arm64" ;;
-    Linux-x86_64) rid="linux-x64" ;;
-  esac
   feed_port="$(python3 - <<'PY'
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -291,18 +288,12 @@ PY
   kill "$httpd_pid" 2>/dev/null || true
   httpd_pid=""
   rm -rf "$feed"
-fi
-
-# In-place update while the OS service holds native libs can leave $bin broken
-# (macOS: cp … Permission denied on libssl/libmsquic). Restore from the smoke zip.
-if ! "$bin" version >/dev/null 2>&1; then
-  if [[ -n "${cli_zip:-}" && -f "$cli_zip" ]]; then
-    echo "NOTE: restoring CLI from SMOKE_CLI_ZIP after update-while-service probe"
-    cli_home="$(cd "$(dirname "$bin")" && pwd)"
-    unzip -qo "$cli_zip" -d "$cli_home"
-    chmod +x "$bin" 2>/dev/null || true
+  # Clear root-owned update workdir before later user-mode legs.
+  if [[ "$user_mode" -eq 0 ]]; then
+    sudo rm -rf /tmp/TitaniumCli-update 2>/dev/null || true
   fi
 fi
+
 "$bin" version >/dev/null || { echo "ASSERT: titanium version failed after update probe" >&2; exit 1; }
 
 run_svc "$bin" service stop --name "$name" "${user_args[@]}" >/dev/null

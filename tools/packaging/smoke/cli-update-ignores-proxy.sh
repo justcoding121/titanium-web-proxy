@@ -64,12 +64,14 @@ chmod +x "$bin" || true
 
 # Prior machine-service update (sudo) can leave root-owned workdirs that make
 # this user-mode update fail with "Access to the path … is denied".
-if [[ "$(id -u)" -eq 0 ]]; then
-  rm -rf /tmp/TitaniumCli-update "${TMPDIR:-/tmp}/TitaniumCli-update" 2>/dev/null || true
-elif command -v sudo >/dev/null 2>&1; then
-  sudo rm -rf /tmp/TitaniumCli-update "${TMPDIR:-/tmp}/TitaniumCli-update" 2>/dev/null || true
+if [[ "$(uname -s)" == Linux ]]; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    rm -rf /tmp/TitaniumCli-update 2>/dev/null || true
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo rm -rf /tmp/TitaniumCli-update 2>/dev/null || true
+  fi
 else
-  rm -rf /tmp/TitaniumCli-update "${TMPDIR:-/tmp}/TitaniumCli-update" 2>/dev/null || true
+  rm -rf "${TMPDIR:-/tmp}/TitaniumCli-update" /tmp/TitaniumCli-update 2>/dev/null || true
 fi
 
 echo "cli-update-ignores-proxy candidate zip=${asset_zip} bytes=$(wc -c <"$asset_zip" | tr -d ' ') plus=${plus}"
@@ -147,6 +149,11 @@ for _ in $(seq 1 50); do
 done
 if [[ ! -f "$proxy_dir/port" || ! -f "$feed/feed-port" ]]; then
   echo "ASSERT: feed or proxy port file missing" >&2
+  echo "---- update-proxy.log ----" >&2
+  cat /tmp/update-proxy.log >&2 || true
+  echo "---- update-feed.log ----" >&2
+  cat /tmp/update-feed.log >&2 || true
+  ps -ef 2>/dev/null | grep -E 'python|titanium' | grep -v grep >&2 || true
   exit 1
 fi
 proxy_port="$(cat "$proxy_dir/port")"
