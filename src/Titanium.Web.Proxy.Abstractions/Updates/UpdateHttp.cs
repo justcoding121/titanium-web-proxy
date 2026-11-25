@@ -27,23 +27,21 @@ public static class UpdateHttp
     }
 
     /// <summary>
-    /// Like <see cref="CreateClient"/>, but disables the proxy entirely when
-    /// <paramref name="url"/> is loopback (smoke feeds / local assets).
+    /// Like <see cref="CreateClient"/>, preferring loopback-aware selective bypass for
+    /// <paramref name="url"/>. Do not short-circuit with <c>UseProxy=false</c> or
+    /// <c>SocketsHttpHandler</c>+<c>Proxy=null</c>: both still honor <c>HTTPS_PROXY</c>
+    /// on musl alpine under product-smoke (feed network error while curl --noproxy works).
+    /// <see cref="SelectiveBypassWebProxy"/> returns the destination from
+    /// <c>GetProxy</c> for loopback, which is the path that works on musl.
     /// </summary>
     public static HttpClient CreateClientForUrl(
         TimeSpan timeout,
         string? url,
         Func<Uri?, bool>? bypassResolvedProxy = null)
     {
-        if (!string.IsNullOrEmpty(url)
-            && Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            && (uri.IsLoopback || IsLoopbackProxy(uri)))
-        {
-            // Prefer HttpClientHandler here: SocketsHttpHandler with Proxy=null regressed
-            // musl-x64 alpine update smoke (feed network error under HTTPS_PROXY).
-            return new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = timeout };
-        }
-
+        // url is retained for call-site clarity and future diagnostics; bypass is
+        // driven by destination IsLoopback inside SelectiveBypassWebProxy.
+        _ = url;
         return CreateClient(timeout, bypassResolvedProxy ?? IsLoopbackProxy);
     }
 
