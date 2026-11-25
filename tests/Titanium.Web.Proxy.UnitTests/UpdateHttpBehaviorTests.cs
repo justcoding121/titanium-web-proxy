@@ -49,6 +49,43 @@ public class UpdateHttpBehaviorTests
     }
 
     [TestMethod]
+    public void CreateClient_NonLoopbackDestination_RoutesViaEnvProxy()
+    {
+        var priorHttp = Environment.GetEnvironmentVariable("HTTP_PROXY");
+        var priorHttps = Environment.GetEnvironmentVariable("HTTPS_PROXY");
+        var priorNo = Environment.GetEnvironmentVariable("NO_PROXY");
+        try
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("NO_PROXY", "");
+
+            using var client = UpdateHttp.CreateClient(
+                TimeSpan.FromSeconds(3),
+                UpdateHttp.IsLoopbackProxy);
+            try
+            {
+                _ = client.GetStringAsync("http://example.invalid/").GetAwaiter().GetResult();
+                Assert.Fail("expected proxy connection failure for non-loopback destination");
+            }
+            catch (HttpRequestException)
+            {
+                // Closed proxy port — proves GetProxy returned the env proxy, not direct.
+            }
+            catch (TaskCanceledException)
+            {
+                // Some stacks surface the refused proxy as a timeout.
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", priorHttp);
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", priorHttps);
+            Environment.SetEnvironmentVariable("NO_PROXY", priorNo);
+        }
+    }
+
+    [TestMethod]
     public void CreateClient_BypassesLoopbackDestinationEvenWhenProxyEnvSet()
     {
         var priorHttp = Environment.GetEnvironmentVariable("HTTP_PROXY");

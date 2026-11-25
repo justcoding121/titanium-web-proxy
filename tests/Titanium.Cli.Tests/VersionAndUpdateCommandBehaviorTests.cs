@@ -347,17 +347,34 @@ public class VersionAndUpdateCommandBehaviorTests
     [Timeout(30000)]
     public async Task Update_WhenCliDownloadChecksumDiffers_AbortsWithoutInstalling()
     {
-        await using var feed = await FeedServer.StartAsync();
-        feed.Bytes("/cli.zip", "application/zip", Encoding.UTF8.GetBytes("not the advertised zip"));
-        feed.Json("/feed.json", ManifestWithCli(feed.Url("/cli.zip"), new string('0', 64)));
-        Environment.SetEnvironmentVariable(FeedEnv, feed.Url("/feed.json"));
+        var priorHttp = Environment.GetEnvironmentVariable("HTTP_PROXY");
+        var priorHttps = Environment.GetEnvironmentVariable("HTTPS_PROXY");
+        var priorNo = Environment.GetEnvironmentVariable("NO_PROXY");
+        try
+        {
+            // Closed proxy: download must still reach the loopback asset (UseProxy=false).
+            Environment.SetEnvironmentVariable("HTTP_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("NO_PROXY", "");
 
-        var (code, stdout, stderr) = await RunAsync(() => UpdateCommand.ExecuteAsync(["update"]));
+            await using var feed = await FeedServer.StartAsync();
+            feed.Bytes("/cli.zip", "application/zip", Encoding.UTF8.GetBytes("not the advertised zip"));
+            feed.Json("/feed.json", ManifestWithCli(feed.Url("/cli.zip"), new string('0', 64)));
+            Environment.SetEnvironmentVariable(FeedEnv, feed.Url("/feed.json"));
 
-        Assert.AreEqual(1, code);
-        StringAssert.Contains(stderr, "SHA256 mismatch — aborting update.");
-        StringAssert.Contains(stdout, "Verifying SHA256");
-        Assert.IsFalse(stdout.Contains("Restarting updater", StringComparison.Ordinal), stdout);
+            var (code, stdout, stderr) = await RunAsync(() => UpdateCommand.ExecuteAsync(["update"]));
+
+            Assert.AreEqual(1, code);
+            StringAssert.Contains(stderr, "SHA256 mismatch — aborting update.");
+            StringAssert.Contains(stdout, "Verifying SHA256");
+            Assert.IsFalse(stdout.Contains("Restarting updater", StringComparison.Ordinal), stdout);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", priorHttp);
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", priorHttps);
+            Environment.SetEnvironmentVariable("NO_PROXY", priorNo);
+        }
     }
 
     // Bug class: a 404 on the asset URL surfaces as an unhandled exception.
