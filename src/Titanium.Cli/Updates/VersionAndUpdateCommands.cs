@@ -1081,7 +1081,7 @@ internal sealed class UpdateFeedClient
         }
         catch (HttpRequestException ex)
         {
-            return (null, $"Update feed network error: {ex.Message}");
+            return (null, $"Update feed network error: {UpdateHttp.FormatFailure(ex, updateTrafficMayBeCaptured: false)}");
         }
         catch (TaskCanceledException)
         {

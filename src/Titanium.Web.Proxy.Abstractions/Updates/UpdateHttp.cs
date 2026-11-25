@@ -97,7 +97,17 @@ public static class UpdateHttp
             set => _inner.Credentials = value;
         }
 
-        public Uri? GetProxy(Uri destination) => _inner.GetProxy(destination);
+        public Uri? GetProxy(Uri destination)
+        {
+            // Returning the destination URI means "go direct" for stacks that
+            // consult GetProxy before IsBypassed (observed on musl HttpClient).
+            if (destination.IsLoopback || IsLoopbackProxy(destination))
+            {
+                return destination;
+            }
+
+            return _inner.GetProxy(destination);
+        }
 
         public bool IsBypassed(Uri host)
         {
