@@ -27,6 +27,10 @@ on:
         description: 'required or extended'
         type: string
         default: required
+      artifact_run_id:
+        description: 'Optional Actions run id whose artifacts to download (reuse a prior dry-run)'
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       source:
@@ -55,12 +59,17 @@ on:
         options:
           - required
           - extended
+      artifact_run_id:
+        description: 'Reuse artifacts from this Actions run id (with source=run-artifacts)'
+        type: string
+        default: ''
   schedule:
     - cron: '41 5 * * *'
 
 permissions:
   contents: read
   packages: read
+  actions: read
   issues: write
 
 concurrency:
@@ -73,6 +82,7 @@ env:
   RELEASE_VERSION: ${{ github.event_name == 'schedule' && '' || inputs.version }}
   BROWSERS: ${{ github.event_name == 'schedule' && 'extended' || inputs.browsers }}
   LIFECYCLE_ENFORCE: ${{ vars.LIFECYCLE_ENFORCE }}
+  ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
 
 jobs:
   self-test:
@@ -128,16 +138,22 @@ jobs:
         with:
           name: inspector-win-x64
           path: dist/inspector-win-x64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: cli-win-x64
           path: dist/cli-win-x64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: plus
           path: dist/plus
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -243,16 +259,22 @@ jobs:
         with:
           name: inspector-osx-arm64
           path: dist/inspector-osx-arm64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: cli-osx-arm64
           path: dist/cli-osx-arm64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: plus
           path: dist/plus
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -334,11 +356,15 @@ jobs:
         with:
           name: inspector-osx-x64
           path: dist/inspector-osx-x64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: cli-osx-x64
           path: dist/cli-osx-x64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -406,16 +432,22 @@ jobs:
         with:
           pattern: inspector-linux-*64
           path: dist/inspector
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           pattern: cli-linux-*64
           path: dist/cli
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: plus
           path: dist/plus
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -517,11 +549,15 @@ jobs:
         with:
           pattern: inspector-linux-*arm64
           path: dist/inspector
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           pattern: cli-linux-*arm64
           path: dist/cli
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -616,6 +652,8 @@ jobs:
         with:
           name: cli-linux-x64
           path: dist
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published zip
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -685,6 +723,8 @@ jobs:
         with:
           name: image-oci-${{ matrix.name }}
           path: oci
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Pull the published tag
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -781,21 +821,29 @@ jobs:
         with:
           name: charts
           path: charts
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'titanium'
         with:
           name: image-oci-proxy
           path: artifacts/images/image-oci-proxy
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'gateway'
         with:
           pattern: 'image-oci-*'
           path: artifacts/images
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'manager'
         with:
           name: image-oci-manager
           path: artifacts/images/image-oci-manager
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: kind
         uses: helm/kind-action@v1
         with:
