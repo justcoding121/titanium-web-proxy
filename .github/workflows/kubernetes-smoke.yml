@@ -35,23 +35,15 @@ jobs:
       REL: twp
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
+      # Native docker build on ubuntu-24.04-arm (no buildx platforms / GHA cache).
+      # buildx+platforms previously pulled amd64 powershell layers → exec format error.
       - name: Build the image (arm64)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: tools/packaging/docker/Dockerfile
-          platforms: linux/arm64
-          load: true
-          push: false
-          tags: titanium-web-proxy:ci
-          build-args: |
-            VERSION=0.0.0-ci
-            COMMIT=${{ github.sha }}
-          # Scope the GHA cache per arch so an amd64 cache cannot feed arm64 layers
-          # (that produced "exec /bin/sh: exec format error" on ubuntu-24.04-arm).
-          cache-from: type=gha,scope=k8s-titanium-arm64
-          cache-to: type=gha,mode=min,scope=k8s-titanium-arm64
+        run: |
+          set -euo pipefail
+          docker build -f tools/packaging/docker/Dockerfile \
+            --build-arg VERSION=0.0.0-ci \
+            --build-arg COMMIT="${GITHUB_SHA}" \
+            -t titanium-web-proxy:ci .
       - uses: helm/kind-action@v1
         with:
           cluster_name: twp-arm
