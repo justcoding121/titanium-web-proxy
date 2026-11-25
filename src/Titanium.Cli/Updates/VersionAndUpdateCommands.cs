@@ -593,9 +593,11 @@ internal static partial class UpdateCommand
     {
         try
         {
-            using var http = UpdateHttp.CreateClient(
-                TimeSpan.FromMinutes(5),
-                UpdateHttp.IsLoopbackProxy);
+            var urlIsLoopback = Uri.TryCreate(asset.Url, UriKind.Absolute, out var assetUri)
+                && (assetUri.IsLoopback || UpdateHttp.IsLoopbackProxy(assetUri));
+            using var http = urlIsLoopback
+                ? new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromMinutes(5) }
+                : UpdateHttp.CreateClient(TimeSpan.FromMinutes(5), UpdateHttp.IsLoopbackProxy);
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
             var bytes = await http.GetByteArrayAsync(asset.Url);
             AsyncConsole.WriteLine("Verifying SHA256…");
@@ -1042,9 +1044,14 @@ internal sealed class UpdateFeedClient
 
         try
         {
-            using var http = UpdateHttp.CreateClient(
-                TimeSpan.FromSeconds(15),
-                UpdateHttp.IsLoopbackProxy);
+            // Loopback smoke feeds must not use the env proxy at all — some musl
+            // HttpClient stacks still route via HTTPS_PROXY even when IsBypassed is true.
+            var feedIsLoopback = !string.IsNullOrEmpty(feed)
+                && Uri.TryCreate(feed, UriKind.Absolute, out var feedUri)
+                && (feedUri.IsLoopback || UpdateHttp.IsLoopbackProxy(feedUri));
+            using var http = feedIsLoopback
+                ? new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(15) }
+                : UpdateHttp.CreateClient(TimeSpan.FromSeconds(15), UpdateHttp.IsLoopbackProxy);
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
 
             if (!string.IsNullOrEmpty(feed))
