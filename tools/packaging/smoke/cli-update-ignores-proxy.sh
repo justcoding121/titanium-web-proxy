@@ -78,22 +78,17 @@ echo "cli-update-ignores-proxy candidate zip=${asset_zip} bytes=$(wc -c <"$asset
 echo "cli-update-ignores-proxy candidate version:"
 "$bin" version || true
 
-# Darwin: prior service/mitm can leave the CLI dir's dylibs locked so in-place
-# update hits Permission denied. Copy to a fresh dir for the update probe.
+# Darwin: unzip a pristine CLI from the zip (not a copy of a dir that already
+# ran service/mitm). In-place update was Permission denied even after ditto.
 if [[ "$(uname -s)" == Darwin ]]; then
   pkill -f "${cli_dir}/titanium" 2>/dev/null || true
   sleep 1
   fresh_cli="$(mktemp -d)"
-  # ditto preserves exec bits better than cp -R on macOS CI images.
-  if command -v ditto >/dev/null 2>&1; then
-    ditto "$cli_dir" "$fresh_cli"
-  else
-    cp -R "$cli_dir"/. "$fresh_cli"/
-  fi
+  unzip -qo "$asset_zip" -d "$fresh_cli"
   chmod +x "$fresh_cli/titanium" 2>/dev/null || true
   cli_dir="$fresh_cli"
   bin="$fresh_cli/titanium"
-  echo "cli-update-ignores-proxy Darwin fresh CLI dir=${cli_dir}"
+  echo "cli-update-ignores-proxy Darwin pristine CLI dir=${cli_dir}"
 fi
 
 feed="$(mktemp -d)"
@@ -110,12 +105,12 @@ sha="$(sha256sum "$feed/$asset_name" 2>/dev/null | awk '{print $1}' || shasum -a
 
 hits="$proxy_dir/hits"
 : >"$hits"
-# On-disk helpers (heredoc+background was flaky on macOS intel). Use plain
-# HTTPServer — ThreadingHTTPServer hung on intel before writing feed-port.
+# Proxy: raw socket (works on macOS intel). Feed: python -m http.server like the
+# other green smoke legs — HTTPServer((127.0.0.1,0)) hung on intel 3.14 before
+# writing feed-port.
 cat >"$proxy_dir/proxy_helper.py" <<'PY'
 import socket, sys, pathlib, threading
 root = pathlib.Path(sys.argv[1])
-(root / "starting").write_text("1", encoding="utf-8")
 hits = root / "hits"
 port_file = root / "port"
 srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -138,25 +133,19 @@ while True:
     c, _ = srv.accept()
     threading.Thread(target=one, args=(c,), daemon=True).start()
 PY
-cat >"$feed/feed_helper.py" <<'PY'
-import sys, pathlib, http.server
-root = pathlib.Path(sys.argv[1])
-(root / "starting").write_text("1", encoding="utf-8")
-port_file = root / "feed-port"
-
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(root), **kwargs)
-    def log_message(self, fmt, *args):
-        pass
-
-httpd = http.server.HTTPServer(("127.0.0.1", 0), Handler)
-port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
-httpd.serve_forever()
-PY
 python3 "$proxy_dir/proxy_helper.py" "$proxy_dir" >/tmp/update-proxy.log 2>&1 &
 proxy_py=$!
-python3 "$feed/feed_helper.py" "$feed" >/tmp/update-feed.log 2>&1 &
+feed_port="$(python3 - <<'PY'
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)"
+printf '%s' "$feed_port" >"$feed/feed-port"
+python3 -m http.server "$feed_port" --bind 127.0.0.1 --directory "$feed" >/tmp/update-feed.log 2>&1 &
 httpd=$!
 
 cleanup() {
