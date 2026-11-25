@@ -115,8 +115,11 @@ manifest = {
 open(feed + "/release-manifest.json", "w", encoding="utf-8").write(json.dumps(manifest))
 PY
 
+# Match SpecialFolder.LocalApplicationData (WriteCliIdentity).
 if [[ -n "${LOCALAPPDATA:-}" ]]; then
   identity_dir="$LOCALAPPDATA/TitaniumCli"
+elif [[ "$(uname -s)" == Darwin ]]; then
+  identity_dir="$HOME/Library/Application Support/TitaniumCli"
 else
   identity_dir="${XDG_DATA_HOME:-$HOME/.local/share}/TitaniumCli"
 fi
@@ -138,27 +141,19 @@ set -e
 cat "$upd_log"
 
 # Shipped macOS CLI updaters emit `cp -a` without making 0444 Homebrew dylibs
-# writable first. The candidate fixes that; the published client cannot. Record
-# the known failure with evidence instead of a silent skip.
-accept_shipped_readonly_dylib_gap() {
-  local reason="$1"
-  if [[ "$(uname -s)" != Darwin ]]; then
-    return 1
-  fi
-  if grep -Eq 'Permission denied' "$upd_log" \
-    && grep -Eq 'libssl|libcrypto|libmsquic' "$upd_log"; then
-    echo "ACCEPTED_GAP: shipped macOS CLI updater cannot overwrite 0444 dylibs ($reason)."
-    echo "ACCEPTED_GAP: candidate BuildUnixScript uses chmod u+w + cp -af; published client still emits the old script."
-    echo "cli upgrade from published accepted-gap (shipped-updater-readonly-dylib)"
-    return 0
-  fi
-  return 1
-}
+# writable first. The candidate fixes that; the published client cannot. The
+# parent still writes installed-release.json before apply runs, so identity can
+# advance even when the overlay fails — treat Permission denied as the gap.
+if [[ "$(uname -s)" == Darwin ]] \
+  && grep -Eq 'Permission denied' "$upd_log" \
+  && grep -Eq 'libssl|libcrypto|libmsquic' "$upd_log"; then
+  echo "ACCEPTED_GAP: shipped macOS CLI updater cannot overwrite 0444 dylibs (update exit $rc)."
+  echo "ACCEPTED_GAP: candidate BuildUnixScript uses chmod u+w + cp -af; published client still emits the old script."
+  echo "cli upgrade from published accepted-gap (shipped-updater-readonly-dylib)"
+  exit 0
+fi
 
 if [[ "$rc" -ne 0 ]]; then
-  if accept_shipped_readonly_dylib_gap "update exit $rc"; then
-    exit 0
-  fi
   echo "ASSERT: published CLI update exited $rc" >&2
   exit 1
 fi
@@ -169,9 +164,6 @@ if [[ -f "$identity_dir/installed-release.json" ]]; then
   if ! grep -q "$version" "$identity_dir/installed-release.json" 2>/dev/null; then
     # Some older clients write only the tag; accept either form.
     if ! grep -Eqi "${version%%-*}|smoke" "$identity_dir/installed-release.json" 2>/dev/null; then
-      if accept_shipped_readonly_dylib_gap "identity did not advance"; then
-        exit 0
-      fi
       echo "ASSERT: installed-release.json was not updated to $version" >&2
       cat "$identity_dir/installed-release.json" >&2 || true
       exit 1

@@ -206,9 +206,13 @@ PY
 fi
 
 # Seed an older installed identity so the feed is offered (CLI path only).
+# Must match SpecialFolder.LocalApplicationData used by WriteCliIdentity:
+# Windows LOCALAPPDATA, macOS ~/Library/Application Support, Linux XDG.
 if [[ "$plus" -eq 0 ]]; then
   if [[ -n "${LOCALAPPDATA:-}" ]]; then
     identity_dir="$LOCALAPPDATA/TitaniumCli"
+  elif [[ "$(uname -s)" == Darwin ]]; then
+    identity_dir="$HOME/Library/Application Support/TitaniumCli"
   else
     identity_dir="${XDG_DATA_HOME:-$HOME/.local/share}/TitaniumCli"
   fi
