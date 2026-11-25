@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http;
 
 namespace Titanium.Web.Proxy.Abstractions.Updates;
 
@@ -38,7 +39,14 @@ public static class UpdateHttp
             && Uri.TryCreate(url, UriKind.Absolute, out var uri)
             && (uri.IsLoopback || IsLoopbackProxy(uri)))
         {
-            return new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = timeout };
+            // SocketsHttpHandler + Proxy=null: musl HttpClientHandler has been observed to
+            // still honor HTTPS_PROXY when only UseProxy=false is set (arm64 alpine smoke).
+            return new HttpClient(new SocketsHttpHandler
+            {
+                UseProxy = false,
+                Proxy = null,
+            })
+            { Timeout = timeout };
         }
 
         return CreateClient(timeout, bypassResolvedProxy ?? IsLoopbackProxy);

@@ -161,9 +161,12 @@ if ! grep -Eq 'Plus: [0-9]' <<<"$ver"; then
   exit 1
 fi
 
+set +e
 "$bin" update --remove-plus
-if [[ $LASTEXITCODE -ne 0 ]]; then
-  echo "ASSERT: titanium update --remove-plus failed" >&2
+remove_rc=$?
+set -e
+if [[ "$remove_rc" -ne 0 ]]; then
+  echo "ASSERT: titanium update --remove-plus failed (exit=$remove_rc)" >&2
   exit 1
 fi
 if [[ -f "$cli_dir/Titanium.Plus.dll" ]]; then

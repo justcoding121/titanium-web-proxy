@@ -209,6 +209,9 @@ else
   kind_chart_assert_no_instance_leftovers
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
   install_prev_oci
+  if [[ "$which" == gateway ]]; then
+    kind_chart_protect_gateway_bootstrap
+  fi
   upgrade_to_candidate
   kind_chart_assert_probes "$which"
   echo "chart $which upgrade $PREV_CHART_VERSION -> candidate ok"
@@ -218,6 +221,7 @@ fi
 # --- rollback ---
 if [[ "$upgrade_ok" == "1" ]]; then
   if [[ "$which" == gateway ]]; then
+    kind_chart_ensure_gateway_tls_secret
     helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m
   else
     helm rollback "$rel" 1 -n "$ns" --wait --timeout 180s

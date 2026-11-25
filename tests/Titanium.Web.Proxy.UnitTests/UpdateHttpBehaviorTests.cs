@@ -170,4 +170,63 @@ public class UpdateHttpBehaviorTests
             Environment.SetEnvironmentVariable("NO_PROXY", priorNo);
         }
     }
+
+    [TestMethod]
+    public void CreateClientForUrl_LoopbackIgnoresClosedHttpsProxy()
+    {
+        var priorHttp = Environment.GetEnvironmentVariable("HTTP_PROXY");
+        var priorHttps = Environment.GetEnvironmentVariable("HTTPS_PROXY");
+        var priorNo = Environment.GetEnvironmentVariable("NO_PROXY");
+        System.Net.HttpListener? listener = null;
+        try
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("NO_PROXY", "");
+
+            var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            probe.Start();
+            var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+            probe.Stop();
+
+            listener = new System.Net.HttpListener();
+            var prefix = $"http://127.0.0.1:{port}/";
+            listener.Prefixes.Add(prefix);
+            listener.Start();
+            var serve = listener.GetContextAsync().ContinueWith(static t =>
+            {
+                if (!t.IsCompletedSuccessfully)
+                {
+                    return;
+                }
+
+                var ctx = t.Result;
+                ctx.Response.StatusCode = 200;
+                var buf = System.Text.Encoding.UTF8.GetBytes("{\"feed\":true}");
+                ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+                ctx.Response.Close();
+            });
+
+            var feedUrl = $"http://127.0.0.1:{port}/feed.json";
+            using var client = UpdateHttp.CreateClientForUrl(TimeSpan.FromSeconds(5), feedUrl);
+            var json = client.GetStringAsync(feedUrl).GetAwaiter().GetResult();
+            serve.Wait(TimeSpan.FromSeconds(2));
+            StringAssert.Contains(json, "feed");
+        }
+        finally
+        {
+            try
+            {
+                listener?.Stop();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            Environment.SetEnvironmentVariable("HTTP_PROXY", priorHttp);
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", priorHttps);
+            Environment.SetEnvironmentVariable("NO_PROXY", priorNo);
+        }
+    }
 }

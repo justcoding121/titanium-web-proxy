@@ -206,6 +206,36 @@ kind_chart_assert_probes() {
   esac
 }
 
+# Published gateway charts may create the bootstrap TLS Secret without
+# helm.sh/resource-policy: keep. Candidate templates omit it via lookup when it
+# already exists, so helm upgrade would delete it and helm rollback then fails
+# with "no Secret with the name …-data-tls found". Stamp keep before upgrade and
+# recreate an empty Opaque secret before rollback when missing.
+kind_chart_protect_gateway_bootstrap() {
+  local tls="${rel}-data-tls"
+  local cm="${rel}-data"
+  if kubectl -n "$ns" get secret "$tls" >/dev/null 2>&1; then
+    kubectl -n "$ns" annotate secret "$tls" "helm.sh/resource-policy=keep" --overwrite >/dev/null 2>&1 || true
+  fi
+  if kubectl -n "$ns" get configmap "$cm" >/dev/null 2>&1; then
+    kubectl -n "$ns" annotate configmap "$cm" "helm.sh/resource-policy=keep" --overwrite >/dev/null 2>&1 || true
+  fi
+}
+
+kind_chart_ensure_gateway_tls_secret() {
+  local tls="${rel}-data-tls"
+  if kubectl -n "$ns" get secret "$tls" >/dev/null 2>&1; then
+    kind_chart_protect_gateway_bootstrap
+    return 0
+  fi
+  kubectl -n "$ns" create secret generic "$tls" --from-literal=placeholder=1 >/dev/null
+  kubectl -n "$ns" label secret "$tls" \
+    "app.kubernetes.io/instance=${rel}" \
+    "app.kubernetes.io/name=titanium-gateway" \
+    --overwrite >/dev/null 2>&1 || true
+  kubectl -n "$ns" annotate secret "$tls" "helm.sh/resource-policy=keep" --overwrite >/dev/null 2>&1 || true
+}
+
 kind_chart_assert_no_instance_leftovers() {
   local scope=()
   if [[ "${which:-}" == gateway ]]; then
