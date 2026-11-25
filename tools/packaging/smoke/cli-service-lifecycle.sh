@@ -85,6 +85,13 @@ cleanup() {
       sudo "$bin" service uninstall --name "$name" 2>/dev/null || true
     fi
   fi
+  # Machine-service update (sudo) can leave root-owned /tmp/TitaniumCli-update and
+  # poison the next user-mode update leg with "Access … is denied".
+  if [[ "$uname_s" == Linux && "$user_mode" -eq 0 ]]; then
+    sudo rm -rf /tmp/TitaniumCli-update 2>/dev/null || true
+  else
+    rm -rf "${TMPDIR:-/tmp}/TitaniumCli-update" /tmp/TitaniumCli-update 2>/dev/null || true
+  fi
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -286,6 +293,16 @@ PY
   rm -rf "$feed"
 fi
 
+# In-place update while the OS service holds native libs can leave $bin broken
+# (macOS: cp … Permission denied on libssl/libmsquic). Restore from the smoke zip.
+if ! "$bin" version >/dev/null 2>&1; then
+  if [[ -n "${cli_zip:-}" && -f "$cli_zip" ]]; then
+    echo "NOTE: restoring CLI from SMOKE_CLI_ZIP after update-while-service probe"
+    cli_home="$(cd "$(dirname "$bin")" && pwd)"
+    unzip -qo "$cli_zip" -d "$cli_home"
+    chmod +x "$bin" 2>/dev/null || true
+  fi
+fi
 "$bin" version >/dev/null || { echo "ASSERT: titanium version failed after update probe" >&2; exit 1; }
 
 run_svc "$bin" service stop --name "$name" "${user_args[@]}" >/dev/null

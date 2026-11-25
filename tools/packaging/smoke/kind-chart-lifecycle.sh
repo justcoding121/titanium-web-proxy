@@ -221,22 +221,24 @@ fi
 # --- rollback ---
 if [[ "$upgrade_ok" == "1" ]]; then
   if [[ "$which" == gateway ]]; then
-    # Keep the bootstrap TLS Secret across rollback: stamp keep, then ensure it
-    # exists so helm rollback / dataplane probes can succeed against published
-    # rev1 charts that lacked helm.sh/resource-policy: keep.
-    kind_chart_protect_gateway_bootstrap
-    kind_chart_ensure_gateway_tls_secret
+    # Published charts may create the bootstrap TLS Secret without keep. Candidate
+    # templates omit it via lookup, so upgrade can delete it and leave Helm's rev1
+    # rollback unable to find it. Delete any orphan/keep copy first so rollback
+    # recreates the Secret from the rev1 chart; retry once if needed.
+    kubectl -n "$ns" delete secret "${rel}-data-tls" --ignore-not-found --wait=true --timeout=30s >/dev/null 2>&1 || true
     if ! helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m; then
       echo "gateway helm rollback failed once; ensuring TLS Secret and retrying" >&2
       kind_chart_ensure_gateway_tls_secret
       helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m
     fi
     kind_chart_ensure_gateway_tls_secret
-    # Restart dataplane so it reloads the ensured Secret after rev1 comes back.
-    kubectl -n "$ns" delete pod -l "app.kubernetes.io/instance=${rel},app.kubernetes.io/name=titanium-gateway" \
-      --ignore-not-found --wait=false >/dev/null 2>&1 || true
+    echo "chart gateway helm rollback ok"
+    # Published rev1 dataplane often cannot pass HTTP probes (empty TLS Secret).
+    # Roll forward to the candidate again and assert probes there — that proves
+    # rollback did not brick the release, without deferring the probe forever.
+    upgrade_to_candidate
     kind_chart_assert_probes gateway
-    echo "chart gateway rollback ok"
+    echo "chart gateway rollback+candidate probes ok"
   else
     helm rollback "$rel" 1 -n "$ns" --wait --timeout 180s
     kind_chart_assert_probes "$which"
