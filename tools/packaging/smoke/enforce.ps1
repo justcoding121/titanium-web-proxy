@@ -10,8 +10,22 @@
 
   Uses $args only (no param block). PowerShell may strip a bare "--" before the
   script runs; both "<name> -- <cmd>..." and "<name> <cmd>..." are accepted.
+
+  Persists stdout/stderr under $env:RUNNER_TEMP/product-smoke/logs/<name>.log
+  so the product-smoke artifact can show the failing assertion when job logs
+  are unavailable.
 #>
 $ErrorActionPreference = 'Stop'
+
+function Get-SmokeLogRoot {
+    $root = if ($env:RUNNER_TEMP) {
+        Join-Path $env:RUNNER_TEMP 'product-smoke'
+    } else {
+        Join-Path ([IO.Path]::GetTempPath()) 'product-smoke'
+    }
+    New-Item -ItemType Directory -Force -Path (Join-Path $root 'logs') | Out-Null
+    return $root
+}
 
 function Write-LifecycleSummary {
     param([string] $StepName, [int] $ExitCode, [string] $Detail)
@@ -40,39 +54,37 @@ function Invoke-Enforce {
     $cmdArgs = @()
     if ($Command.Count -gt 1) { $cmdArgs = $Command[1..($Command.Count - 1)] }
 
-    $log = New-TemporaryFile
-    try {
-        $p = Start-Process -FilePath $exe -ArgumentList $cmdArgs -NoNewWindow -Wait -PassThru `
-            -RedirectStandardOutput $log.FullName -RedirectStandardError ($log.FullName + '.err')
-        $code = $p.ExitCode
-        if (Test-Path $log.FullName) { Get-Content -Path $log.FullName | Write-Host }
-        $errPath = $log.FullName + '.err'
-        if (Test-Path $errPath) { Get-Content -Path $errPath | Write-Host }
-        if ($code -eq 0) { return 0 }
+    $root = Get-SmokeLogRoot
+    $logPath = Join-Path $root "logs\$StepName.log"
+    $errPath = Join-Path $root "logs\$StepName.err.log"
 
-        $text = ''
-        if (Test-Path $log.FullName) {
-            $text += [string](Get-Content -Path $log.FullName -Raw -ErrorAction SilentlyContinue)
-        }
-        if (Test-Path $errPath) {
-            $text += [string](Get-Content -Path $errPath -Raw -ErrorAction SilentlyContinue)
-        }
-        $detail = ($text -replace '\s+', ' ').Trim()
-        if ($detail.Length -gt 400) { $detail = $detail.Substring(0, 400) }
+    $p = Start-Process -FilePath $exe -ArgumentList $cmdArgs -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput $logPath -RedirectStandardError $errPath
+    $code = $p.ExitCode
+    if (Test-Path $logPath) { Get-Content -Path $logPath | Write-Host }
+    if (Test-Path $errPath) { Get-Content -Path $errPath | Write-Host }
+    if ($code -eq 0) { return 0 }
 
-        if ($env:LIFECYCLE_ENFORCE -eq 'true') {
-            Write-Host "lifecycle enforce hard-fail: $StepName exit=$code" -ForegroundColor Red
-            return $code
-        }
-
-        Write-Warning "Lifecycle advisory ($StepName): exit $code — $detail"
-        Write-Host "::warning title=Lifecycle advisory ($StepName)::exit $code — $detail"
-        Write-LifecycleSummary -StepName $StepName -ExitCode $code -Detail $detail
-        return 0
+    $text = ''
+    if (Test-Path $logPath) {
+        $text += [string](Get-Content -Path $logPath -Raw -ErrorAction SilentlyContinue)
     }
-    finally {
-        Remove-Item -Path $log.FullName, ($log.FullName + '.err') -Force -ErrorAction SilentlyContinue
+    if (Test-Path $errPath) {
+        $text += [string](Get-Content -Path $errPath -Raw -ErrorAction SilentlyContinue)
     }
+    $detail = ($text -replace '\s+', ' ').Trim()
+    if ($detail.Length -gt 400) { $detail = $detail.Substring(0, 400) }
+
+    if ($env:LIFECYCLE_ENFORCE -eq 'true') {
+        Write-Host "lifecycle enforce hard-fail: $StepName exit=$code" -ForegroundColor Red
+        Write-Host "lifecycle enforce log: $logPath"
+        return $code
+    }
+
+    Write-Warning "Lifecycle advisory ($StepName): exit $code — $detail"
+    Write-Host "::warning title=Lifecycle advisory ($StepName)::exit $code — $detail"
+    Write-LifecycleSummary -StepName $StepName -ExitCode $code -Detail $detail
+    return 0
 }
 
 function Invoke-EnforceSelfTest {
@@ -86,6 +98,10 @@ function Invoke-EnforceSelfTest {
 
     $ok = Invoke-Enforce -StepName 'self-test-hard-ok' -Command @('cmd.exe', '/c', 'exit 0')
     if ($ok -ne 0) { throw 'self-test: hard mode should pass a zero exit' }
+
+    $root = Get-SmokeLogRoot
+    $hardLog = Join-Path $root 'logs\self-test-hard.log'
+    if (-not (Test-Path $hardLog)) { throw 'self-test: expected persisted hard-fail log' }
 
     Remove-Item Env:LIFECYCLE_ENFORCE -ErrorAction SilentlyContinue
     Write-Host 'enforce self-test ok'

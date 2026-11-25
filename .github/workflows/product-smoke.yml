@@ -167,6 +167,7 @@ jobs:
           if (-not $msi -or -not $zip -or -not $plus) { throw 'ASSERT: windows artifacts missing' }
           Write-Host "windows-smoke: install inspector"
           $log = Join-Path $env:RUNNER_TEMP 'product-smoke'
+          New-Item -ItemType Directory -Force -Path (Join-Path $log 'logs') | Out-Null
           $exe = ./tools/packaging/smoke/install-inspector.ps1 -Msi $msi.FullName -LogDir $log
           Write-Host "windows-smoke: prove inspector $exe"
           $env:SMOKE_EXE = "$exe"
@@ -269,6 +270,7 @@ jobs:
           zip="$(find dist -name 'Titanium.Cli-osx-arm64.zip' | head -1)"
           test -n "$dmg" && test -n "$zip"
           log="${RUNNER_TEMP}/product-smoke"
+          mkdir -p "$log/logs"
           exe="$(bash tools/packaging/smoke/install-inspector.sh "$dmg" "$log")"
           browsers=chrome,firefox,safari
           [[ "${BROWSERS}" == "extended" ]] && browsers=chrome,firefox,safari,edge
@@ -276,6 +278,7 @@ jobs:
           cli="${RUNNER_TEMP}/cli"
           bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
           codesign --verify --verbose "$bin" || { echo "ASSERT: CLI codesign verify failed" >&2; exit 1; }
+          echo "product-smoke macos-arm64 candidate CLI:"; "$bin" version || true
           bash tools/packaging/smoke/cli-mitm.sh "$bin" "$log/cli"
           SMOKE_CLI_ZIP="$zip" bash tools/packaging/smoke/enforce.sh cli-service-lifecycle -- \
             bash tools/packaging/smoke/cli-service-lifecycle.sh "$bin"
@@ -353,10 +356,12 @@ jobs:
           zip="$(find dist -name 'Titanium.Cli-osx-x64.zip' | head -1)"
           test -n "$dmg" && test -n "$zip"
           log="${RUNNER_TEMP}/product-smoke"
+          mkdir -p "$log/logs"
           exe="$(bash tools/packaging/smoke/install-inspector.sh "$dmg" "$log")"
           bash tools/packaging/smoke/retry.sh --leg gui -- bash tools/packaging/smoke/prove-inspector.sh "$exe" "chrome,firefox,safari" "$log/gui"
           cli="${RUNNER_TEMP}/cli"
           bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
+          echo "product-smoke macos-x64 candidate CLI:"; "$bin" version || true
           bash tools/packaging/smoke/cli-mitm.sh "$bin" "$log/cli"
           SMOKE_CLI_ZIP="$zip" bash tools/packaging/smoke/enforce.sh cli-service-lifecycle -- \
             bash tools/packaging/smoke/cli-service-lifecycle.sh "$bin"
@@ -426,6 +431,7 @@ jobs:
           set -euo pipefail
           chmod +x tools/packaging/smoke/*.sh
           export LIFECYCLE_PROOF="${LIFECYCLE_PROOF}"
+          mkdir -p "${RUNNER_TEMP}/product-smoke/logs"
           pub_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft==false and .prerelease==false)][0].tag_name' || true)"
           if [[ -n "$pub_tag" && "$pub_tag" != "null" ]]; then
             pub_dir="${RUNNER_TEMP}/published-cli"

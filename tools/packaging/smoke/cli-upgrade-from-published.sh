@@ -47,6 +47,9 @@ if [[ ! -f "$published_zip" || ! -f "$candidate_zip" ]]; then
   exit 1
 fi
 
+echo "cli-upgrade-from-published published=${published_zip} bytes=$(wc -c <"$published_zip" | tr -d ' ')"
+echo "cli-upgrade-from-published candidate=${candidate_zip} bytes=$(wc -c <"$candidate_zip" | tr -d ' ') offer=${version}"
+
 old="$work/old"
 rm -rf "$old"
 mkdir -p "$old"
