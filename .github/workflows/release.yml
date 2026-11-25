@@ -1253,6 +1253,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      actions: read
       issues: write
     uses: ./.github/workflows/product-smoke.yml
     with:
