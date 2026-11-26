@@ -245,6 +245,8 @@ public class UpdateCommandTests
         StringAssert.Contains(script, "chmod -R u+w \"$install_dir\"");
         StringAssert.Contains(script, "rm -f \"$target\"");
         StringAssert.Contains(script, "cp -Pp \"$f\" \"$target\"");
+        StringAssert.Contains(script, "$install_dir/$rel");
+        Assert.IsFalse(script.Contains("$$", StringComparison.Ordinal), "$$ is the shell pid, not the relative path");
         StringAssert.Contains(script, "\\( -type f -o -type l \\)");
         StringAssert.Contains(script, "-mindepth 1 -type d");
         Assert.IsFalse(script.Contains("cp -af", StringComparison.Ordinal));

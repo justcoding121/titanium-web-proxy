@@ -1199,7 +1199,7 @@ public static class UpdateApplyHelper
     {
         sb.AppendLine("while IFS= read -r -d '' f; do");
         sb.AppendLine($"  rel=\"${{f#\"{src}\"/}}\"");
-        sb.AppendLine($"  target=\"{dest}/$$rel\"");
+        sb.AppendLine("  target=\"" + dest + "/$rel\"");
         sb.AppendLine("  mkdir -p \"$(dirname \"$target\")\"");
         sb.AppendLine("  rm -f \"$target\"");
         sb.AppendLine("  cp -Pp \"$f\" \"$target\"");
@@ -1207,7 +1207,7 @@ public static class UpdateApplyHelper
         sb.AppendLine("while IFS= read -r -d '' d; do");
         sb.AppendLine($"  rel=\"${{d#\"{src}\"/}}\"");
         sb.AppendLine("  if [[ -n \"$rel\" ]]; then");
-        sb.AppendLine($"    mkdir -p \"{dest}/$$rel\"");
+        sb.AppendLine("    mkdir -p \"" + dest + "/$rel\"");
         sb.AppendLine("  fi");
         sb.AppendLine($"done < <(find \"{src}\" -mindepth 1 -type d -print0)");
     }
