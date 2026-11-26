@@ -221,11 +221,15 @@ if [[ "$upgrade_ok" == "1" ]]; then
     # Candidate→candidate rollback is the shipped-path proof. Published rev1 may
     # still lack keep; do not assert HTTP probes against it.
     tgz="$(ls "$charts_dir"/$tgz_glob | head -1)"
-    # Values-only bump (replicaCount) creates the next Helm revision without
-    # changing the rendered ConfigMap. Hold the controller at 0 so its
-    # server-side apply cannot rewrite twp.yaml during --wait. Helm itself
-    # must keep the live edit.
+    # The controller server-side applies twp.yaml. Scale it to 0 and wait
+    # before the edit, then bump only the data-plane replica count. The
+    # rendered ConfigMap does not change, so Helm must keep the live edit.
     cm="${rel}-data"
+    helm upgrade "$rel" "$tgz" --namespace "$ns" \
+      -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" \
+      --set dataPlane.service.type=ClusterIP \
+      --set controller.replicaCount=0 \
+      --wait --timeout 8m
     live="$(mktemp)"
     kubectl -n "$ns" get configmap "$cm" -o jsonpath='{.data.twp\.yaml}' >"$live"
     printf '\n# smoke-preserve-marker\n' >>"$live"
