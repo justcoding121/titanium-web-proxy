@@ -537,15 +537,18 @@ internal static partial class UpdateCommand
         var relaunch = ResolveCliRelaunchPath(installDir);
 
         AsyncConsole.WriteLine("Restarting updater…");
+        // Identity is written by the detached apply script after a successful
+        // overlay. Writing it here made smoke assertions vacuous (parent exit
+        // alone looked like a completed update).
         CliUpdateApplyHelper.StartDetached(
             Environment.ProcessId,
             destZip,
             installDir,
             relaunch,
             remoteText,
-            channelDisplay);
+            channelDisplay,
+            CliIdentityPath);
 
-        WriteCliIdentity(remoteText, channelDisplay);
         AsyncConsole.WriteLine(
             $"Installing {remoteText} ({channelDisplay}) in the background. When finished, run: titanium version");
         return 0;
@@ -868,26 +871,6 @@ internal static partial class UpdateCommand
         }
     }
 
-    private static void WriteCliIdentity(string tag, string channel)
-    {
-        try
-        {
-            var dir = Path.GetDirectoryName(CliIdentityPath);
-            if (!string.IsNullOrEmpty(dir))
-            {
-                Directory.CreateDirectory(dir);
-            }
-
-            File.WriteAllText(
-                CliIdentityPath,
-                JsonSerializer.Serialize(new { tag, channel }));
-        }
-        catch
-        {
-            // Non-fatal.
-        }
-    }
-
     private static string ResolveRid() => Http3DepsCommand.SuggestRid();
 }
 
@@ -900,13 +883,18 @@ internal static class CliUpdateApplyHelper
         string installDir,
         string relaunchPath,
         string version,
-        string channel)
+        string channel,
+        string? identityPath = null)
     {
         var workDir = Path.GetDirectoryName(zipPath) ?? Path.GetTempPath();
+        var donePath = Path.Combine(workDir, "apply.done");
         if (OperatingSystem.IsWindows())
         {
             var ps1 = Path.Combine(workDir, "apply-cli-update.ps1");
-            File.WriteAllText(ps1, BuildWindowsScript(pid, zipPath, installDir, relaunchPath, version, channel), Encoding.UTF8);
+            File.WriteAllText(
+                ps1,
+                BuildWindowsScript(pid, zipPath, installDir, relaunchPath, version, channel, donePath, identityPath),
+                Encoding.UTF8);
             Process.Start(new ProcessStartInfo
             {
                 // Absolute path: Sonar S4036 (PATH lookup for powershell.exe is a vulnerability).
@@ -925,7 +913,16 @@ internal static class CliUpdateApplyHelper
         // macOS still bundles libssl.3.dylib / libcrypto.3.dylib, so those stay.
         File.WriteAllText(
             sh,
-            BuildUnixScript(pid, zipPath, installDir, relaunchPath, version, channel, OperatingSystem.IsLinux()),
+            BuildUnixScript(
+                pid,
+                zipPath,
+                installDir,
+                relaunchPath,
+                version,
+                channel,
+                OperatingSystem.IsLinux(),
+                donePath,
+                identityPath),
             new UTF8Encoding(false));
         Process.Start(new ProcessStartInfo
         {
@@ -951,7 +948,9 @@ internal static class CliUpdateApplyHelper
         string installDir,
         string relaunchPath,
         string version,
-        string channel)
+        string channel,
+        string? donePath = null,
+        string? identityPath = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
@@ -959,17 +958,49 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine($"$package = '{EscapePs(zipPath)}'");
         sb.AppendLine($"$installDir = '{EscapePs(installDir)}'");
         sb.AppendLine($"$relaunch = '{EscapePs(relaunchPath)}'");
+        if (!string.IsNullOrEmpty(donePath))
+        {
+            sb.AppendLine($"$donePath = '{EscapePs(donePath)}'");
+        }
+
+        if (!string.IsNullOrEmpty(identityPath))
+        {
+            sb.AppendLine($"$identityPath = '{EscapePs(identityPath)}'");
+        }
+
         sb.AppendLine("while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 400 }");
         sb.AppendLine("Start-Sleep -Seconds 1");
         sb.AppendLine("$tmp = Join-Path $env:TEMP ('ti-cli-unz-' + [guid]::NewGuid().ToString('n'))");
         sb.AppendLine("New-Item -ItemType Directory -Force -Path $tmp | Out-Null");
         sb.AppendLine("Expand-Archive -LiteralPath $package -DestinationPath $tmp -Force");
-        sb.AppendLine("Copy-Item -Path (Join-Path $tmp '*') -Destination $installDir -Recurse -Force");
+        // Remove-then-copy so destination files get new identities (also clears
+        // read-only bits that would block Copy-Item -Force on some layouts).
+        sb.AppendLine("Get-ChildItem -LiteralPath $tmp -Force | ForEach-Object {");
+        sb.AppendLine("  $dest = Join-Path $installDir $_.Name");
+        sb.AppendLine("  if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }");
+        sb.AppendLine("  Copy-Item -LiteralPath $_.FullName -Destination $dest -Recurse -Force");
+        sb.AppendLine("}");
         sb.AppendLine("Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue");
+        if (!string.IsNullOrEmpty(identityPath))
+        {
+            sb.AppendLine("$idDir = Split-Path -Parent $identityPath");
+            sb.AppendLine("if ($idDir) { New-Item -ItemType Directory -Force -Path $idDir | Out-Null }");
+            sb.AppendLine(
+                $"Set-Content -LiteralPath $identityPath -Value '{{\"tag\":\"{EscapePs(version)}\",\"channel\":\"{EscapePs(channel)}\"}}' -Encoding utf8");
+        }
+
         sb.AppendLine($"Write-Host 'Updated to {EscapePs(version)} ({EscapePs(channel)}).'");
+        sb.AppendLine("$relaunchRc = 0");
         sb.AppendLine("if (Test-Path -LiteralPath $relaunch) {");
         sb.AppendLine("  & $relaunch version");
+        sb.AppendLine("  $relaunchRc = $LASTEXITCODE");
         sb.AppendLine("}");
+        if (!string.IsNullOrEmpty(donePath))
+        {
+            sb.AppendLine(
+                $"Set-Content -LiteralPath $donePath -Value \"ok version={EscapePs(version)} relaunch_rc=$relaunchRc\" -Encoding utf8");
+        }
+
         return sb.ToString();
     }
 
@@ -980,7 +1011,9 @@ internal static class CliUpdateApplyHelper
         string relaunchPath,
         string version,
         string channel,
-        bool removeBundledOpenSsl = false)
+        bool removeBundledOpenSsl = false,
+        string? donePath = null,
+        string? identityPath = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("#!/usr/bin/env bash");
@@ -989,6 +1022,16 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine($"package={BashQuote(zipPath)}");
         sb.AppendLine($"install_dir={BashQuote(installDir)}");
         sb.AppendLine($"relaunch={BashQuote(relaunchPath)}");
+        if (!string.IsNullOrEmpty(donePath))
+        {
+            sb.AppendLine($"done_path={BashQuote(donePath)}");
+        }
+
+        if (!string.IsNullOrEmpty(identityPath))
+        {
+            sb.AppendLine($"identity_path={BashQuote(identityPath)}");
+        }
+
         sb.AppendLine("while kill -0 \"$pid\" 2>/dev/null; do sleep 0.4; done");
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
@@ -1003,14 +1046,41 @@ internal static class CliUpdateApplyHelper
         }
 
         // Homebrew-sourced dylibs often unpack as 0444. Plain `cp -a` cannot
-        // overwrite a read-only destination file (macOS and Linux), so make the
-        // install dir writable first and force the overlay.
+        // overwrite a read-only destination file (macOS and Linux). Delete each
+        // destination path first so the copy creates a new inode — that also
+        // clears a stale macOS kernel code-signature cache on the old Mach-O
+        // (in-place overwrite kept the inode and led to SIGKILL after overlay).
         sb.AppendLine("chmod -R u+w \"$install_dir\" 2>/dev/null || true");
-        sb.AppendLine("cp -af \"$tmp\"/. \"$install_dir\"/");
+        sb.AppendLine("while IFS= read -r -d '' f; do");
+        sb.AppendLine("  rel=\"${f#\"$tmp\"/}\"");
+        sb.AppendLine("  dest=\"$install_dir/$rel\"");
+        sb.AppendLine("  mkdir -p \"$(dirname \"$dest\")\"");
+        sb.AppendLine("  rm -f \"$dest\"");
+        sb.AppendLine("  cp -p \"$f\" \"$dest\"");
+        sb.AppendLine("done < <(find \"$tmp\" -type f -print0)");
         sb.AppendLine("rm -rf \"$tmp\"");
         sb.AppendLine("chmod +x \"$install_dir/titanium\" \"$install_dir/twp\" 2>/dev/null || true");
+        if (!string.IsNullOrEmpty(identityPath))
+        {
+            sb.AppendLine("mkdir -p \"$(dirname \"$identity_path\")\"");
+            sb.AppendLine(
+                $"printf '%s\\n' '{{\"tag\":\"{version}\",\"channel\":\"{channel}\"}}' >\"$identity_path\"");
+        }
+
         sb.AppendLine($"echo 'Updated to {version} ({channel}).'");
-        sb.AppendLine("if [[ -x \"$relaunch\" ]]; then \"$relaunch\" version || true; fi");
+        sb.AppendLine("relaunch_rc=0");
+        sb.AppendLine("if [[ -x \"$relaunch\" ]]; then");
+        sb.AppendLine("  set +e");
+        sb.AppendLine("  \"$relaunch\" version");
+        sb.AppendLine("  relaunch_rc=$?");
+        sb.AppendLine("  set -e");
+        sb.AppendLine("fi");
+        if (!string.IsNullOrEmpty(donePath))
+        {
+            sb.AppendLine(
+                $"printf 'ok version={version} relaunch_rc=%s\\n' \"$relaunch_rc\" >\"$done_path\"");
+        }
+
         return sb.ToString();
     }
 

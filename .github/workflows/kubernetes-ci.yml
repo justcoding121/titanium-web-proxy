@@ -298,8 +298,10 @@ jobs:
           done
 
       # Renders the chart and loads the rendered twp.yaml with the CLI's own loader and validator.
+      # Also run Unix CLI update-script proofs here: heavy-suites is Windows-only, so the
+      # bash remove-then-copy overlay test would otherwise stay Inconclusive forever.
       - name: Chart config passes the Titanium validator
-        run: dotnet test tests/Titanium.Cli.Tests -c Release --filter "FullyQualifiedName~HelmChartTests|FullyQualifiedName~HealthcheckCommandTests"
+        run: dotnet test tests/Titanium.Cli.Tests -c Release --filter "FullyQualifiedName~HelmChartTests|FullyQualifiedName~HealthcheckCommandTests|FullyQualifiedName~CliHelper_UnixScript"
 
       # The Gateway API chart: lint, schema-check every rendered object (the GatewayClass schema comes from the CRDs
       # catalog), and run the chart tests, which also check the bootstrap config and the RBAC.

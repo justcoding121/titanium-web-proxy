@@ -1831,7 +1831,10 @@ jobs:
 
   publish-rehearsal:
     needs: [resolve-version, product-smoke, build-images, build-charts, release-manifest-gate]
+    # always(): skipped test/cli-e2e ancestors on a green-push dry-run otherwise
+    # skip this job even when product-smoke and the gate succeeded.
     if: |
+      always() &&
       needs.resolve-version.outputs.dry_run == 'true' &&
       needs.product-smoke.result == 'success' &&
       needs.build-images.result == 'success' &&

@@ -135,6 +135,7 @@ public class UpdateCommandTests
         StringAssert.Contains(script, "7");
         StringAssert.Contains(script, "stable");
         StringAssert.Contains(script, "version");
+        StringAssert.Contains(script, "Remove-Item -LiteralPath $dest -Recurse -Force");
     }
 
     [TestMethod]
@@ -150,7 +151,9 @@ public class UpdateCommandTests
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "beta");
         StringAssert.Contains(script, "chmod -R u+w \"$install_dir\"");
-        StringAssert.Contains(script, "cp -af \"$tmp\"/. \"$install_dir\"/");
+        StringAssert.Contains(script, "rm -f \"$dest\"");
+        StringAssert.Contains(script, "cp -p \"$f\" \"$dest\"");
+        Assert.IsFalse(script.Contains("cp -af", StringComparison.Ordinal));
         Assert.IsFalse(script.Contains("libssl", StringComparison.Ordinal));
         Assert.IsFalse(script.Contains("libcrypto", StringComparison.Ordinal));
     }
@@ -168,7 +171,7 @@ public class UpdateCommandTests
             removeBundledOpenSsl: true);
         var remove = script.IndexOf("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*", StringComparison.Ordinal);
         var chmod = script.IndexOf("chmod -R u+w \"$install_dir\"", StringComparison.Ordinal);
-        var copy = script.IndexOf("cp -af \"$tmp\"/. \"$install_dir\"/", StringComparison.Ordinal);
+        var copy = script.IndexOf("cp -p \"$f\" \"$dest\"", StringComparison.Ordinal);
         var guard = script.IndexOf("compgen -G \"$install_dir\"/libmsquic.so*", StringComparison.Ordinal);
         Assert.IsTrue(guard >= 0 && remove > guard, "OpenSSL removal must be limited to a directory that contains libmsquic.");
         Assert.IsTrue(remove >= 0, "Linux update must delete bundled OpenSSL before overlaying the zip.");
@@ -181,10 +184,15 @@ public class UpdateCommandTests
     public void CliHelper_UnixScript_OverwritesReadOnlyDestinationFiles()
     {
         // Reproduces the macOS zip mode trap (Homebrew dylibs at 0444) on Linux
-        // with GNU cp: plain `cp -a` fails; the fixed script must succeed.
+        // with GNU cp: plain `cp -a` fails; the fixed remove-then-copy script must succeed.
         if (OperatingSystem.IsWindows())
         {
             Assert.Inconclusive("bash, chmod, and zip are required.");
+        }
+
+        if (!File.Exists("/bin/bash") && !File.Exists("/usr/bin/bash"))
+        {
+            Assert.Fail("bash is required on Linux/macOS CI for the read-only overlay proof.");
         }
 
         var root = Path.Combine(Path.GetTempPath(), "twp-ro-update-" + Guid.NewGuid().ToString("N"));
@@ -210,6 +218,8 @@ public class UpdateCommandTests
 
             ZipFile.CreateFromDirectory(packageDir, zipPath);
 
+            var donePath = Path.Combine(root, "apply.done");
+            var identityPath = Path.Combine(root, "identity", "installed-release.json");
             // pid 1 stays alive on Unix; use a definitely-dead pid so the wait loop exits.
             var script = CliUpdateApplyHelper.BuildUnixScript(
                 pid: 2147483646,
@@ -217,11 +227,18 @@ public class UpdateCommandTests
                 installDir: installDir,
                 relaunchPath: relaunch,
                 version: "99.0.0-smoke",
-                channel: "beta");
+                channel: "beta",
+                removeBundledOpenSsl: false,
+                donePath: donePath,
+                identityPath: identityPath);
             File.WriteAllText(scriptPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             RunBash($"chmod +x '{scriptPath.Replace("'", "'\\''", StringComparison.Ordinal)}' && bash '{scriptPath.Replace("'", "'\\''", StringComparison.Ordinal)}'");
 
             Assert.AreEqual("new", File.ReadAllText(destPayload));
+            Assert.IsTrue(File.Exists(donePath), "apply.done must be written after a successful overlay");
+            StringAssert.Contains(File.ReadAllText(donePath), "ok version=99.0.0-smoke");
+            Assert.IsTrue(File.Exists(identityPath), "identity must be written after overlay, not before");
+            StringAssert.Contains(File.ReadAllText(identityPath), "99.0.0-smoke");
         }
         finally
         {

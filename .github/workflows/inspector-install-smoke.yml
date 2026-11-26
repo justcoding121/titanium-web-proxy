@@ -750,6 +750,28 @@ jobs:
             grep -E '^(pass |click:|firefox:|cli |titanium version|root in store)' "$log/driver.log" || true
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Windows Chrome relaunch diag (on failure)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'install-smoke'
+          $diag = Join-Path $log 'chrome-relaunch-diag.txt'
+          $lines = @()
+          foreach ($f in @('driver.log', 'advisory.txt')) {
+            $p = Join-Path $log $f
+            if (Test-Path $p) {
+              $lines += "=== $f ==="
+              $lines += Get-Content $p | Select-String -Pattern 'relaunch|restart|no decrypted|chrome-relaunch|Har|GET' |
+                ForEach-Object { $_.Line }
+            }
+          }
+          if ($lines.Count -gt 0) {
+            Set-Content -Path $diag -Value $lines
+            Get-Content $diag | Select-Object -First 80
+          } else {
+            Write-Host 'no chrome relaunch lines found in install-smoke logs'
+          }
+
       - name: Upload logs
         if: always() && runner.os == 'Windows'
         uses: actions/upload-artifact@v7

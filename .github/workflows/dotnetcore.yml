@@ -424,7 +424,9 @@ jobs:
         ) -ResultsDir coverage/unit
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-        dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/xds
+        # --blame-hang: ADS fake-server suites have timed out at 30s once (#1301);
+        # dump the hung test instead of a silent job timeout.
+        dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --blame-hang --blame-hang-timeout 2m --collect:"Code Coverage" --results-directory coverage/xds
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         $unitJobs = @(
@@ -457,6 +459,17 @@ jobs:
           $unitFailures | ForEach-Object { Write-Error $_ }
           exit 1
         }
+    - name: Upload ADS blame-hang dumps
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: xds-blame-hang
+        path: |
+          coverage/xds/**
+          **/Sequence_*.xml
+          **/TestResults/**
+        if-no-files-found: ignore
+        retention-days: 7
     - name: Upload unit coverage
       uses: actions/upload-artifact@v7
       with:

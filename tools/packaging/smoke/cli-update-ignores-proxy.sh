@@ -80,12 +80,24 @@ echo "cli-update-ignores-proxy candidate version:"
 
 feed="$(mktemp -d)"
 proxy_dir="$(mktemp -d)"
+# Marker proves the detached apply overlay actually ran (identity alone is
+# vacuous if written by the parent before StartDetached).
+marker_name="smoke-marker.txt"
+marker_value="cli-update-ignores-proxy-${version}"
 if [[ "$plus" -eq 1 ]]; then
   asset_name="plus.zip"
   cp "$asset_zip" "$feed/$asset_name"
 else
   asset_name="cli.zip"
   cp "$asset_zip" "$feed/$asset_name"
+  printf '%s\n' "$marker_value" >"$feed/$marker_name"
+  if command -v zip >/dev/null 2>&1; then
+    (cd "$feed" && zip -q "$asset_name" "$marker_name")
+  else
+    echo "ASSERT: zip required to inject smoke marker into CLI asset" >&2
+    exit 1
+  fi
+  rm -f "$feed/$marker_name"
 fi
 size="$(wc -c < "$feed/$asset_name" | tr -d ' ')"
 sha="$(sha256sum "$feed/$asset_name" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$feed/$asset_name" | awk '{print $1}')"
@@ -206,7 +218,7 @@ PY
 fi
 
 # Seed an older installed identity so the feed is offered (CLI path only).
-# Must match SpecialFolder.LocalApplicationData used by WriteCliIdentity:
+# Must match SpecialFolder.LocalApplicationData used by the apply script:
 # Windows LOCALAPPDATA, macOS ~/Library/Application Support, Linux XDG.
 if [[ "$plus" -eq 0 ]]; then
   if [[ -n "${LOCALAPPDATA:-}" ]]; then
@@ -257,28 +269,49 @@ if [[ "$update_rc" -ne 0 ]]; then
   exit 1
 fi
 
-assert_version_applied() {
+assert_update_applied() {
   local target="$1"
   local tries=0
+  local apply_done="${TMPDIR:-/tmp}/TitaniumCli-update/apply.done"
+  # Windows TEMP may differ from TMPDIR; also check LOCALAPPDATA-relative workdir.
+  local apply_done_win=""
+  if [[ -n "${LOCALAPPDATA:-}${TEMP:-}${TMP:-}" ]]; then
+    apply_done_win="${TEMP:-${TMP:-${LOCALAPPDATA}/../Temp}}/TitaniumCli-update/apply.done"
+  fi
   while [[ "$tries" -lt 90 ]]; do
     tries=$((tries + 1))
-    if [[ -f "$identity_dir/installed-release.json" ]] \
-      && grep -qF "$target" "$identity_dir/installed-release.json" 2>/dev/null; then
-      return 0
+    local done_file=""
+    if [[ -f "$apply_done" ]]; then
+      done_file="$apply_done"
+    elif [[ -n "$apply_done_win" && -f "$apply_done_win" ]]; then
+      done_file="$apply_done_win"
     fi
-    if "$bin" version 2>/dev/null | grep -qF "$target"; then
+    if [[ -n "$done_file" ]] \
+      && grep -qF "ok version=$target" "$done_file" 2>/dev/null \
+      && [[ -f "$cli_dir/$marker_name" ]] \
+      && grep -qF "$marker_value" "$cli_dir/$marker_name" 2>/dev/null \
+      && [[ -f "$identity_dir/installed-release.json" ]] \
+      && grep -qF "$target" "$identity_dir/installed-release.json" 2>/dev/null; then
+      # Overlay + identity + done file are present; binary must still run.
+      if ! "$bin" version >/dev/null 2>&1; then
+        echo "ASSERT: titanium version failed after overlay (possible SIGKILL)" >&2
+        "$bin" version >&2 || true
+        return 1
+      fi
       return 0
     fi
     sleep 1
   done
-  echo "ASSERT: installed identity did not advance to $target after update" >&2
+  echo "ASSERT: update did not apply (marker/done/identity) to $target" >&2
+  ls -la "$cli_dir/$marker_name" "$apply_done" "$apply_done_win" 2>&1 || true
   "$bin" version >&2 || true
   cat "$identity_dir/installed-release.json" >&2 2>/dev/null || true
+  cat "$apply_done" "$apply_done_win" >&2 2>/dev/null || true
   return 1
 }
 
 if [[ "$plus" -eq 0 ]]; then
-  assert_version_applied "$version"
+  assert_update_applied "$version"
 fi
 
 hit_count="$(tr -d ' \r\n' <"$hits" 2>/dev/null || echo 0)"
