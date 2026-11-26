@@ -176,6 +176,10 @@ jobs:
           LIFECYCLE_PROOF: ${{ runner.temp }}/lifecycle-proof-win-x64.json
         run: |
           $ErrorActionPreference = 'Stop'
+          # exit from a called .ps1 only sets $LASTEXITCODE. Stop does not see it,
+          # so a failed retry/enforce leg used to leave this step green.
+          . ./tools/packaging/smoke/invoke-leg.ps1
+          ./tools/packaging/smoke/invoke-leg.ps1 --self-test
           $env:LIFECYCLE_PROOF = $env:LIFECYCLE_PROOF
           $msi = Get-ChildItem -Recurse dist -Filter 'TitaniumInspector-win-x64.msi' | Select-Object -First 1
           $zip = Get-ChildItem -Recurse dist -Filter 'Titanium.Cli-win-x64.zip' | Select-Object -First 1
@@ -190,7 +194,7 @@ jobs:
           $env:SMOKE_BROWSERS = 'chrome,firefox,edge'
           if ($env:BROWSERS -eq 'extended') { $env:SMOKE_BROWSERS = 'chrome,edge,brave,firefox,opera' }
           $env:SMOKE_OUT = Join-Path $log 'gui'
-          ./tools/packaging/smoke/retry.ps1 -Leg gui -Command { ./tools/packaging/smoke/prove-inspector.ps1 -Exe $env:SMOKE_EXE -Browsers $env:SMOKE_BROWSERS -Out $env:SMOKE_OUT }
+          Invoke-SmokeLeg { ./tools/packaging/smoke/retry.ps1 -Leg gui -Command { ./tools/packaging/smoke/prove-inspector.ps1 -Exe $env:SMOKE_EXE -Browsers $env:SMOKE_BROWSERS -Out $env:SMOKE_OUT } }
           Write-Host "windows-smoke: cli, plus, chocolatey"
           $cli = Join-Path $env:RUNNER_TEMP 'cli'
           Expand-Archive $zip.FullName $cli -Force
@@ -202,16 +206,20 @@ jobs:
           ./tools/packaging/winget/test-links-symlink.ps1 -Zip $zip.FullName
           ./tools/packaging/smoke/cli-mitm.ps1 -Titanium (Join-Path $cli 'titanium.exe') -Out (Join-Path $log 'cli')
           ./tools/packaging/smoke/apply-plus.ps1 -CliDir $cli -PlusZip $plus.FullName -Titanium (Join-Path $cli 'titanium.exe')
-          ./tools/packaging/smoke/enforce.ps1 plus-lifecycle -- pwsh -NoProfile -File ./tools/packaging/smoke/plus-lifecycle.ps1 -CliDir $cli -PlusZip $plus.FullName -Titanium (Join-Path $cli 'titanium.exe')
-          ./tools/packaging/smoke/enforce.ps1 cli-service-lifecycle -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-service-lifecycle.ps1 -Titanium (Join-Path $cli 'titanium.exe') -CliZip $zip.FullName
+          Invoke-SmokeLeg { ./tools/packaging/smoke/enforce.ps1 plus-lifecycle -- pwsh -NoProfile -File ./tools/packaging/smoke/plus-lifecycle.ps1 -CliDir $cli -PlusZip $plus.FullName -Titanium (Join-Path $cli 'titanium.exe') }
+          Invoke-SmokeLeg { ./tools/packaging/smoke/enforce.ps1 cli-service-lifecycle -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-service-lifecycle.ps1 -Titanium (Join-Path $cli 'titanium.exe') -CliZip $zip.FullName }
           $env:SMOKE_CLI = $cli
           $env:SMOKE_ZIP = $zip.FullName
           $env:SMOKE_PLUS = $plus.FullName
-          ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
-            ./tools/packaging/smoke/enforce.ps1 cli-update-ignores-proxy -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-update-ignores-proxy.ps1 -CliDir $env:SMOKE_CLI -CliZip $env:SMOKE_ZIP -Titanium (Join-Path $env:SMOKE_CLI 'titanium.exe')
+          Invoke-SmokeLeg {
+            ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
+              ./tools/packaging/smoke/enforce.ps1 cli-update-ignores-proxy -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-update-ignores-proxy.ps1 -CliDir $env:SMOKE_CLI -CliZip $env:SMOKE_ZIP -Titanium (Join-Path $env:SMOKE_CLI 'titanium.exe')
+            }
           }
-          ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
-            ./tools/packaging/smoke/enforce.ps1 cli-update-ignores-proxy-plus -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-update-ignores-proxy.ps1 -Plus -CliDir $env:SMOKE_CLI -PlusZip $env:SMOKE_PLUS -Titanium (Join-Path $env:SMOKE_CLI 'titanium.exe')
+          Invoke-SmokeLeg {
+            ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
+              ./tools/packaging/smoke/enforce.ps1 cli-update-ignores-proxy-plus -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-update-ignores-proxy.ps1 -Plus -CliDir $env:SMOKE_CLI -PlusZip $env:SMOKE_PLUS -Titanium (Join-Path $env:SMOKE_CLI 'titanium.exe')
+            }
           }
           $pubDir = Join-Path $env:RUNNER_TEMP 'published-cli'
           New-Item -ItemType Directory -Force -Path $pubDir | Out-Null
@@ -222,8 +230,10 @@ jobs:
             if ($pubZip) {
               $env:SMOKE_PUB = $pubZip.FullName
               $env:SMOKE_UPG = Join-Path $env:RUNNER_TEMP 'cli-upgrade'
-              ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
-                ./tools/packaging/smoke/enforce.ps1 cli-upgrade-from-published -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-upgrade-from-published.ps1 -PublishedZip $env:SMOKE_PUB -CandidateZip $env:SMOKE_ZIP -WorkDir $env:SMOKE_UPG
+              Invoke-SmokeLeg {
+                ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
+                  ./tools/packaging/smoke/enforce.ps1 cli-upgrade-from-published -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-upgrade-from-published.ps1 -PublishedZip $env:SMOKE_PUB -CandidateZip $env:SMOKE_ZIP -WorkDir $env:SMOKE_UPG
+                }
               }
               $fromVer = $pubTag.TrimStart('v')
               $candVer = if ($env:RELEASE_VERSION) { $env:RELEASE_VERSION } else { 'candidate' }
@@ -232,7 +242,7 @@ jobs:
           }
           $tag = $env:RELEASE_TAG
           if (-not $tag) { $tag = 'v8.0.7-beta' }
-          ./tools/packaging/smoke/enforce.ps1 pre-immutable-choco -- pwsh -NoProfile -File ./tools/packaging/smoke/pre-immutable-choco.ps1 -CliZip $zip.FullName -InspectorMsi $msi.FullName -Tag $tag
+          Invoke-SmokeLeg { ./tools/packaging/smoke/enforce.ps1 pre-immutable-choco -- pwsh -NoProfile -File ./tools/packaging/smoke/pre-immutable-choco.ps1 -CliZip $zip.FullName -InspectorMsi $msi.FullName -Tag $tag }
       - uses: actions/upload-artifact@v7
         if: always()
         with:

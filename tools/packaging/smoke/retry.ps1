@@ -5,11 +5,35 @@
   not retry, except -Leg gui or kind, which get one retry. A pass on retry is flaky.
 #>
 param(
+    [switch] $SelfTest,
     [ValidateSet('assert', 'gui', 'kind')]
     [string] $Leg = 'assert',
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Position = 0)]
     [scriptblock] $Command
 )
+
+if ($SelfTest) {
+    $runner = if (Get-Command pwsh -ErrorAction SilentlyContinue) { 'pwsh' } else { 'powershell' }
+    $retryCmd = @"
+& '$PSCommandPath' -Leg assert -Command { cmd.exe /c exit 6 }
+exit `$LASTEXITCODE
+"@
+    & $runner -NoProfile -Command $retryCmd | Out-Host
+    if ($LASTEXITCODE -eq 0) { throw 'self-test: retry.ps1 failing assert leg left the caller green' }
+    if ($LASTEXITCODE -ne 6) { throw "self-test: expected retry exit 6, got $LASTEXITCODE" }
+    . (Join-Path $PSScriptRoot 'invoke-leg.ps1')
+    $threw = $false
+    try {
+        Invoke-SmokeLeg { & $runner -NoProfile -Command $retryCmd }
+    } catch {
+        $threw = $true
+    }
+    if (-not $threw) { throw 'self-test: Invoke-SmokeLeg swallowed a failing retry.ps1 leg' }
+    Write-Host 'retry self-test ok'
+    exit 0
+}
+
+if (-not $Command) { throw 'usage: retry.ps1 -Leg assert -Command { ... }  or  retry.ps1 -SelfTest' }
 
 $ErrorActionPreference = 'Continue'
 $maxTries = 1
