@@ -1128,7 +1128,7 @@ internal static class CliUpdateApplyHelper
         // clears a stale macOS kernel code-signature cache on the old Mach-O
         // (in-place overwrite kept the inode and led to SIGKILL after overlay).
         sb.AppendLine("chmod -R u+w \"$install_dir\" 2>/dev/null || true");
-        AppendUnixRemoveThenCopy(sb, "$tmp", "$install_dir");
+        UnixOverlayScript.AppendUnixRemoveThenCopy(sb, "$tmp", "$install_dir", stopOnError: true);
         sb.AppendLine("rm -rf \"$tmp\"");
         sb.AppendLine("chmod +x \"$install_dir/titanium\" \"$install_dir/twp\" 2>/dev/null || true");
         if (!string.IsNullOrEmpty(identityPath))
@@ -1153,28 +1153,6 @@ internal static class CliUpdateApplyHelper
         }
 
         return sb.ToString();
-    }
-
-    /// <summary>
-    /// Copy files and symlinks from <paramref name="src"/> onto <paramref name="dest"/>
-    /// without following links, and recreate empty directories. Does not delete
-    /// paths that exist only in the destination.
-    /// </summary>
-    private static void AppendUnixRemoveThenCopy(StringBuilder sb, string src, string dest)
-    {
-        sb.AppendLine("while IFS= read -r -d '' f; do");
-        sb.AppendLine($"  rel=\"${{f#\"{src}\"/}}\"");
-        sb.AppendLine("  target=\"" + dest + "/$rel\"");
-        sb.AppendLine("  mkdir -p \"$(dirname \"$target\")\"");
-        sb.AppendLine("  rm -f \"$target\"");
-        sb.AppendLine("  cp -Pp \"$f\" \"$target\" || die \"cp $target\"");
-        sb.AppendLine($"done < <(find \"{src}\" \\( -type f -o -type l \\) -print0)");
-        sb.AppendLine("while IFS= read -r -d '' d; do");
-        sb.AppendLine($"  rel=\"${{d#\"{src}\"/}}\"");
-        sb.AppendLine("  if [[ -n \"$rel\" ]]; then");
-        sb.AppendLine("    mkdir -p \"" + dest + "/$rel\" || die \"mkdir $rel\"");
-        sb.AppendLine("  fi");
-        sb.AppendLine($"done < <(find \"{src}\" -mindepth 1 -type d -print0)");
     }
 
     private static string EscapePs(string value) => value.Replace("'", "''", StringComparison.Ordinal);
