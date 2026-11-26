@@ -131,7 +131,8 @@ public class UpdateCommandTests
             @"C:\tools\titanium\titanium.exe",
             "7.0.4",
             "stable");
-        StringAssert.Contains(script, "Expand-Archive");
+        StringAssert.Contains(script, "ExtractToDirectory");
+        Assert.IsFalse(script.Contains("Expand-Archive", StringComparison.Ordinal));
         StringAssert.Contains(script, "7");
         StringAssert.Contains(script, "stable");
         StringAssert.Contains(script, "version");

@@ -971,7 +971,6 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine("while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 400 }");
         sb.AppendLine("Start-Sleep -Seconds 1");
         sb.AppendLine("$tmp = Join-Path $env:TEMP ('ti-cli-unz-' + [guid]::NewGuid().ToString('n'))");
-        sb.AppendLine("New-Item -ItemType Directory -Force -Path $tmp | Out-Null");
         if (!string.IsNullOrEmpty(donePath))
         {
             sb.AppendLine("$applyLog = Join-Path (Split-Path -Parent $donePath) 'apply.log'");
@@ -983,7 +982,11 @@ internal static class CliUpdateApplyHelper
 
         sb.AppendLine("if ($applyLog) { Start-Transcript -LiteralPath $applyLog -Force | Out-Null }");
         sb.AppendLine("try {");
-        sb.AppendLine("Expand-Archive -LiteralPath $package -DestinationPath $tmp -Force");
+        // Windows PowerShell 5.1 Expand-Archive calls ZipFile.ExtractToDirectory with a
+        // 3-argument overload that does not exist on .NET Framework. The 2-argument
+        // overload creates $tmp itself.
+        sb.AppendLine("Add-Type -AssemblyName System.IO.Compression.FileSystem");
+        sb.AppendLine("[System.IO.Compression.ZipFile]::ExtractToDirectory($package, $tmp)");
         // Per-file remove-then-copy. Deleting a whole top-level directory would
         // remove user files that are not in the zip. Retry because a locked
         // titanium.exe (or an antivirus scan) often releases within a few seconds.

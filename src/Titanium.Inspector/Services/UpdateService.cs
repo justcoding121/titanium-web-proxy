@@ -1067,8 +1067,10 @@ public static class UpdateApplyHelper
         else
         {
             sb.AppendLine("$tmp = Join-Path $env:TEMP ('ti-unz-' + [guid]::NewGuid().ToString('n'))");
-            sb.AppendLine("New-Item -ItemType Directory -Force -Path $tmp | Out-Null");
-            sb.AppendLine("Expand-Archive -LiteralPath $package -DestinationPath $tmp -Force");
+            // Same .NET Framework limit as the CLI apply script: Expand-Archive's
+            // 3-argument ExtractToDirectory overload is missing on Windows PowerShell 5.1.
+            sb.AppendLine("Add-Type -AssemblyName System.IO.Compression.FileSystem");
+            sb.AppendLine("[System.IO.Compression.ZipFile]::ExtractToDirectory($package, $tmp)");
             sb.AppendLine("Copy-Item -Path (Join-Path $tmp '*') -Destination $installDir -Recurse -Force");
             sb.AppendLine("Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue");
         }

@@ -167,7 +167,8 @@ public class InspectorServiceReplayMitmAndDisplayBehaviorTests
             relaunchPath: @"C:\Titanium\Inspector\TitaniumInspector.exe",
             version: "8.1.0",
             channel: "stable");
-        StringAssert.Contains(script, "Expand-Archive");
+        StringAssert.Contains(script, "ExtractToDirectory");
+        Assert.IsFalse(script.Contains("Expand-Archive", StringComparison.Ordinal));
         Assert.IsFalse(script.Contains("msiexec", StringComparison.OrdinalIgnoreCase));
         StringAssert.Contains(script, "Updated Inspector to 8.1.0");
 
