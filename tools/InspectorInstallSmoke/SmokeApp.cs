@@ -2628,22 +2628,32 @@ internal sealed class InspectorProcess : IAsyncDisposable
         var path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "TitaniumInspector", "settings.json");
-        if (!File.Exists(path))
-            return false;
-        int port;
-        try
-        {
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
-            port = doc.RootElement.GetProperty("bindPort").GetInt32();
-        }
-        catch
-        {
-            return false;
-        }
-
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        // TrustRootAsync waits on rootCert.pfx, which the app writes before settings.json.
+        // Returning as soon as settings.json is missing used to fail in-app-apply on a slow
+        // start (arm install-smoke: "capture did not start" about 16s after the feed line).
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        var reason = "settings.json missing";
         while (DateTime.UtcNow < deadline)
         {
+            if (!File.Exists(path))
+            {
+                await Task.Delay(300);
+                continue;
+            }
+
+            int port;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                port = doc.RootElement.GetProperty("bindPort").GetInt32();
+            }
+            catch
+            {
+                reason = "settings.json has no bindPort yet";
+                await Task.Delay(300);
+                continue;
+            }
+
             try
             {
                 using var tcp = new TcpClient();
@@ -2652,10 +2662,12 @@ internal sealed class InspectorProcess : IAsyncDisposable
             }
             catch
             {
+                reason = "bindPort " + port + " not accepting";
                 await Task.Delay(300);
             }
         }
 
+        Console.WriteLine("capture not listening: " + reason);
         return false;
     }
 
