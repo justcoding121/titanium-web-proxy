@@ -19,6 +19,10 @@ Scaffold committed. `pwsh tools/run-tests.ps1 -Project tls` passed (2 tests). Wo
 
 Key login works for `macmini` (192.168.1.55, Darwin arm64, macOS 26.6.2) and `linuxmini` (192.168.1.2, Ubuntu 26.04.1, x86_64). `sudo -n true` succeeds on both. The password was used once to install the key and is not stored. Both machines have the .NET 10.0.404 SDK under `~/.dotnet`. macmini also has OpenSSL 3.5.9 under `~/opt/openssl-3.5.9`, with `X25519MLKEM768`. Details are in `REMOTE-MACHINES.md`.
 
+## T1.4
+
+`X25519` is a 51-bit-limb ladder. It matches RFC 7748 section 5.2, the Alice/Bob agreement in section 6.1, and the 1,000-iteration chain that starts from the base point. An all-zero shared secret is rejected. Still open: the million-iteration vector, Wycheproof, the OpenSSL differential, the timing check, and the constant-time review.
+
 ## T1.3
 
 `TlsRecordProtector` protects one direction with AES-128-GCM, AES-256-GCM, or ChaCha20-Poly1305. It decrypts the RFC 8448 section 3 server handshake flight and the client Finished record. Padding, a bad tag, a replay, an oversized plaintext, and an all-zero inner plaintext are rejected. The IV is wiped on dispose.

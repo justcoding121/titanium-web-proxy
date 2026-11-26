@@ -7,3 +7,4 @@ Rows are added as each task's vectors land. A row names the requirement, the cod
 | RFC 5869 HKDF extract and expand, cases 1 to 3 | `TlsHkdf.Extract` and `HKDF.Expand` | `HkdfTests.BclHkdfMatchesRfc5869Case1` through `Case3` |
 | RFC 8446 section 7.1 key schedule, traffic keys, finished, exporter, resumption | `Internal/TlsKeySchedule.cs` | `KeyScheduleTests` |
 | RFC 8446 section 5.1 to 5.2 record protection | `Internal/TlsRecordProtector.cs` | `RecordProtectorTests` |
+| RFC 7748 X25519 scalar multiplication | `Internal/X25519.cs` | `X25519Tests` |
