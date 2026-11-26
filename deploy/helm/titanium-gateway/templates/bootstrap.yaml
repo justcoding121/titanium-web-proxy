@@ -2,11 +2,11 @@
 {{- $tls := include "titanium-gateway.tlsSecretName" . }}
 {{- $adminName := include "titanium-gateway.adminSecretName" . }}
 {{- /*
-  The controller owns the data of the ConfigMap and the Secret below (server-side apply, field manager
-  titanium-gateway). Always render them with `helm.sh/resource-policy: keep` so a later
-  `helm upgrade` neither deletes them nor resets controller-written live data under Helm's
-  three-way merge. Do not gate on lookup — omitting the resource when it already exists
-  causes Helm to delete the live object on upgrade from charts that managed it.
+  The controller owns twp.yaml (server-side apply, field manager titanium-gateway).
+  Always render the ConfigMap. Omitting it once it exists makes Helm delete the live
+  object. Copy live twp.yaml into the rendered manifest: Helm replaces that key on
+  upgrade when the chart emits the bootstrap default, even when the default text
+  did not change. resource-policy keep only stops uninstall from deleting it.
 */}}
 apiVersion: v1
 kind: ConfigMap
@@ -19,7 +19,12 @@ metadata:
     helm.sh/resource-policy: keep
 data:
   twp.yaml: |
-    {{- .Values.dataPlane.bootstrapConfig | nindent 4 }}
+    {{- $body := .Values.dataPlane.bootstrapConfig }}
+    {{- $live := lookup "v1" "ConfigMap" .Release.Namespace $data }}
+    {{- if and $live $live.data (hasKey $live.data "twp.yaml") }}
+    {{- $body = index $live.data "twp.yaml" }}
+    {{- end }}
+    {{- $body | nindent 4 }}
 ---
 apiVersion: v1
 kind: Secret
