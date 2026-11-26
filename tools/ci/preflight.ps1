@@ -112,6 +112,10 @@ for path in sorted(root.glob("*.yml")):
             if ($isWin) {
                 & $psRunner -NoProfile -File tools/packaging/smoke/enforce.ps1 --self-test
                 Write-Check 'enforce.ps1 --self-test' ($LASTEXITCODE -eq 0)
+                & $psRunner -NoProfile -File tools/packaging/smoke/invoke-leg.ps1 --self-test
+                Write-Check 'invoke-leg.ps1 --self-test' ($LASTEXITCODE -eq 0)
+                & $psRunner -NoProfile -File tools/packaging/smoke/retry.ps1 -SelfTest
+                Write-Check 'retry.ps1 -SelfTest' ($LASTEXITCODE -eq 0)
             }
         }
         if (Test-Path 'tools/ci/assert-lifecycle-proof.ps1') {

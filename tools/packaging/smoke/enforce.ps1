@@ -99,6 +99,15 @@ function Invoke-EnforceSelfTest {
     $ok = Invoke-Enforce -StepName 'self-test-hard-ok' -Command @('cmd.exe', '/c', 'exit 0')
     if ($ok -ne 0) { throw 'self-test: hard mode should pass a zero exit' }
 
+    . (Join-Path $PSScriptRoot 'invoke-leg.ps1')
+    $threw = $false
+    try {
+        Invoke-SmokeLeg { & $PSCommandPath 'caller-guard' -- cmd.exe /c exit 1 }
+    } catch {
+        $threw = $true
+    }
+    if (-not $threw) { throw 'self-test: failing enforce leg left the step green' }
+
     $root = Get-SmokeLogRoot
     $hardLog = Join-Path $root 'logs\self-test-hard.log'
     if (-not (Test-Path $hardLog)) { throw 'self-test: expected persisted hard-fail log' }
