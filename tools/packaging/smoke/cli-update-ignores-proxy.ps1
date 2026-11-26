@@ -50,14 +50,57 @@ if ([string]::IsNullOrWhiteSpace($assetZip)) {
     throw $(if ($Plus) { 'PlusZip is required with -Plus' } else { 'CliZip is required' })
 }
 
+function Assert-InstallMatchesZip([string] $ZipPath, [string] $InstallDir) {
+    $extract = Join-Path $env:TEMP ("twp-hash-" + [guid]::NewGuid().ToString('n'))
+    try {
+        Expand-Archive -LiteralPath $ZipPath -DestinationPath $extract -Force
+        $files = @(Get-ChildItem -LiteralPath $extract -Recurse -File -Force)
+        if ($files.Count -lt 1) { throw 'ASSERT: candidate zip has no files' }
+        foreach ($f in $files) {
+            $rel = $f.FullName.Substring($extract.Length).TrimStart('\', '/')
+            $dest = Join-Path $InstallDir $rel
+            if (-not (Test-Path -LiteralPath $dest)) { throw "ASSERT: missing $rel after overlay" }
+            $want = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash
+            $got = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash
+            if ($want -ne $got) { throw "ASSERT: hash mismatch $rel" }
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Write-ApplyDiagnostics {
+    $applyDir = Join-Path $env:TEMP 'TitaniumCli-update'
+    foreach ($name in @('apply.done', 'apply.log', 'apply-cli-update.ps1')) {
+        $path = Join-Path $applyDir $name
+        Write-Host "---- $name ----"
+        if (Test-Path -LiteralPath $path) { Get-Content -LiteralPath $path | Write-Host }
+    }
+}
+
 $CliDir = (Resolve-Path $CliDir).Path
 $assetZip = (Resolve-Path $assetZip).Path
 $Titanium = (Resolve-Path $Titanium).Path
+$markerValue = "cli-update-ignores-proxy-$Version"
 
 $feed = Join-Path $env:TEMP ("twp-update-feed-" + [guid]::NewGuid().ToString('n'))
 New-Item -ItemType Directory -Force -Path $feed | Out-Null
 $assetName = if ($Plus) { 'plus.zip' } else { 'cli.zip' }
 Copy-Item $assetZip (Join-Path $feed $assetName) -Force
+if (-not $Plus) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $served = Join-Path $feed $assetName
+    $archive = [System.IO.Compression.ZipFile]::Open($served, [System.IO.Compression.ZipArchiveMode]::Update)
+    try {
+        $existing = $archive.GetEntry('smoke-marker.txt')
+        if ($existing) { $existing.Delete() }
+        $entry = $archive.CreateEntry('smoke-marker.txt')
+        $writer = New-Object System.IO.StreamWriter($entry.Open())
+        try { $writer.Write($markerValue) } finally { $writer.Dispose() }
+    }
+    finally { $archive.Dispose() }
+}
 $sha = (Get-FileHash (Join-Path $feed $assetName) -Algorithm SHA256).Hash.ToLowerInvariant()
 $size = (Get-Item (Join-Path $feed $assetName)).Length
 $rids = @('linux-x64','linux-arm64','osx-arm64','osx-x64','win-x64','linux-musl-x64','linux-musl-arm64')
@@ -176,25 +219,45 @@ try {
     $updateArgs = @('update', '--channel', 'beta')
     if ($Plus) { $updateArgs = @('update', '--plus', '--channel', 'beta') }
 
+    $applyDir = Join-Path $env:TEMP 'TitaniumCli-update'
+    if (Test-Path $applyDir) { Remove-Item $applyDir -Recurse -Force -ErrorAction SilentlyContinue }
+
     $proc = Start-Process -FilePath $Titanium -ArgumentList $updateArgs -Wait -PassThru -NoNewWindow
     if ($proc.ExitCode -ne 0) { throw "ASSERT: titanium update exited $($proc.ExitCode)" }
 
     if (-not $Plus) {
-        $idFile = Join-Path $env:LOCALAPPDATA 'TitaniumCli\installed-release.json'
+        $doneFile = Join-Path $applyDir 'apply.done'
         $applied = $false
+        $doneText = ''
         for ($t = 0; $t -lt 90; $t++) {
-            if ((Test-Path $idFile) -and ((Get-Content $idFile -Raw) -match [regex]::Escape($Version))) {
-                $applied = $true
-                break
-            }
-            $verOut = & $Titanium version 2>&1 | Out-String
-            if ($verOut -match [regex]::Escape($Version)) {
-                $applied = $true
-                break
+            if (Test-Path -LiteralPath $doneFile) {
+                $doneText = Get-Content -LiteralPath $doneFile -Raw
+                if ($doneText -match 'ok version=') { $applied = $true; break }
+                if ($doneText -match 'fail ') { break }
             }
             Start-Sleep -Seconds 1
         }
         if (-not $applied) {
+            Write-ApplyDiagnostics
+            throw "ASSERT: apply.done was not ok for $Version"
+        }
+        $markerPath = Join-Path $CliDir 'smoke-marker.txt'
+        $markerBody = if (Test-Path -LiteralPath $markerPath) { Get-Content -LiteralPath $markerPath -Raw } else { '' }
+        if ($markerBody -notmatch [regex]::Escape($markerValue)) {
+            Write-ApplyDiagnostics
+            throw "ASSERT: smoke marker missing after overlay"
+        }
+        try {
+            Assert-InstallMatchesZip -ZipPath (Join-Path $feed $assetName) -InstallDir $CliDir
+        }
+        catch {
+            Write-ApplyDiagnostics
+            throw
+        }
+        $idFile = Join-Path $env:LOCALAPPDATA 'TitaniumCli\installed-release.json'
+        $idBody = if (Test-Path -LiteralPath $idFile) { Get-Content -LiteralPath $idFile -Raw } else { '' }
+        if ($idBody -notmatch [regex]::Escape($Version)) {
+            Write-ApplyDiagnostics
             throw "ASSERT: installed identity did not advance to $Version after update"
         }
     }
