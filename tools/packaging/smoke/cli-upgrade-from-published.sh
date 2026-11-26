@@ -70,7 +70,16 @@ cp "$candidate_zip" "$feed/cli.zip"
 marker_name="smoke-marker.txt"
 marker_value="cli-upgrade-from-published-${version}"
 printf '%s\n' "$marker_value" >"$feed/$marker_name"
-(cd "$feed" && zip -q cli.zip "$marker_name")
+if command -v zip >/dev/null 2>&1; then
+  (cd "$feed" && zip -q cli.zip "$marker_name")
+else
+  python3 - "$feed/cli.zip" "$feed/$marker_name" "$marker_name" <<'PY'
+import sys, zipfile
+zpath, src, arc = sys.argv[1:4]
+with zipfile.ZipFile(zpath, "a", compression=zipfile.ZIP_DEFLATED) as zf:
+    zf.write(src, arcname=arc)
+PY
+fi
 rm -f "$feed/$marker_name"
 size="$(wc -c < "$feed/cli.zip" | tr -d ' ')"
 sha="$(sha256sum "$feed/cli.zip" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$feed/cli.zip" | awk '{print $1}')"

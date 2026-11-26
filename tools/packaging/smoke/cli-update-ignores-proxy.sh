@@ -91,11 +91,16 @@ else
   asset_name="cli.zip"
   cp "$asset_zip" "$feed/$asset_name"
   printf '%s\n' "$marker_value" >"$feed/$marker_name"
+  # Prefer zip(1); fall back to Python (Ubuntu product-smoke images may omit zip).
   if command -v zip >/dev/null 2>&1; then
     (cd "$feed" && zip -q "$asset_name" "$marker_name")
   else
-    echo "ASSERT: zip required to inject smoke marker into CLI asset" >&2
-    exit 1
+    python3 - "$feed/$asset_name" "$feed/$marker_name" "$marker_name" <<'PY'
+import sys, zipfile
+zpath, src, arc = sys.argv[1:4]
+with zipfile.ZipFile(zpath, "a", compression=zipfile.ZIP_DEFLATED) as zf:
+    zf.write(src, arcname=arc)
+PY
   fi
   rm -f "$feed/$marker_name"
 fi
