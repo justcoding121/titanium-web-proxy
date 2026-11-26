@@ -8,6 +8,34 @@
 #   cli-upgrade-from-published.sh --self-test
 set -euo pipefail
 
+# Every file in the zip must match the install. A marker copied before a later
+# failure is not a successful upgrade.
+assert_files_match() {
+  python3 - "$1" "$2" <<'PY'
+import hashlib, os, sys, zipfile
+zpath, dest = sys.argv[1:]
+missing, mismatch = [], []
+with zipfile.ZipFile(zpath) as zf:
+    for info in zf.infolist():
+        rel = info.filename.replace("\\", "/")
+        if not rel or rel.endswith("/"):
+            continue
+        target = os.path.join(dest, *rel.split("/"))
+        if not os.path.isfile(target):
+            missing.append(rel)
+            continue
+        want = hashlib.sha256(zf.read(info)).hexdigest()
+        with open(target, "rb") as fh:
+            got = hashlib.sha256(fh.read()).hexdigest()
+        if want != got:
+            mismatch.append(rel)
+print(f"hash-compare missing={len(missing)} mismatch={len(mismatch)}")
+for rel in (missing + mismatch)[:20]:
+    print(rel)
+sys.exit(1 if missing or mismatch else 0)
+PY
+}
+
 self_test() {
   if ! command -v python3 >/dev/null 2>&1; then
     echo "ASSERT: python3 required for cli-upgrade-from-published self-test" >&2
@@ -24,6 +52,24 @@ s.close()
 PY
 )"
   [[ -n "$feed_port" ]] || { echo "ASSERT: self-test feed port missing" >&2; exit 1; }
+  local tmp
+  tmp="$(mktemp -d)"
+  mkdir -p "$tmp/src"
+  printf 'abc\n' >"$tmp/src/a.txt"
+  python3 - "$tmp/src" "$tmp/c.zip" <<'PY'
+import sys, zipfile
+src, dest = sys.argv[1:]
+with zipfile.ZipFile(dest, "w") as zf:
+    zf.write(src + "/a.txt", arcname="a.txt")
+PY
+  cp "$tmp/src/a.txt" "$tmp/a.txt"
+  assert_files_match "$tmp/c.zip" "$tmp"
+  printf 'nope\n' >"$tmp/a.txt"
+  if assert_files_match "$tmp/c.zip" "$tmp"; then
+    echo "ASSERT: self-test hash compare should fail on a mismatch" >&2
+    exit 1
+  fi
+  rm -rf "$tmp"
   echo "cli-upgrade-from-published self-test ok (feed=$feed_port)"
 }
 
@@ -61,6 +107,12 @@ if [[ ! -f "$bin" ]]; then
   exit 1
 fi
 chmod +x "$bin" || true
+# Shipped macOS zips unpack dylibs as 0444. Force that mode so a marker-only
+# success cannot hide an overlay that stops on the first read-only file.
+if [[ "$(uname -s)" == Darwin ]]; then
+  chmod 0444 "$old"/*.dylib 2>/dev/null || true
+  echo "simulated read-only dylibs before published upgrade"
+fi
 
 feed="$(mktemp -d)"
 cp "$candidate_zip" "$feed/cli.zip"
@@ -202,6 +254,31 @@ for _ in $(seq 1 90); do
 done
 if [[ -f "$apply_done" ]]; then
   cat "$apply_done"
+fi
+
+shipped_readonly_updater=0
+if [[ "$(uname -s)" == Darwin ]] \
+  && [[ -f "$apply_script" ]] \
+  && grep -Eq 'cp -a' "$apply_script" \
+  && ! grep -q 'chmod -R u+w' "$apply_script"; then
+  shipped_readonly_updater=1
+fi
+
+if [[ "$applied" -eq 1 ]]; then
+  set +e
+  assert_files_match "$feed/cli.zip" "$old"
+  hash_rc=$?
+  set -e
+  if [[ "$hash_rc" -ne 0 ]]; then
+    if [[ "$shipped_readonly_updater" -eq 1 ]]; then
+      echo "KNOWN_FAILURE: shipped macOS CLI updater left the install different from the candidate zip."
+      echo "KNOWN_FAILURE: workaround: chmod -R u+w <install dir> && titanium update, or reinstall."
+      echo "cli upgrade from published known-failure (shipped-updater-readonly-dylib)"
+      exit 0
+    fi
+    echo "ASSERT: install tree does not match the candidate zip" >&2
+    exit 1
+  fi
 fi
 
 if [[ "$applied" -ne 1 ]]; then

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using Microsoft.Extensions.Hosting;
 using Envoy.Config.Cluster.V3;
 using Envoy.Service.Discovery.V3;
 using Google.Protobuf.WellKnownTypes;
@@ -24,6 +25,9 @@ internal sealed class FakeAdsState
 
     /// <summary>When set, every ADS stream completes right after it opens (a control plane that hangs up at once).</summary>
     public bool CloseStreamsImmediately { get; set; }
+
+    /// <summary>Cancelled when the fake server is disposed so an open stream cannot hold shutdown for 30s.</summary>
+    public CancellationTokenSource Stop { get; } = new();
 
     private int _streamCount;
 
@@ -76,6 +80,7 @@ internal sealed class FakeAdsServer : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddSingleton(State);
         builder.Services.AddGrpc();
+        builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(2));
         builder.WebHost.UseKestrel(options =>
         {
             options.Listen(IPAddress.Loopback, 0, listen => listen.Protocols = HttpProtocols.Http2);
@@ -106,8 +111,25 @@ internal sealed class FakeAdsServer : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _app.StopAsync();
-        await _app.DisposeAsync();
+        try
+        {
+            State.Stop.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try
+        {
+            await _app.StopAsync(stop.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        await _app.DisposeAsync().ConfigureAwait(false);
+        State.Stop.Dispose();
     }
 
     private static FakeAdsState DefaultClusterOnlyState()
@@ -143,24 +165,31 @@ internal sealed class FakeAdsService : AggregatedDiscoveryService.AggregatedDisc
             return;
         }
 
-        await foreach (var request in requestStream.ReadAllAsync(context.CancellationToken))
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, _state.Stop.Token);
+        try
         {
-            if (!string.IsNullOrEmpty(request.ErrorDetail))
+            await foreach (var request in requestStream.ReadAllAsync(linked.Token))
             {
-                _state.Nacks.Enqueue(request.ErrorDetail);
-                continue;
-            }
+                if (!string.IsNullOrEmpty(request.ErrorDetail))
+                {
+                    _state.Nacks.Enqueue(request.ErrorDetail);
+                    continue;
+                }
 
-            if (request.VersionInfo == string.Empty)
-            {
-                await responseStream.WriteAsync(_state.InitialResponse(request.TypeUrl)).ConfigureAwait(false);
-                continue;
-            }
+                if (request.VersionInfo == string.Empty)
+                {
+                    await responseStream.WriteAsync(_state.InitialResponse(request.TypeUrl)).ConfigureAwait(false);
+                    continue;
+                }
 
-            if (_state.TryDequeueFollowUp(request.TypeUrl, out var followUp))
-            {
-                await responseStream.WriteAsync(followUp).ConfigureAwait(false);
+                if (_state.TryDequeueFollowUp(request.TypeUrl, out var followUp))
+                {
+                    await responseStream.WriteAsync(followUp).ConfigureAwait(false);
+                }
             }
+        }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
+        {
         }
     }
 }
