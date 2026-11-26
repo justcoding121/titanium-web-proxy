@@ -972,13 +972,46 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine("Start-Sleep -Seconds 1");
         sb.AppendLine("$tmp = Join-Path $env:TEMP ('ti-cli-unz-' + [guid]::NewGuid().ToString('n'))");
         sb.AppendLine("New-Item -ItemType Directory -Force -Path $tmp | Out-Null");
+        if (!string.IsNullOrEmpty(donePath))
+        {
+            sb.AppendLine("$applyLog = Join-Path (Split-Path -Parent $donePath) 'apply.log'");
+        }
+        else
+        {
+            sb.AppendLine("$applyLog = Join-Path $env:TEMP 'titanium-cli-apply.log'");
+        }
+
+        sb.AppendLine("if ($applyLog) { Start-Transcript -LiteralPath $applyLog -Force | Out-Null }");
+        sb.AppendLine("try {");
         sb.AppendLine("Expand-Archive -LiteralPath $package -DestinationPath $tmp -Force");
-        // Remove-then-copy so destination files get new identities (also clears
-        // read-only bits that would block Copy-Item -Force on some layouts).
-        sb.AppendLine("Get-ChildItem -LiteralPath $tmp -Force | ForEach-Object {");
-        sb.AppendLine("  $dest = Join-Path $installDir $_.Name");
-        sb.AppendLine("  if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }");
-        sb.AppendLine("  Copy-Item -LiteralPath $_.FullName -Destination $dest -Recurse -Force");
+        // Per-file remove-then-copy. Deleting a whole top-level directory would
+        // remove user files that are not in the zip. Retry because a locked
+        // titanium.exe (or an antivirus scan) often releases within a few seconds.
+        // Get-Item.FullName is the long path. Resolve-Path keeps the 8.3 TEMP
+        // path, and Substring then slices the middle of a long FullName.
+        sb.AppendLine("$root = (Get-Item -LiteralPath $tmp).FullName");
+        sb.AppendLine("Get-ChildItem -LiteralPath $tmp -Recurse -Directory -Force | ForEach-Object {");
+        sb.AppendLine("  $rel = $_.FullName.Substring($root.Length).TrimStart('\\','/')");
+        sb.AppendLine("  if ($rel) { New-Item -ItemType Directory -Force -Path (Join-Path $installDir $rel) | Out-Null }");
+        sb.AppendLine("}");
+        sb.AppendLine("Get-ChildItem -LiteralPath $tmp -Recurse -File -Force | ForEach-Object {");
+        sb.AppendLine("  $rel = $_.FullName.Substring($root.Length).TrimStart('\\','/')");
+        sb.AppendLine("  $dest = Join-Path $installDir $rel");
+        sb.AppendLine("  $destDir = Split-Path -Parent $dest");
+        sb.AppendLine("  if ($destDir) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }");
+        sb.AppendLine("  $copied = $false");
+        sb.AppendLine("  for ($try = 1; $try -le 5; $try++) {");
+        sb.AppendLine("    try {");
+        sb.AppendLine("      if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Force }");
+        sb.AppendLine("      Copy-Item -LiteralPath $_.FullName -Destination $dest -Force");
+        sb.AppendLine("      $copied = $true");
+        sb.AppendLine("      break");
+        sb.AppendLine("    } catch {");
+        sb.AppendLine("      Write-Host \"overlay retry $try $rel : $_\"");
+        sb.AppendLine("      Start-Sleep -Seconds 1");
+        sb.AppendLine("    }");
+        sb.AppendLine("  }");
+        sb.AppendLine("  if (-not $copied) { throw \"overlay failed for $rel\" }");
         sb.AppendLine("}");
         sb.AppendLine("Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue");
         if (!string.IsNullOrEmpty(identityPath))
@@ -992,8 +1025,13 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine($"Write-Host 'Updated to {EscapePs(version)} ({EscapePs(channel)}).'");
         sb.AppendLine("$relaunchRc = 0");
         sb.AppendLine("if (Test-Path -LiteralPath $relaunch) {");
-        sb.AppendLine("  & $relaunch version");
-        sb.AppendLine("  $relaunchRc = $LASTEXITCODE");
+        sb.AppendLine("  try {");
+        sb.AppendLine("    & $relaunch version");
+        sb.AppendLine("    $relaunchRc = $LASTEXITCODE");
+        sb.AppendLine("  } catch {");
+        sb.AppendLine("    $relaunchRc = 1");
+        sb.AppendLine("    Write-Host \"relaunch failed: $_\"");
+        sb.AppendLine("  }");
         sb.AppendLine("}");
         if (!string.IsNullOrEmpty(donePath))
         {
@@ -1001,6 +1039,17 @@ internal static class CliUpdateApplyHelper
                 $"Set-Content -LiteralPath $donePath -Value \"ok version={EscapePs(version)} relaunch_rc=$relaunchRc\" -Encoding utf8");
         }
 
+        sb.AppendLine("} catch {");
+        sb.AppendLine("  Write-Host \"apply failed: $_\"");
+        if (!string.IsNullOrEmpty(donePath))
+        {
+            sb.AppendLine("  Set-Content -LiteralPath $donePath -Value ('fail ' + $_.Exception.Message) -Encoding utf8");
+        }
+
+        sb.AppendLine("  exit 1");
+        sb.AppendLine("} finally {");
+        sb.AppendLine("  if ($applyLog) { try { Stop-Transcript | Out-Null } catch { } }");
+        sb.AppendLine("}");
         return sb.ToString();
     }
 
@@ -1032,6 +1081,14 @@ internal static class CliUpdateApplyHelper
             sb.AppendLine($"identity_path={BashQuote(identityPath)}");
         }
 
+        sb.AppendLine("on_apply_err() {");
+        sb.AppendLine("  rc=$?");
+        sb.AppendLine("  if [[ -n \"${done_path:-}\" ]]; then");
+        sb.AppendLine("    printf 'fail rc=%s\\n' \"$rc\" >\"$done_path\" || true");
+        sb.AppendLine("  fi");
+        sb.AppendLine("  exit \"$rc\"");
+        sb.AppendLine("}");
+        sb.AppendLine("trap on_apply_err ERR");
         sb.AppendLine("while kill -0 \"$pid\" 2>/dev/null; do sleep 0.4; done");
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
@@ -1051,13 +1108,7 @@ internal static class CliUpdateApplyHelper
         // clears a stale macOS kernel code-signature cache on the old Mach-O
         // (in-place overwrite kept the inode and led to SIGKILL after overlay).
         sb.AppendLine("chmod -R u+w \"$install_dir\" 2>/dev/null || true");
-        sb.AppendLine("while IFS= read -r -d '' f; do");
-        sb.AppendLine("  rel=\"${f#\"$tmp\"/}\"");
-        sb.AppendLine("  dest=\"$install_dir/$rel\"");
-        sb.AppendLine("  mkdir -p \"$(dirname \"$dest\")\"");
-        sb.AppendLine("  rm -f \"$dest\"");
-        sb.AppendLine("  cp -p \"$f\" \"$dest\"");
-        sb.AppendLine("done < <(find \"$tmp\" -type f -print0)");
+        AppendUnixRemoveThenCopy(sb, "$tmp", "$install_dir");
         sb.AppendLine("rm -rf \"$tmp\"");
         sb.AppendLine("chmod +x \"$install_dir/titanium\" \"$install_dir/twp\" 2>/dev/null || true");
         if (!string.IsNullOrEmpty(identityPath))
@@ -1082,6 +1133,28 @@ internal static class CliUpdateApplyHelper
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Copy files and symlinks from <paramref name="src"/> onto <paramref name="dest"/>
+    /// without following links, and recreate empty directories. Does not delete
+    /// paths that exist only in the destination.
+    /// </summary>
+    private static void AppendUnixRemoveThenCopy(StringBuilder sb, string src, string dest)
+    {
+        sb.AppendLine("while IFS= read -r -d '' f; do");
+        sb.AppendLine($"  rel=\"${{f#\"{src}\"/}}\"");
+        sb.AppendLine($"  target=\"{dest}/$$rel\"");
+        sb.AppendLine("  mkdir -p \"$(dirname \"$target\")\"");
+        sb.AppendLine("  rm -f \"$target\"");
+        sb.AppendLine("  cp -Pp \"$f\" \"$target\"");
+        sb.AppendLine($"done < <(find \"{src}\" \\( -type f -o -type l \\) -print0)");
+        sb.AppendLine("while IFS= read -r -d '' d; do");
+        sb.AppendLine($"  rel=\"${{d#\"{src}\"/}}\"");
+        sb.AppendLine("  if [[ -n \"$rel\" ]]; then");
+        sb.AppendLine($"    mkdir -p \"{dest}/$$rel\"");
+        sb.AppendLine("  fi");
+        sb.AppendLine($"done < <(find \"{src}\" -mindepth 1 -type d -print0)");
     }
 
     private static string EscapePs(string value) => value.Replace("'", "''", StringComparison.Ordinal);

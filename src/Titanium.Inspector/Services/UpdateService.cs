@@ -1148,7 +1148,8 @@ public static class UpdateApplyHelper
         sb.AppendLine("  if command -v ditto >/dev/null 2>&1; then");
         sb.AppendLine("    ditto \"$tmp\" \"$macos_dir\"");
         sb.AppendLine("  else");
-        sb.AppendLine("    cp -a \"$tmp\"/. \"$macos_dir\"/");
+        sb.AppendLine("    chmod -R u+w \"$macos_dir\" 2>/dev/null || true");
+        AppendUnixRemoveThenCopy(sb, "$tmp", "$macos_dir");
         sb.AppendLine("  fi");
         sb.AppendLine("  chmod +x \"$macos_dir/TitaniumInspector\" 2>/dev/null || true");
         sb.AppendLine("  rm -rf \"$tmp\"");
@@ -1170,7 +1171,8 @@ public static class UpdateApplyHelper
         sb.AppendLine("  if compgen -G \"$install_dir\"/libmsquic.so* >/dev/null; then");
         sb.AppendLine("    rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*");
         sb.AppendLine("  fi");
-        sb.AppendLine("  cp -a \"$tmp\"/. \"$install_dir\"/");
+        sb.AppendLine("  chmod -R u+w \"$install_dir\" 2>/dev/null || true");
+        AppendUnixRemoveThenCopy(sb, "$tmp", "$install_dir");
         sb.AppendLine("  rm -rf \"$tmp\"");
         sb.AppendLine("  chmod +x \"$install_dir/TitaniumInspector\" 2>/dev/null || true");
         sb.AppendLine("  if [[ -x \"$relaunch\" ]]; then");
@@ -1191,6 +1193,23 @@ public static class UpdateApplyHelper
             return version;
         var dash = version.IndexOf('-');
         return dash > 0 ? version[..dash] : version;
+    }
+
+    private static void AppendUnixRemoveThenCopy(StringBuilder sb, string src, string dest)
+    {
+        sb.AppendLine("while IFS= read -r -d '' f; do");
+        sb.AppendLine($"  rel=\"${{f#\"{src}\"/}}\"");
+        sb.AppendLine($"  target=\"{dest}/$$rel\"");
+        sb.AppendLine("  mkdir -p \"$(dirname \"$target\")\"");
+        sb.AppendLine("  rm -f \"$target\"");
+        sb.AppendLine("  cp -Pp \"$f\" \"$target\"");
+        sb.AppendLine($"done < <(find \"{src}\" \\( -type f -o -type l \\) -print0)");
+        sb.AppendLine("while IFS= read -r -d '' d; do");
+        sb.AppendLine($"  rel=\"${{d#\"{src}\"/}}\"");
+        sb.AppendLine("  if [[ -n \"$rel\" ]]; then");
+        sb.AppendLine($"    mkdir -p \"{dest}/$$rel\"");
+        sb.AppendLine("  fi");
+        sb.AppendLine($"done < <(find \"{src}\" -mindepth 1 -type d -print0)");
     }
 
     private static string EscapePs(string value) => value.Replace("'", "''", StringComparison.Ordinal);
