@@ -1092,12 +1092,14 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine("while kill -0 \"$pid\" 2>/dev/null; do sleep 0.4; done");
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
-        // Info-ZIP returns 1 for warnings (a stored symlink can print
-        // "mkdir: Already exists") and 2+ for a real failure.
+        // set +e does not stop the ERR trap. Info-ZIP returns 1 for warnings
+        // such as "mkdir: Already exists" on an empty directory entry.
+        sb.AppendLine("trap - ERR");
         sb.AppendLine("set +e");
         sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
         sb.AppendLine("uz=$?");
         sb.AppendLine("set -e");
+        sb.AppendLine("trap on_apply_err ERR");
         sb.AppendLine("if [[ \"$uz\" -gt 1 ]]; then");
         sb.AppendLine("  exit \"$uz\"");
         sb.AppendLine("fi");
