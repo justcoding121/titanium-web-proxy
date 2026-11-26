@@ -1,4 +1,8 @@
 <Project>
+  <!-- Set before the Compile item below. Directory.Build.props is imported before the project body, so a property set only in the csproj arrives too late. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Titanium.Tls.Tests' or '$(MSBuildProjectName)' == 'Titanium.Quic.Tests' or '$(MSBuildProjectName)' == 'Titanium.Net.Compatibility.Tests'">
+    <ManagedStackTestHost>true</ManagedStackTestHost>
+  </PropertyGroup>
   <!-- TestKit and the plugin fixture are not test hosts. Every other project under tests/ is. -->
   <PropertyGroup Condition="'$(MSBuildProjectName)' != 'Titanium.TestKit' and '$(MSBuildProjectName)' != 'Titanium.Web.Proxy.TestPlugins'">
     <RunSettingsFilePath>$(MSBuildThisFileDirectory)test.runsettings</RunSettingsFilePath>
@@ -6,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsTestHost)' == 'true'">
-    <Compile Include="$(MSBuildThisFileDirectory)Titanium.TestKit\Shared\SuppressRootStoreUiModuleInit.cs" Link="Shared\SuppressRootStoreUiModuleInit.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Titanium.TestKit\Shared\SuppressRootStoreUiModuleInit.cs" Link="Shared\SuppressRootStoreUiModuleInit.cs" Condition="'$(ManagedStackTestHost)' != 'true'" />
     <Compile Include="$(MSBuildThisFileDirectory)Titanium.TestKit\Shared\TwpStoreLeakGuard.cs" Link="Shared\TwpStoreLeakGuard.cs" />
   </ItemGroup>
 </Project>

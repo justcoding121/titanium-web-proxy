@@ -12,6 +12,9 @@
     "Titanium.Xds": 85,
     "Titanium.Inspector": 85,
     "Titanium.Web.Proxy.Scripting": 85,
-    "Titanium.Cli.GeoIp": 85
+    "Titanium.Cli.GeoIp": 85,
+    "Titanium.Tls": 80,
+    "Titanium.Quic": 80,
+    "Titanium.Net.Compatibility": 80
   }
 }

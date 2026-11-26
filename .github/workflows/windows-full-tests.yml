@@ -61,6 +61,9 @@ jobs:
         $projects = @(
           'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj',
           'tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj',
+          'tests/Titanium.Tls.Tests/Titanium.Tls.Tests.csproj',
+          'tests/Titanium.Quic.Tests/Titanium.Quic.Tests.csproj',
+          'tests/Titanium.Net.Compatibility.Tests/Titanium.Net.Compatibility.Tests.csproj',
           'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj',
           'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj',
           'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj',
@@ -115,6 +118,13 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        dotnet test tests/Titanium.Tls.Tests/Titanium.Tls.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Quic.Tests/Titanium.Quic.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Net.Compatibility.Tests/Titanium.Net.Compatibility.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         $unitJobs = @(

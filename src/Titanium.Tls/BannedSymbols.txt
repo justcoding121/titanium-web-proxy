@@ -1,0 +1,19 @@
+T:System.Runtime.InteropServices.DllImportAttribute;P/Invoke is not allowed in the managed TLS stack.
+T:System.Runtime.InteropServices.LibraryImportAttribute;P/Invoke is not allowed in the managed TLS stack.
+M:System.Threading.Tasks.Task.Run(System.Action);Crypto and protocol work stay on the caller. Do not hop threads.
+M:System.Threading.Tasks.Task.Run(System.Action,System.Threading.CancellationToken);Crypto and protocol work stay on the caller. Do not hop threads.
+M:System.Threading.Tasks.Task.Run(System.Func{System.Threading.Tasks.Task});Crypto and protocol work stay on the caller. Do not hop threads.
+M:System.Threading.Tasks.Task.Run(System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken);Crypto and protocol work stay on the caller. Do not hop threads.
+M:System.Threading.Tasks.Task.Wait;Blocking on a task hides the caller. Await at the I/O boundary.
+M:System.Threading.Tasks.Task.Wait(System.Int32);Blocking on a task hides the caller. Await at the I/O boundary.
+M:System.Threading.Tasks.Task.Wait(System.Threading.CancellationToken);Blocking on a task hides the caller. Await at the I/O boundary.
+P:System.Threading.Tasks.Task`1.Result;Blocking on a task hides the caller. Await at the I/O boundary.
+M:System.Threading.Thread.Sleep(System.Int32);Use TimeProvider and timers, not thread sleeps.
+M:System.Random.#ctor;Entropy goes through IEntropySource.
+M:System.Random.#ctor(System.Int32);Entropy goes through IEntropySource.
+T:System.IO.Pipelines.Pipe;The managed stack uses the caller-driven stream model, not a pipe.
+T:System.IO.Pipelines.PipeReader;The managed stack uses the caller-driven stream model, not a pipe.
+T:System.IO.Pipelines.PipeWriter;The managed stack uses the caller-driven stream model, not a pipe.
+T:System.IO.Pipelines.IDuplexPipe;The managed stack uses the caller-driven stream model, not a pipe.
+T:System.Threading.Channels.Channel;No producer and consumer hop on the data path.
+T:System.Threading.Channels.Channel`2;No producer and consumer hop on the data path.
