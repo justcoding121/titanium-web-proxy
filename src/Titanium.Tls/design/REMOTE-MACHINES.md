@@ -11,9 +11,11 @@ The key is `~/.ssh/id_ed25519_twp` on this PC. `~/.ssh/config` has the aliases `
 
 ## Already present
 
-- macmini: Apple Git 2.54.0, Xcode at `/Applications/Xcode.app/Contents/Developer`, system LibreSSL 3.3.6. No .NET SDK and no Homebrew. LibreSSL is not the oracle. OpenSSL 3.5 or later still has to be built under `~/opt`.
-- linuxmini: Git 2.53.0, OpenSSL 3.5.5. `openssl list -tls-groups` includes `X25519MLKEM768`, `MLKEM768`, and `x25519`, so this build can serve as the oracle. No .NET SDK yet.
+- macmini: Apple Git 2.54.0, Xcode at `/Applications/Xcode.app/Contents/Developer`, system LibreSSL 3.3.6 (not the oracle). No Homebrew. .NET SDK 10.0.202 and 10.0.404 are under `~/.dotnet`. OpenSSL 3.5.9 is at `~/opt/openssl-3.5.9` and does not replace LibreSSL. `openssl list -tls-groups` includes `X25519MLKEM768`, `MLKEM768`, and `x25519`.
+- linuxmini: Git 2.53.0, OpenSSL 3.5.5. `openssl list -tls-groups` includes `X25519MLKEM768`, `MLKEM768`, and `x25519`, so this build can serve as the oracle. .NET SDK 10.0.404 is under `~/.dotnet`.
+
+Non-interactive SSH does not source the shell profile. Call `$HOME/.dotnet/dotnet` directly. `DOTNET_ROOT` is also appended to `~/.zprofile` on macmini and `~/.bashrc` on linuxmini.
 
 ## Still to install
 
-.NET 10 SDK for both, under `~/.dotnet`. OpenSSL 3.5 or later on macmini, under `~/opt`, without replacing the system LibreSSL. PowerShell 7 on both so the same helper scripts can run. Docker and libmsquic on linuxmini when Phase 2 and Phase 4 need them.
+PowerShell 7 on both so the same helper scripts can run. Docker and libmsquic on linuxmini when Phase 2 and Phase 4 need them.
