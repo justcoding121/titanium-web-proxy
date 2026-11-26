@@ -15,6 +15,10 @@ See `SPIKES.md`.
 
 Scaffold committed. `pwsh tools/run-tests.ps1 -Project tls` passed (2 tests). Workflow actionlint passed. The PyYAML preflight step fails on this PC because `python` is the Microsoft Store stub, which A2 already recorded. No workflow syntax error came from actionlint.
 
+## A0b
+
+Key login works for `macmini` (192.168.1.55, Darwin arm64, macOS 26.6.2) and `linuxmini` (192.168.1.2, Ubuntu 26.04.1, x86_64). `sudo -n true` succeeds on both. The password was used once to install the key and is not stored. Details are in `REMOTE-MACHINES.md`.
+
 ## T1.1
 
 `TlsHkdf.ExpandLabel` matches the RFC 8448 section 3 `c hs traffic`, `s hs traffic`, and `derived` values. `TranscriptStore` hashes, supports `HashWith` for binders, and replaces the transcript with a `message_hash` handshake message. Remaining for the task's done-when: the rest of the RFC 8448 section 3 to 5 Expand-Label rows, the section 5 HelloRetryRequest transcript, the RFC 5869 sanity cases, the zero-allocation gate, and the traceability rows.
