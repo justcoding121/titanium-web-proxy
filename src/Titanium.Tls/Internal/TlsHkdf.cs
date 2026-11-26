@@ -59,6 +59,23 @@ internal static class TlsHkdf
         HKDF.Expand(hash, secret, output, info);
     }
 
+    internal static void Hash(HashAlgorithmName hash, ReadOnlySpan<byte> data, Span<byte> destination)
+    {
+        int hashLength = HashLength(hash);
+        if (destination.Length < hashLength)
+        {
+            throw new ArgumentException("Destination is shorter than the hash.", nameof(destination));
+        }
+
+        if (hash == HashAlgorithmName.SHA256)
+        {
+            SHA256.HashData(data, destination[..hashLength]);
+            return;
+        }
+
+        SHA384.HashData(data, destination[..hashLength]);
+    }
+
     internal static void DeriveSecret(
         HashAlgorithmName hash,
         ReadOnlySpan<byte> secret,

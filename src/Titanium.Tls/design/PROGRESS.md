@@ -19,6 +19,10 @@ Scaffold committed. `pwsh tools/run-tests.ps1 -Project tls` passed (2 tests). Wo
 
 Key login works for `macmini` (192.168.1.55, Darwin arm64, macOS 26.6.2) and `linuxmini` (192.168.1.2, Ubuntu 26.04.1, x86_64). `sudo -n true` succeeds on both. The password was used once to install the key and is not stored. Both machines have the .NET 10.0.404 SDK under `~/.dotnet`. macmini also has OpenSSL 3.5.9 under `~/opt/openssl-3.5.9`, with `X25519MLKEM768`. Details are in `REMOTE-MACHINES.md`.
 
+## T1.2
+
+The schedule walks Early, Handshake, and Master. A transition zeroes the secret it consumes. Section 3 covers the master secret, application traffic keys, the exporter master, and the resumption PSK. Section 4 covers the early traffic secret and the resumption binder. Section 5 covers the HelloRetryRequest handshake secret. SHA-384 is checked against an HMAC implementation in the test project.
+
 ## T1.1
 
 `TlsHkdf.ExpandLabel` matches every Expand-Label output in RFC 8448 sections 3 to 5, including traffic secrets, finished keys, key, and iv. `TranscriptStore.ReplaceWithMessageHash` reproduces the section 5 HelloRetryRequest transcript hash. RFC 5869 cases 1 to 3 pass through `HKDF.Extract` and `HKDF.Expand`. The label builder adds no allocation beyond `HKDF.Expand` itself, which still allocates inside the runtime. Traceability rows for RFC 8446 sections 7.1 and 4.4.1 are in `TRACEABILITY.md`.
