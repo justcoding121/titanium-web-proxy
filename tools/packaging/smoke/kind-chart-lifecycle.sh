@@ -222,11 +222,30 @@ if [[ "$upgrade_ok" == "1" ]]; then
     # still lack keep; do not assert HTTP probes against it.
     tgz="$(ls "$charts_dir"/$tgz_glob | head -1)"
     # Values-only bump (replicaCount) creates Helm rev3 without touching bootstrap JSON.
+    # Live data written between upgrades must survive. Helm three-way merge
+    # keeps it when the chart still renders the ConfigMap and the rendered
+    # bytes did not change.
+    cm="${rel}-data"
+    live="$(mktemp)"
+    kubectl -n "$ns" get configmap "$cm" -o jsonpath='{.data.twp\.yaml}' >"$live"
+    printf '\n# smoke-preserve-marker\n' >>"$live"
+    python3 - "$live" "$live.patch" <<'PY'
+import json, pathlib, sys
+src, dest = sys.argv[1:]
+text = pathlib.Path(src).read_text(encoding="utf-8")
+pathlib.Path(dest).write_text(json.dumps({"data": {"twp.yaml": text}}), encoding="utf-8")
+PY
+    kubectl -n "$ns" patch configmap "$cm" --type merge --patch-file "$live.patch"
     helm upgrade "$rel" "$tgz" --namespace "$ns" \
       -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" \
       --set dataPlane.service.type=ClusterIP \
       --set dataPlane.replicaCount=3 \
       --wait --timeout 8m
+    if ! kubectl -n "$ns" get configmap "$cm" -o jsonpath='{.data.twp\.yaml}' | grep -q 'smoke-preserve-marker'; then
+      echo "ASSERT: gateway data ConfigMap lost a live edit across helm upgrade" >&2
+      exit 1
+    fi
+    echo "chart gateway data preserved across upgrade"
     kind_chart_assert_probes gateway
     helm rollback "$rel" 2 --namespace "$ns" --wait --timeout 8m
     kind_chart_assert_probes gateway
