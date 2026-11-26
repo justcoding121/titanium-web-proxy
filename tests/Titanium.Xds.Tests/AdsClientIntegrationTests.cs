@@ -33,7 +33,7 @@ public class AdsClientIntegrationTests
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         client.Start(cts.Token);
-        await acked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await AdsPhase.Wait(acked.Task, TimeSpan.FromSeconds(15), "FakeAdsServer ACK");
         Assert.IsTrue(client.Store.TryGetAll(Titanium.Xds.XdsTypeUrls.Cluster, out var clusters));
         Assert.IsTrue(clusters.Count > 0);
 
@@ -81,7 +81,7 @@ public class AdsClientIntegrationTests
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         client.Start(cts.Token);
-        await nacked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await AdsPhase.Wait(nacked.Task, TimeSpan.FromSeconds(15), "ValidateSnapshot NACK");
 
         // After NACK the type is cleared from the store.
         await Task.Delay(200);

@@ -4,8 +4,8 @@ name: inspector-install-smoke
 # Promotion PRs into beta and stable run it with no path filter, so a docs-only PR cannot leave a required check pending.
 
 on:
-  # All five legs run on pull_request/push. ubuntu-24.04-arm is required;
-  # macos-15-intel stays continue-on-error (Intel Safari decrypt GET miss + runner scarcity).
+  # All five legs run on pull_request/push and are blocking, including macos-15-intel.
+  # Intel had no Intel-only failure in the recent install-smoke history (#1303).
   # macos-15-intel: fresh Safari decrypt GET is flaky on the Intel image even when
   # trust settings and other browsers pass (driver.log: "no decrypted GET … safari").
   # Fresh on intel therefore omits Safari; upgrade-verify still includes it.
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       os:
-        description: 'Runner leg (all = five OS legs; macos-15-intel stays advisory)'
+        description: 'Runner leg (all = five blocking OS legs)'
         required: false
         default: all
         type: choice
@@ -33,7 +33,7 @@ concurrency:
 
 jobs:
   install-smoke:
-    # All five legs on every event. Only macos-15-intel stays continue-on-error.
+    # All five legs on every event, including macos-15-intel (#1303).
     # Do not gate with `if: matrix.os...` — actionlint rejects matrix in that context.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -43,7 +43,7 @@ jobs:
       matrix:
         # A concrete inputs.os always runs that single leg (dispatch only).
         os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest","macos-15-intel","ubuntu-24.04-arm"]') }}
-    continue-on-error: ${{ matrix.os == 'macos-15-intel' }}
+    continue-on-error: false
     steps:
       - name: Screenshot folder
         shell: bash
