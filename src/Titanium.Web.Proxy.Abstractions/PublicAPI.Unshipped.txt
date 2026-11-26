@@ -14,6 +14,8 @@ static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ResolveLocalReleas
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.StripPrerelease(string? tag) -> string!
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ToComparable(System.Version? version) -> System.Version!
 Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion
+static Titanium.Web.Proxy.Abstractions.Updates.UnixOverlayScript.AppendUnixRemoveThenCopy(System.Text.StringBuilder! sb, string! src, string! dest, bool stopOnError) -> void
+Titanium.Web.Proxy.Abstractions.Updates.UnixOverlayScript
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.AffinityCookie.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.AffinityCookie.init -> void

@@ -1067,8 +1067,10 @@ public static class UpdateApplyHelper
         else
         {
             sb.AppendLine("$tmp = Join-Path $env:TEMP ('ti-unz-' + [guid]::NewGuid().ToString('n'))");
-            sb.AppendLine("New-Item -ItemType Directory -Force -Path $tmp | Out-Null");
-            sb.AppendLine("Expand-Archive -LiteralPath $package -DestinationPath $tmp -Force");
+            // Same .NET Framework limit as the CLI apply script: Expand-Archive's
+            // 3-argument ExtractToDirectory overload is missing on Windows PowerShell 5.1.
+            sb.AppendLine("Add-Type -AssemblyName System.IO.Compression.FileSystem");
+            sb.AppendLine("[System.IO.Compression.ZipFile]::ExtractToDirectory($package, $tmp)");
             sb.AppendLine("Copy-Item -Path (Join-Path $tmp '*') -Destination $installDir -Recurse -Force");
             sb.AppendLine("Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue");
         }
@@ -1148,7 +1150,8 @@ public static class UpdateApplyHelper
         sb.AppendLine("  if command -v ditto >/dev/null 2>&1; then");
         sb.AppendLine("    ditto \"$tmp\" \"$macos_dir\"");
         sb.AppendLine("  else");
-        sb.AppendLine("    cp -a \"$tmp\"/. \"$macos_dir\"/");
+        sb.AppendLine("    chmod -R u+w \"$macos_dir\" 2>/dev/null || true");
+        UnixOverlayScript.AppendUnixRemoveThenCopy(sb, "$tmp", "$macos_dir", stopOnError: false);
         sb.AppendLine("  fi");
         sb.AppendLine("  chmod +x \"$macos_dir/TitaniumInspector\" 2>/dev/null || true");
         sb.AppendLine("  rm -rf \"$tmp\"");
@@ -1170,7 +1173,8 @@ public static class UpdateApplyHelper
         sb.AppendLine("  if compgen -G \"$install_dir\"/libmsquic.so* >/dev/null; then");
         sb.AppendLine("    rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*");
         sb.AppendLine("  fi");
-        sb.AppendLine("  cp -a \"$tmp\"/. \"$install_dir\"/");
+        sb.AppendLine("  chmod -R u+w \"$install_dir\" 2>/dev/null || true");
+        UnixOverlayScript.AppendUnixRemoveThenCopy(sb, "$tmp", "$install_dir", stopOnError: false);
         sb.AppendLine("  rm -rf \"$tmp\"");
         sb.AppendLine("  chmod +x \"$install_dir/TitaniumInspector\" 2>/dev/null || true");
         sb.AppendLine("  if [[ -x \"$relaunch\" ]]; then");

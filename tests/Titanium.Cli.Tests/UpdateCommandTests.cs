@@ -131,11 +131,104 @@ public class UpdateCommandTests
             @"C:\tools\titanium\titanium.exe",
             "7.0.4",
             "stable");
-        StringAssert.Contains(script, "Expand-Archive");
+        StringAssert.Contains(script, "ExtractToDirectory");
+        Assert.IsFalse(script.Contains("Expand-Archive", StringComparison.Ordinal));
         StringAssert.Contains(script, "7");
         StringAssert.Contains(script, "stable");
         StringAssert.Contains(script, "version");
-        StringAssert.Contains(script, "Remove-Item -LiteralPath $dest -Recurse -Force");
+        StringAssert.Contains(script, "Remove-Item -LiteralPath $dest -Force");
+        Assert.IsFalse(
+            script.Contains("Remove-Item -LiteralPath $dest -Recurse", StringComparison.Ordinal),
+            "overlay must not delete whole destination directories");
+        StringAssert.Contains(script, "overlay retry");
+        StringAssert.Contains(script, "apply.log");
+    }
+
+    [TestMethod]
+    public void CliHelper_WindowsScript_OverlaysPerFileAndKeepsUserFiles()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Windows PowerShell is required.");
+        }
+
+        var root = Path.Combine(Path.GetTempPath(), "twp-win-update-" + Guid.NewGuid().ToString("N"));
+        var installDir = Path.Combine(root, "install");
+        var packageDir = Path.Combine(root, "pkg");
+        var zipPath = Path.Combine(root, "candidate.zip");
+        var scriptPath = Path.Combine(root, "apply.ps1");
+        Directory.CreateDirectory(installDir);
+        Directory.CreateDirectory(Path.Combine(packageDir, "sub"));
+        Directory.CreateDirectory(Path.Combine(packageDir, "emptydir"));
+        try
+        {
+            File.WriteAllText(Path.Combine(installDir, "payload.txt"), "old");
+            File.SetAttributes(Path.Combine(installDir, "payload.txt"), FileAttributes.ReadOnly);
+            File.WriteAllText(Path.Combine(installDir, "user-keep.txt"), "keep");
+            File.WriteAllText(Path.Combine(packageDir, "payload.txt"), "new");
+            File.WriteAllText(Path.Combine(packageDir, "sub", "nested.txt"), "nested");
+            File.WriteAllText(Path.Combine(packageDir, "titanium.exe"), "not-a-real-exe");
+            ZipFile.CreateFromDirectory(packageDir, zipPath);
+
+            var donePath = Path.Combine(root, "apply.done");
+            var identityPath = Path.Combine(root, "identity", "installed-release.json");
+            var script = CliUpdateApplyHelper.BuildWindowsScript(
+                pid: 2147483646,
+                zipPath: zipPath,
+                installDir: installDir,
+                relaunchPath: Path.Combine(installDir, "titanium.exe"),
+                version: "99.0.0-smoke",
+                channel: "beta",
+                donePath: donePath,
+                identityPath: identityPath);
+            StringAssert.Contains(script, "'fail '");
+            File.WriteAllText(scriptPath, script);
+            var ps = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "WindowsPowerShell",
+                "v1.0",
+                "powershell.exe");
+            using var process = new System.Diagnostics.Process();
+            process.StartInfo.FileName = ps;
+            process.StartInfo.ArgumentList.Add("-NoProfile");
+            process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
+            process.StartInfo.ArgumentList.Add("Bypass");
+            process.StartInfo.ArgumentList.Add("-File");
+            process.StartInfo.ArgumentList.Add(scriptPath);
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.UseShellExecute = false;
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit(60_000);
+            Assert.AreEqual(0, process.ExitCode, $"apply script failed: {stderr}\n{stdout}");
+            Assert.AreEqual("new", File.ReadAllText(Path.Combine(installDir, "payload.txt")));
+            Assert.AreEqual("keep", File.ReadAllText(Path.Combine(installDir, "user-keep.txt")));
+            Assert.AreEqual("nested", File.ReadAllText(Path.Combine(installDir, "sub", "nested.txt")));
+            Assert.IsTrue(Directory.Exists(Path.Combine(installDir, "emptydir")));
+            Assert.IsTrue(File.Exists(donePath));
+            var doneText = File.ReadAllText(donePath);
+            StringAssert.Contains(doneText, "ok version=99.0.0-smoke");
+            Assert.IsFalse(doneText.Contains("fail ", StringComparison.Ordinal));
+            Assert.IsTrue(File.Exists(Path.Combine(root, "apply.log")));
+            StringAssert.Contains(File.ReadAllText(identityPath), "99.0.0-smoke");
+        }
+        finally
+        {
+            if (Directory.Exists(installDir))
+            {
+                foreach (var file in Directory.EnumerateFiles(installDir, "*", SearchOption.AllDirectories))
+                {
+                    File.SetAttributes(file, FileAttributes.Normal);
+                }
+            }
+
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 
     [TestMethod]
@@ -151,9 +244,14 @@ public class UpdateCommandTests
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "beta");
         StringAssert.Contains(script, "chmod -R u+w \"$install_dir\"");
-        StringAssert.Contains(script, "rm -f \"$dest\"");
-        StringAssert.Contains(script, "cp -p \"$f\" \"$dest\"");
+        StringAssert.Contains(script, "rm -f \"$target\"");
+        StringAssert.Contains(script, "cp -Pp \"$f\" \"$target\"");
+        StringAssert.Contains(script, "$install_dir/$rel");
+        Assert.IsFalse(script.Contains("$$", StringComparison.Ordinal), "$$ is the shell pid, not the relative path");
+        StringAssert.Contains(script, "\\( -type f -o -type l \\)");
+        StringAssert.Contains(script, "-mindepth 1 -type d");
         Assert.IsFalse(script.Contains("cp -af", StringComparison.Ordinal));
+        Assert.IsFalse(script.Contains("find \"$tmp\" -type f -print0", StringComparison.Ordinal));
         Assert.IsFalse(script.Contains("libssl", StringComparison.Ordinal));
         Assert.IsFalse(script.Contains("libcrypto", StringComparison.Ordinal));
     }
@@ -171,7 +269,7 @@ public class UpdateCommandTests
             removeBundledOpenSsl: true);
         var remove = script.IndexOf("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*", StringComparison.Ordinal);
         var chmod = script.IndexOf("chmod -R u+w \"$install_dir\"", StringComparison.Ordinal);
-        var copy = script.IndexOf("cp -p \"$f\" \"$dest\"", StringComparison.Ordinal);
+        var copy = script.IndexOf("cp -Pp \"$f\" \"$target\"", StringComparison.Ordinal);
         var guard = script.IndexOf("compgen -G \"$install_dir\"/libmsquic.so*", StringComparison.Ordinal);
         Assert.IsTrue(guard >= 0 && remove > guard, "OpenSSL removal must be limited to a directory that contains libmsquic.");
         Assert.IsTrue(remove >= 0, "Linux update must delete bundled OpenSSL before overlaying the zip.");
@@ -211,11 +309,16 @@ public class UpdateCommandTests
 
             File.WriteAllText(Path.Combine(packageDir, "payload.txt"), "new");
             File.WriteAllText(Path.Combine(packageDir, "titanium"), "#!/bin/sh\necho ok\n");
+            Directory.CreateDirectory(Path.Combine(packageDir, "emptydir"));
+            File.WriteAllText(Path.Combine(installDir, "user-keep.txt"), "keep");
             if (File.Exists(zipPath))
             {
                 File.Delete(zipPath);
             }
 
+            // ZipFile stores the empty directory. `zip -y` symlinks make Info-ZIP
+            // unzip exit 1 ("mkdir: Already exists") on the CI image, so the
+            // symlink copy is asserted from the generated script text.
             ZipFile.CreateFromDirectory(packageDir, zipPath);
 
             var donePath = Path.Combine(root, "apply.done");
@@ -235,6 +338,8 @@ public class UpdateCommandTests
             RunBash($"chmod +x '{scriptPath.Replace("'", "'\\''", StringComparison.Ordinal)}' && bash '{scriptPath.Replace("'", "'\\''", StringComparison.Ordinal)}'");
 
             Assert.AreEqual("new", File.ReadAllText(destPayload));
+            Assert.AreEqual("keep", File.ReadAllText(Path.Combine(installDir, "user-keep.txt")));
+            Assert.IsTrue(Directory.Exists(Path.Combine(installDir, "emptydir")), "empty directories in the zip must be created");
             Assert.IsTrue(File.Exists(donePath), "apply.done must be written after a successful overlay");
             StringAssert.Contains(File.ReadAllText(donePath), "ok version=99.0.0-smoke");
             Assert.IsTrue(File.Exists(identityPath), "identity must be written after overlay, not before");
