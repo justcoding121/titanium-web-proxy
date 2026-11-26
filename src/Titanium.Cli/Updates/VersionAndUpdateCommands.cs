@@ -1092,7 +1092,15 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine("while kill -0 \"$pid\" 2>/dev/null; do sleep 0.4; done");
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
+        // Info-ZIP returns 1 for warnings (a stored symlink can print
+        // "mkdir: Already exists") and 2+ for a real failure.
+        sb.AppendLine("set +e");
         sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
+        sb.AppendLine("uz=$?");
+        sb.AppendLine("set -e");
+        sb.AppendLine("if [[ \"$uz\" -gt 1 ]]; then");
+        sb.AppendLine("  exit \"$uz\"");
+        sb.AppendLine("fi");
         if (removeBundledOpenSsl)
         {
             // Only a Titanium layout (libmsquic beside the binary). A shared directory
