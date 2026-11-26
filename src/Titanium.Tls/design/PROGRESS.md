@@ -21,4 +21,4 @@ Key login works for `macmini` (192.168.1.55, Darwin arm64, macOS 26.6.2) and `li
 
 ## T1.1
 
-`TlsHkdf.ExpandLabel` matches the RFC 8448 section 3 `c hs traffic`, `s hs traffic`, and `derived` values. `TranscriptStore` hashes, supports `HashWith` for binders, and replaces the transcript with a `message_hash` handshake message. Remaining for the task's done-when: the rest of the RFC 8448 section 3 to 5 Expand-Label rows, the section 5 HelloRetryRequest transcript, the RFC 5869 sanity cases, the zero-allocation gate, and the traceability rows.
+`TlsHkdf.ExpandLabel` matches every Expand-Label output in RFC 8448 sections 3 to 5, including traffic secrets, finished keys, key, and iv. `TranscriptStore.ReplaceWithMessageHash` reproduces the section 5 HelloRetryRequest transcript hash. RFC 5869 cases 1 to 3 pass through `HKDF.Extract` and `HKDF.Expand`. The label builder adds no allocation beyond `HKDF.Expand` itself, which still allocates inside the runtime. Traceability rows for RFC 8446 sections 7.1 and 4.4.1 are in `TRACEABILITY.md`.
