@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.Abstractions.Updates;
 /// Shared bash fragment for in-place zip updates. One copy so CLI and Inspector
 /// do not duplicate the remove-then-copy loop.
 /// </summary>
-internal static class UnixOverlayScript
+public static class UnixOverlayScript
 {
     /// <summary>
     /// Copy files and symlinks from <paramref name="src"/> onto <paramref name="dest"/>
@@ -14,7 +14,7 @@ internal static class UnixOverlayScript
     /// in the destination are left in place. When <paramref name="stopOnError"/> is set,
     /// <c>cp</c> and <c>mkdir</c> failures call the script's <c>die</c> function.
     /// </summary>
-    internal static void AppendUnixRemoveThenCopy(StringBuilder sb, string src, string dest, bool stopOnError)
+    public static void AppendUnixRemoveThenCopy(StringBuilder sb, string src, string dest, bool stopOnError)
     {
         sb.AppendLine("while IFS= read -r -d '' f; do");
         sb.AppendLine($"  rel=\"${{f#\"{src}\"/}}\"");
