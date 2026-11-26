@@ -3,10 +3,11 @@
 {{- $adminName := include "titanium-gateway.adminSecretName" . }}
 {{- /*
   The controller owns the data of the ConfigMap and the Secret below (server-side apply, field manager
-  titanium-gateway). The chart creates them only when they do not exist, and marks them `keep`, so a later
-  `helm upgrade` neither resets what the controller wrote nor deletes it.
+  titanium-gateway). Always render them with `helm.sh/resource-policy: keep` so a later
+  `helm upgrade` neither deletes them nor resets controller-written live data under Helm's
+  three-way merge. Do not gate on lookup — omitting the resource when it already exists
+  causes Helm to delete the live object on upgrade from charts that managed it.
 */}}
-{{- if not (lookup "v1" "ConfigMap" .Release.Namespace $data) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -20,8 +21,6 @@ data:
   twp.yaml: |
     {{- .Values.dataPlane.bootstrapConfig | nindent 4 }}
 ---
-{{- end }}
-{{- if not (lookup "v1" "Secret" .Release.Namespace $tls) }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -32,7 +31,6 @@ metadata:
   annotations:
     helm.sh/resource-policy: keep
 type: Opaque
-{{- end }}
 {{- if not .Values.dataPlane.admin.token.existingSecret }}
 {{- /* Keep the token across `helm upgrade`; generate it only the first time. */}}
 {{- $existing := lookup "v1" "Secret" .Release.Namespace $adminName }}

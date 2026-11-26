@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Non-blocking install smoke for ubuntu-24.04-arm. The required linux leg stays
-# on x64 with its full browser set. This leg uses Firefox and Chrome only.
-# Covers fresh, upgrade (when a previous arm64 deb exists), uninstall, and
-# advisory update-under-decrypt.
+# Blocking install smoke for ubuntu-24.04-arm. The full-browser linux leg stays
+# on x64; this leg uses Firefox and Chrome only. Covers fresh, upgrade (when a
+# previous arm64 deb exists), uninstall, update-under-decrypt, and in-app-apply.
 set -euo pipefail
 chmod +x tools/packaging/smoke/*.sh 2>/dev/null || true
 sudo apt-get update
@@ -57,10 +56,10 @@ run_driver() {
 if [[ -n "$prev" ]]; then
   prev_ver="$(dpkg-deb -f "$prev" Version)"
   sudo dpkg -i "$prev" || sudo apt-get install -y -f
-  run_driver upgrade-seed --exe /opt/titanium-inspector/TitaniumInspector --browsers firefox --out "$log" || true
+  run_driver upgrade-seed --exe /opt/titanium-inspector/TitaniumInspector --browsers firefox --out "$log"
   sudo dpkg -i "$cand" || sudo apt-get install -y -f
   test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
-  run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,firefox --out "$log" || true
+  run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,firefox --out "$log"
   test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
   # Leave proxy armed so dpkg prerm must clear it (do not pre-clear here).
   pkill -TERM -f '^/opt/titanium-inspector/TitaniumInspector( |$)' >/dev/null 2>&1 || true
@@ -89,16 +88,18 @@ run_driver fresh --exe /opt/titanium-inspector/TitaniumInspector --browsers chro
 if run_driver update-under-decrypt --exe /opt/titanium-inspector/TitaniumInspector --out "$log"; then
   echo "update-under-decrypt=pass" | tee -a "$log/advisory.txt"
 else
-  echo "update-under-decrypt=fail (advisory)" | tee -a "$log/advisory.txt"
+  echo "update-under-decrypt=fail" | tee -a "$log/advisory.txt"
+  exit 1
 fi
 if [[ -f "$cand" ]]; then
   if run_driver in-app-apply --exe /opt/titanium-inspector/TitaniumInspector --package "$cand" --out "$log"; then
     echo "in-app-apply=pass" | tee -a "$log/advisory.txt"
   else
-    echo "in-app-apply=fail (advisory)" | tee -a "$log/advisory.txt"
+    echo "in-app-apply=fail" | tee -a "$log/advisory.txt"
+    exit 1
   fi
 else
-  echo "in-app-apply=skip (advisory)" | tee -a "$log/advisory.txt"
+  echo "in-app-apply=skip" | tee -a "$log/advisory.txt"
 fi
 dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r linux-arm64 --self-contained true -o artifacts/cli/linux-arm64
 ./tools/packaging/linux/build-deb-rpm.sh cli artifacts/cli/linux-arm64 artifacts/candidate "$ver" linux-arm64

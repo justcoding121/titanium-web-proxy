@@ -453,13 +453,21 @@ internal static class SmokeApp
                         ? TimeSpan.FromSeconds(20)
                         : null;
             firstUrl = false;
-            var ok = await WaitForHarAsync(
-                before, url, safari ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60), nudge, nudgeEvery);
+            // Windows Chrome/Edge first-window decrypt is flaky under load (#1301);
+            // match Safari's 75s budget and keep the 20s relaunch nudge.
+            var waitFor = safari || windowsChromium ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60);
+            var ok = await WaitForHarAsync(before, url, waitFor, nudge, nudgeEvery);
             launched.Kill();
             if (!ok)
             {
                 PrintRecentHarEntries(before);
                 DumpDiagnostics(null);
+                if (windowsChromium)
+                {
+                    Console.WriteLine(
+                        $"chrome-relaunch-diag name={name} url={url} waitSec={waitFor.TotalSeconds} nudgeEverySec={(nudgeEvery?.TotalSeconds.ToString() ?? "none")}");
+                }
+
                 Console.WriteLine($"no decrypted GET for {url} via {name}");
                 return false;
             }

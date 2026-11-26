@@ -64,6 +64,14 @@ chmod +x "$bin" || true
 
 feed="$(mktemp -d)"
 cp "$candidate_zip" "$feed/cli.zip"
+# Marker only proves overlay when the *candidate* apply script runs. The published
+# (old) client still emits its own apply script, so on Darwin with a shipped
+# updater that fails on 0444 dylibs we assert that known failure instead.
+marker_name="smoke-marker.txt"
+marker_value="cli-upgrade-from-published-${version}"
+printf '%s\n' "$marker_value" >"$feed/$marker_name"
+(cd "$feed" && zip -q cli.zip "$marker_name")
+rm -f "$feed/$marker_name"
 size="$(wc -c < "$feed/cli.zip" | tr -d ' ')"
 sha="$(sha256sum "$feed/cli.zip" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$feed/cli.zip" | awk '{print $1}')"
 
@@ -121,7 +129,8 @@ manifest = {
 open(feed + "/release-manifest.json", "w", encoding="utf-8").write(json.dumps(manifest))
 PY
 
-# Match SpecialFolder.LocalApplicationData (WriteCliIdentity).
+# Match SpecialFolder.LocalApplicationData (identity written by apply script on
+# candidate clients; older published clients still write it in the parent).
 if [[ -n "${LOCALAPPDATA:-}" ]]; then
   identity_dir="$LOCALAPPDATA/TitaniumCli"
 elif [[ "$(uname -s)" == Darwin ]]; then
@@ -132,7 +141,19 @@ fi
 mkdir -p "$identity_dir"
 printf '%s\n' '{"tag":"0.0.1","channel":"Stable"}' >"$identity_dir/installed-release.json"
 
+# Clear any prior apply.done so we do not race against a stale success marker.
+rm -rf "${TMPDIR:-/tmp}/TitaniumCli-update" /tmp/TitaniumCli-update 2>/dev/null || true
+if [[ -n "${TEMP:-}${TMP:-}" ]]; then
+  rm -rf "${TEMP:-$TMP}/TitaniumCli-update" 2>/dev/null || true
+fi
+
+# Capture detached apply stdout/stderr by pointing the workdir script's
+# inherited streams is unreliable after the parent exits. Tee parent output,
+# then poll for the marker / apply.done / Permission denied in the apply script
+# residual log if the old client left one.
 upd_log="$work/update.log"
+apply_log="$work/apply-residual.log"
+: >"$apply_log"
 set +e
 if command -v timeout >/dev/null 2>&1; then
   TITANIUM_UPDATE_FEED="http://127.0.0.1:$feed_port/release-manifest.json" \
@@ -146,35 +167,57 @@ fi
 set -e
 cat "$upd_log"
 
-# Shipped macOS CLI updaters emit `cp -a` without making 0444 Homebrew dylibs
-# writable first. The candidate fixes that; the published client cannot. The
-# parent still writes installed-release.json before apply runs, so identity can
-# advance even when the overlay fails — treat Permission denied as the gap.
-if [[ "$(uname -s)" == Darwin ]] \
-  && grep -Eq 'Permission denied' "$upd_log" \
-  && grep -Eq 'libssl|libcrypto|libmsquic' "$upd_log"; then
-  echo "ACCEPTED_GAP: shipped macOS CLI updater cannot overwrite 0444 dylibs (update exit $rc)."
-  echo "ACCEPTED_GAP: candidate BuildUnixScript uses chmod u+w + cp -af; published client still emits the old script."
-  echo "cli upgrade from published accepted-gap (shipped-updater-readonly-dylib)"
-  exit 0
-fi
-
 if [[ "$rc" -ne 0 ]]; then
   echo "ASSERT: published CLI update exited $rc" >&2
   exit 1
 fi
 
-# After update the binary in $old should report the candidate tag (or at least
-# the installed-release identity should advance).
-if [[ -f "$identity_dir/installed-release.json" ]]; then
-  if ! grep -q "$version" "$identity_dir/installed-release.json" 2>/dev/null; then
-    # Some older clients write only the tag; accept either form.
-    if ! grep -Eqi "${version%%-*}|smoke" "$identity_dir/installed-release.json" 2>/dev/null; then
-      echo "ASSERT: installed-release.json was not updated to $version" >&2
-      cat "$identity_dir/installed-release.json" >&2 || true
-      exit 1
+# Wait for the detached apply to finish. Prefer apply.done from candidate
+# clients; fall back to marker + runnable binary for older published clients
+# that still write identity in the parent before StartDetached.
+apply_done="${TMPDIR:-/tmp}/TitaniumCli-update/apply.done"
+apply_script="${TMPDIR:-/tmp}/TitaniumCli-update/apply-cli-update.sh"
+applied=0
+for _ in $(seq 1 90); do
+  if [[ -f "$apply_done" ]] && grep -qF "ok version=" "$apply_done" 2>/dev/null; then
+    applied=1
+    break
+  fi
+  if [[ -f "$old/$marker_name" ]] && grep -qF "$marker_value" "$old/$marker_name" 2>/dev/null; then
+    if "$bin" version >/dev/null 2>&1; then
+      applied=1
+      break
     fi
   fi
+  sleep 1
+done
+if [[ -f "$apply_done" ]]; then
+  cat "$apply_done"
+fi
+
+if [[ "$applied" -ne 1 ]]; then
+  # Shipped macOS CLI updaters emit `cp -a` without chmod u+w. Overlay fails on
+  # 0444 Homebrew dylibs. Detect via the generated script + missing marker.
+  if [[ "$(uname -s)" == Darwin ]] \
+    && [[ -f "$apply_script" ]] \
+    && grep -Eq 'cp -a' "$apply_script" \
+    && ! grep -q 'chmod -R u+w' "$apply_script"; then
+    echo "KNOWN_FAILURE: shipped macOS CLI updater cannot overwrite 0444 dylibs."
+    echo "KNOWN_FAILURE: workaround: chmod -R u+w <install dir> && titanium update, or reinstall."
+    echo "cli upgrade from published known-failure (shipped-updater-readonly-dylib)"
+    exit 0
+  fi
+  echo "ASSERT: detached apply did not finish (no apply.done / marker)" >&2
+  ls -la "$old/$marker_name" "$apply_done" "$apply_script" 2>&1 || true
+  [[ -f "$apply_script" ]] && head -n 40 "$apply_script" >&2 || true
+  "$bin" version >&2 || true
+  exit 1
+fi
+
+if ! "$bin" version >/dev/null 2>&1; then
+  echo "ASSERT: titanium version failed after upgrade-from-published" >&2
+  "$bin" version >&2 || true
+  exit 1
 fi
 
 echo "cli upgrade from published ok (version=$version)"

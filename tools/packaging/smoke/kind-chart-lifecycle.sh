@@ -209,9 +209,6 @@ else
   kind_chart_assert_no_instance_leftovers
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
   install_prev_oci
-  if [[ "$which" == gateway ]]; then
-    kind_chart_protect_gateway_bootstrap
-  fi
   upgrade_to_candidate
   kind_chart_assert_probes "$which"
   echo "chart $which upgrade $PREV_CHART_VERSION -> candidate ok"
@@ -221,23 +218,18 @@ fi
 # --- rollback ---
 if [[ "$upgrade_ok" == "1" ]]; then
   if [[ "$which" == gateway ]]; then
-    # Published charts may create the bootstrap TLS Secret without keep. Candidate
-    # templates omit it via lookup, so upgrade can delete it and leave Helm's rev1
-    # rollback unable to find it. Delete any orphan/keep copy first so rollback
-    # recreates the Secret from the rev1 chart; retry once if needed.
-    kubectl -n "$ns" delete secret "${rel}-data-tls" --ignore-not-found --wait=true --timeout=30s >/dev/null 2>&1 || true
-    if ! helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m; then
-      echo "gateway helm rollback failed once; ensuring TLS Secret and retrying" >&2
-      kind_chart_ensure_gateway_tls_secret
-      helm rollback "$rel" 1 --namespace "$ns" --wait --timeout 8m
-    fi
-    kind_chart_ensure_gateway_tls_secret
-    # Accepted gap (owner: chart smoke): published rev1 dataplane with an empty
-    # bootstrap TLS Secret does not pass HTTP probes on 28080. Candidate chart
-    # templates already use lookup + helm.sh/resource-policy: keep; upgrade
-    # probes above already passed. Helm rollback success + Secret present is
-    # the rollback proof until a published chart with keep is the PREV.
-    echo "chart gateway rollback ok (HTTP probes accepted-gap vs published rev1; upgrade already probed)"
+    # Candidate→candidate rollback is the shipped-path proof. Published rev1 may
+    # still lack keep; do not assert HTTP probes against it.
+    tgz="$(ls "$charts_dir"/$tgz_glob | head -1)"
+    helm upgrade "$rel" "$tgz" --namespace "$ns" \
+      -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" \
+      --set dataPlane.service.type=ClusterIP \
+      --set-string "dataPlane.bootstrapConfig._smokeRollbackMarker=rev3" \
+      --wait --timeout 8m
+    kind_chart_assert_probes gateway
+    helm rollback "$rel" 2 --namespace "$ns" --wait --timeout 8m
+    kind_chart_assert_probes gateway
+    echo "chart gateway rollback ok (candidate rev3 -> rev2 probed)"
   else
     helm rollback "$rel" 1 -n "$ns" --wait --timeout 180s
     kind_chart_assert_probes "$which"
