@@ -19,7 +19,35 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Get-RelName([string] $rootPath, $item) {
+    # Walk .Name. Substring on FullName breaks when TEMP is an 8.3 path and the
+    # child FullName is the long path (Windows product-smoke: missing 29f\HTTP3-WINDOWS.txt).
+    $names = New-Object System.Collections.Generic.List[string]
+    $cur = $item
+    $rootPath = $rootPath.TrimEnd('\')
+    while ($null -ne $cur) {
+        if ([string]::Equals($cur.FullName.TrimEnd('\'), $rootPath, 'OrdinalIgnoreCase')) { break }
+        $names.Insert(0, $cur.Name)
+        if ($cur.PSIsContainer) { $cur = $cur.Parent } else { $cur = Get-Item -LiteralPath $cur.DirectoryName }
+    }
+    if ($null -eq $cur) { throw "ASSERT: $($item.FullName) is not under $rootPath" }
+    return ($names -join '\')
+}
+
 function Invoke-SelfTest {
+    $relRoot = Join-Path $env:TEMP ("twp-rel-" + [guid]::NewGuid().ToString('n'))
+    New-Item -ItemType Directory -Force -Path (Join-Path $relRoot 'nested') | Out-Null
+    $relFile = Join-Path $relRoot 'nested\HTTP3-WINDOWS.txt'
+    Set-Content -LiteralPath $relFile -Value 'ok' -Encoding ascii
+    try {
+        $rootFull = (Get-Item -LiteralPath $relRoot).FullName
+        $rel = Get-RelName $rootFull (Get-Item -LiteralPath $relFile)
+        if ($rel -ne 'nested\HTTP3-WINDOWS.txt') { throw "ASSERT: rel was $rel" }
+    }
+    finally {
+        Remove-Item -LiteralPath $relRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     # Dry parse + ephemeral TcpListener bind/unbind (no HttpListener / no network deps).
     $proxy = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::Loopback, 0)
     $feed = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::Loopback, 0)
@@ -54,10 +82,11 @@ function Assert-InstallMatchesZip([string] $ZipPath, [string] $InstallDir) {
     $extract = Join-Path $env:TEMP ("twp-hash-" + [guid]::NewGuid().ToString('n'))
     try {
         Expand-Archive -LiteralPath $ZipPath -DestinationPath $extract -Force
+        $root = (Get-Item -LiteralPath $extract).FullName
         $files = @(Get-ChildItem -LiteralPath $extract -Recurse -File -Force)
         if ($files.Count -lt 1) { throw 'ASSERT: candidate zip has no files' }
         foreach ($f in $files) {
-            $rel = $f.FullName.Substring($extract.Length).TrimStart('\', '/')
+            $rel = Get-RelName $root $f
             $dest = Join-Path $InstallDir $rel
             if (-not (Test-Path -LiteralPath $dest)) { throw "ASSERT: missing $rel after overlay" }
             $want = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash
