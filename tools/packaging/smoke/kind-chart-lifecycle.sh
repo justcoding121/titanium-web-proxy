@@ -221,10 +221,11 @@ if [[ "$upgrade_ok" == "1" ]]; then
     # Candidate→candidate rollback is the shipped-path proof. Published rev1 may
     # still lack keep; do not assert HTTP probes against it.
     tgz="$(ls "$charts_dir"/$tgz_glob | head -1)"
+    # Values-only bump (replicaCount) creates Helm rev3 without touching bootstrap JSON.
     helm upgrade "$rel" "$tgz" --namespace "$ns" \
       -f "$root/deploy/helm/titanium-gateway/ci/kind-values.yaml" \
       --set dataPlane.service.type=ClusterIP \
-      --set-string "dataPlane.bootstrapConfig._smokeRollbackMarker=rev3" \
+      --set dataPlane.replicaCount=3 \
       --wait --timeout 8m
     kind_chart_assert_probes gateway
     helm rollback "$rel" 2 --namespace "$ns" --wait --timeout 8m
