@@ -1081,27 +1081,23 @@ internal static class CliUpdateApplyHelper
             sb.AppendLine($"identity_path={BashQuote(identityPath)}");
         }
 
-        sb.AppendLine("on_apply_err() {");
-        sb.AppendLine("  rc=$?");
+        sb.AppendLine("die() {");
+        sb.AppendLine("  echo \"apply failed: $1\" >&2");
         sb.AppendLine("  if [[ -n \"${done_path:-}\" ]]; then");
-        sb.AppendLine("    printf 'fail rc=%s\\n' \"$rc\" >\"$done_path\" || true");
+        sb.AppendLine("    printf 'fail %s\\n' \"$1\" >\"$done_path\" || true");
         sb.AppendLine("  fi");
-        sb.AppendLine("  exit \"$rc\"");
+        sb.AppendLine("  exit 1");
         sb.AppendLine("}");
-        sb.AppendLine("trap on_apply_err ERR");
         sb.AppendLine("while kill -0 \"$pid\" 2>/dev/null; do sleep 0.4; done");
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
-        // set +e does not stop the ERR trap. Info-ZIP returns 1 for warnings
-        // such as "mkdir: Already exists" on an empty directory entry.
-        sb.AppendLine("trap - ERR");
+        // Info-ZIP returns 1 for warnings (empty directory: "mkdir: Already exists").
         sb.AppendLine("set +e");
         sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
         sb.AppendLine("uz=$?");
         sb.AppendLine("set -e");
-        sb.AppendLine("trap on_apply_err ERR");
         sb.AppendLine("if [[ \"$uz\" -gt 1 ]]; then");
-        sb.AppendLine("  exit \"$uz\"");
+        sb.AppendLine("  die \"unzip exit $uz\"");
         sb.AppendLine("fi");
         if (removeBundledOpenSsl)
         {
@@ -1157,12 +1153,12 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine($"  target=\"{dest}/$$rel\"");
         sb.AppendLine("  mkdir -p \"$(dirname \"$target\")\"");
         sb.AppendLine("  rm -f \"$target\"");
-        sb.AppendLine("  cp -Pp \"$f\" \"$target\"");
+        sb.AppendLine("  cp -Pp \"$f\" \"$target\" || die \"cp $target\"");
         sb.AppendLine($"done < <(find \"{src}\" \\( -type f -o -type l \\) -print0)");
         sb.AppendLine("while IFS= read -r -d '' d; do");
         sb.AppendLine($"  rel=\"${{d#\"{src}\"/}}\"");
         sb.AppendLine("  if [[ -n \"$rel\" ]]; then");
-        sb.AppendLine($"    mkdir -p \"{dest}/$$rel\"");
+        sb.AppendLine($"    mkdir -p \"{dest}/$$rel\" || die \"mkdir $$rel\"");
         sb.AppendLine("  fi");
         sb.AppendLine($"done < <(find \"{src}\" -mindepth 1 -type d -print0)");
     }
