@@ -987,15 +987,25 @@ internal static class CliUpdateApplyHelper
         // Per-file remove-then-copy. Deleting a whole top-level directory would
         // remove user files that are not in the zip. Retry because a locked
         // titanium.exe (or an antivirus scan) often releases within a few seconds.
-        // Get-Item.FullName is the long path. Resolve-Path keeps the 8.3 TEMP
-        // path, and Substring then slices the middle of a long FullName.
+        // Walk .Name so an 8.3 TEMP path and a long FullName cannot be sliced apart.
+        sb.AppendLine("function Get-RelName([string]$rootPath, $item) {");
+        sb.AppendLine("  $names = New-Object System.Collections.Generic.List[string]");
+        sb.AppendLine("  $cur = $item");
+        sb.AppendLine("  $rootPath = $rootPath.TrimEnd('\\')");
+        sb.AppendLine("  while ($null -ne $cur) {");
+        sb.AppendLine("    if ([string]::Equals($cur.FullName.TrimEnd('\\'), $rootPath, 'OrdinalIgnoreCase')) { break }");
+        sb.AppendLine("    $names.Insert(0, $cur.Name)");
+        sb.AppendLine("    if ($cur.PSIsContainer) { $cur = $cur.Parent } else { $cur = Get-Item -LiteralPath $cur.DirectoryName }");
+        sb.AppendLine("  }");
+        sb.AppendLine("  return ($names -join '\\')");
+        sb.AppendLine("}");
         sb.AppendLine("$root = (Get-Item -LiteralPath $tmp).FullName");
         sb.AppendLine("Get-ChildItem -LiteralPath $tmp -Recurse -Directory -Force | ForEach-Object {");
-        sb.AppendLine("  $rel = $_.FullName.Substring($root.Length).TrimStart('\\','/')");
+        sb.AppendLine("  $rel = Get-RelName $root $_");
         sb.AppendLine("  if ($rel) { New-Item -ItemType Directory -Force -Path (Join-Path $installDir $rel) | Out-Null }");
         sb.AppendLine("}");
         sb.AppendLine("Get-ChildItem -LiteralPath $tmp -Recurse -File -Force | ForEach-Object {");
-        sb.AppendLine("  $rel = $_.FullName.Substring($root.Length).TrimStart('\\','/')");
+        sb.AppendLine("  $rel = Get-RelName $root $_");
         sb.AppendLine("  $dest = Join-Path $installDir $rel");
         sb.AppendLine("  $destDir = Split-Path -Parent $dest");
         sb.AppendLine("  if ($destDir) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }");
@@ -1041,6 +1051,7 @@ internal static class CliUpdateApplyHelper
 
         sb.AppendLine("} catch {");
         sb.AppendLine("  Write-Host \"apply failed: $_\"");
+        sb.AppendLine("  [Console]::Error.WriteLine(\"apply failed: $_\")");
         if (!string.IsNullOrEmpty(donePath))
         {
             sb.AppendLine("  Set-Content -LiteralPath $donePath -Value ('fail ' + $_.Exception.Message) -Encoding utf8");
