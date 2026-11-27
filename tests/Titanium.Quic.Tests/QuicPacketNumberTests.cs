@@ -56,6 +56,19 @@ public sealed class QuicPacketNumberTests
     }
 
     [TestMethod]
+    public void EncodeFitsTheExactWidthAndRejectsAnEqualAck()
+    {
+        Assert.IsFalse(QuicPacketNumber.TryEncode(5, 5, new byte[4], out _));
+        Assert.IsTrue(QuicPacketNumber.TryEncode(5, 4, new byte[1], out int written));
+        Assert.AreEqual(1, written);
+        Assert.IsFalse(QuicPacketNumber.TryEncode(256, 0, new byte[1], out _));
+        Assert.IsTrue(QuicPacketNumber.TryEncode(256, 0, new byte[2], out written));
+        Assert.AreEqual(2, written);
+        Assert.IsTrue(QuicPacketNumber.TryDecode(4, [5], out ulong full));
+        Assert.AreEqual(5UL, full);
+    }
+
+    [TestMethod]
     public void EncodedNumbersDecodeBackToTheSameValue()
     {
         ulong[] numbers = [1, 63, 256, 0x734f, 0x10000, 0xa82f9b32];
