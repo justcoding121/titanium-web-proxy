@@ -8,7 +8,7 @@ Public names follow the protocol and mirror the BCL type they stand in for. `Tls
 
 ## Ownership
 
-`TlsEngine` will own the role, the handshake state, one `TlsKeySchedule`, one `TranscriptStore`, and two record directions. It is sans-IO: `Advance` takes bytes and returns bytes to send plus events. Events that need the caller (`ClientHelloReceived`, `ServerCertificateReceived`) pause the engine. The caller does the async work and then calls `Resume`. No cryptographic method returns a `Task` or `ValueTask`.
+Handshake messages and extensions are span codecs. A known extension on the wrong message is `unsupported_extension`, an unknown extension is retained, and a duplicate of either is `illegal_parameter`. `TlsEngine` will own the role, the handshake state, one `TlsKeySchedule`, one `TranscriptStore`, and two record directions. It is sans-IO: `Advance` takes bytes and returns bytes to send plus events. Events that need the caller (`ClientHelloReceived`, `ServerCertificateReceived`) pause the engine. The caller does the async work and then calls `Resume`. No cryptographic method returns a `Task` or `ValueTask`.
 
 `TlsStream` owns the inner `Stream`, the pooled receive buffer, and the engine. Read and write run on the caller's continuation. There is no pipe, no channel, and no extra thread per connection.
 
