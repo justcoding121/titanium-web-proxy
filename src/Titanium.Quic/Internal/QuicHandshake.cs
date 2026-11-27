@@ -1581,6 +1581,13 @@ internal sealed partial class QuicConnectionCore : IDisposable
         {
             SealAndStage(kind, protector, frame[..written], 0, countCongestion: false);
         }
+
+        // The peer repeats an Initial when the ServerHello is lost. Answer that repeat immediately.
+        // Waiting for the doubled probe timeout lets a 5s idle timer win.
+        if (kind == QuicPacketKind.Initial && _loss.TryOldestPayload(0, out QuicPacketKind carried, out byte[] flight))
+        {
+            Retransmit(carried, flight);
+        }
     }
 
     private void InstallInitial(ReadOnlySpan<byte> destinationId, bool clientSend)

@@ -480,6 +480,20 @@ internal sealed class QuicLossRecovery
         return space;
     }
 
+    internal bool TryOldestPayload(int space, out QuicPacketKind kind, out byte[] payload)
+    {
+        if (Oldest(space) is not Flight packet || packet.Payload.Length == 0)
+        {
+            kind = default;
+            payload = [];
+            return false;
+        }
+
+        kind = packet.Kind;
+        payload = packet.Payload;
+        return true;
+    }
+
     private Flight? Oldest(int space)
     {
         Flight? oldest = null;
