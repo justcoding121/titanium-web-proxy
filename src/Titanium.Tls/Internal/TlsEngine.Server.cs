@@ -35,6 +35,8 @@ internal sealed partial class TlsEngine
     private byte[]? _sessionId;
     private ushort _requestedGroup;
     private bool _resumed;
+
+    internal bool AcceptedResumption => _resumed;
     private byte[]? _clientLeaf;
     private string? _selectedAlpn;
     private SecretBuffer? _clientApplication;

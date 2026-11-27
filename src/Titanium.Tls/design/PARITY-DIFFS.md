@@ -23,3 +23,7 @@ Recorded differences:
 - A write that fits in 2^14 bytes is one TLS record. A larger write is split. `SslStream` may coalesce several small writes.
 - Stapled OCSP and signed certificate timestamps are copied and not enforced.
 - `NegotiateClientCertificateAsync` throws `NotSupportedException`. Post-handshake client authentication is not implemented.
+
+## OpenSSL 3.5.9
+
+`s_server` and `s_client` from OpenSSL 3.5.9 complete the pairwise cells in T1.13. The managed client is limited to AES-128-GCM-SHA256, an ECDSA P-256 peer certificate, and `ecdsa_secp256r1_sha256` client authentication. P-256 against that client is a HelloRetryRequest. The managed server accepts the three TLS 1.3 ciphers, X25519, P-256, P-384, X25519MLKEM768, and RSA-2048 as well as the two ECDSA certificates. `s_server` is a terminal relay, so the transfer test reads stdout and writes the same bytes to stdin. Tickets do not resume across the two stacks. `s_client` key update (`k`/`K`) is not an oracle for `CLIENT_TRAFFIC_SECRET_1` and is not part of the matrix. The full cross product is a Slow test and was not run here. Kestrel on this PC accepts the managed client.

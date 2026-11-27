@@ -19,6 +19,16 @@ public sealed class TlsStreamOptions
     internal IEntropySource? Entropy { get; set; }
 
     internal X509Certificate2Collection? TrustAnchors { get; set; }
+
+    internal NamedGroup[]? Groups { get; set; }
+
+    internal ushort[]? CipherSuites { get; set; }
+
+    internal ITicketProtector? Tickets { get; set; }
+
+    internal bool RequestClientCertificate { get; set; }
+
+    internal X509Certificate2Collection? ClientTrustAnchors { get; set; }
 }
 
 /// <summary>Selects server authentication options after the ClientHello arrives.</summary>

@@ -114,6 +114,8 @@ public sealed class TlsStream : Stream
     /// <summary>The fingerprint profile's fidelity, or the built-in hello's fidelity when no profile is set.</summary>
     public TlsFingerprintFidelity FingerprintFidelity => _options.FingerprintProfile?.Fidelity ?? TlsFingerprintFidelity.ReducedNoPostQuantum;
 
+    internal bool AcceptedResumption => _engine?.AcceptedResumption == true;
+
     /// <inheritdoc />
     public override bool CanRead => !_disposed && _inner.CanRead;
 
@@ -1061,18 +1063,22 @@ public sealed class TlsStream : Stream
         _inner.Write(bytes);
     }
 
-    private static TlsServerSelection BuildSelection(SslServerAuthenticationOptions options)
+    private TlsServerSelection BuildSelection(SslServerAuthenticationOptions options)
     {
         X509Certificate2 certificate = CertificateOf(options) ?? throw new InvalidOperationException("A server certificate is required.");
         string[]? protocols = ProtocolNames(options.ApplicationProtocols);
-        ushort[]? ciphers = CipherIds(options.CipherSuitesPolicy);
+        ushort[]? ciphers = _options.CipherSuites ?? CipherIds(options.CipherSuitesPolicy);
         return new TlsServerSelection
         {
             Certificate = certificate,
             ApplicationProtocols = protocols,
             RequireApplicationProtocol = protocols is { Length: > 0 },
-            RequestClientCertificate = options.ClientCertificateRequired,
+            RequestClientCertificate = options.ClientCertificateRequired || _options.RequestClientCertificate,
+            ClientTrustAnchors = _options.ClientTrustAnchors,
+            Groups = _options.Groups,
             CipherSuites = ciphers,
+            PreferServerCipherOrder = _options.CipherSuites is not null,
+            Tickets = _options.Tickets,
         };
     }
 

@@ -857,7 +857,7 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (!ResponseExtensionsAreOffered(extensions, false, out byte extensionAlert))
+        if (!CertificateRequestExtensionsAreAcceptable(extensions, out byte extensionAlert))
         {
             Fail(output, extensionAlert);
             return;
@@ -873,6 +873,37 @@ internal sealed partial class TlsEngine
         _certificateAllowsP256 = listed;
         _transcript!.Append(message);
         State = TlsEngineState.WaitCertificate;
+    }
+
+    private bool CertificateRequestExtensionsAreAcceptable(ReadOnlySpan<byte> extensions, out byte alert)
+    {
+        alert = 0;
+        TlsReader reader = new(extensions);
+        while (reader.Remaining > 0)
+        {
+            if (!reader.TryReadUInt16(out ushort type) || !reader.TryReadVector16(out _))
+            {
+                alert = (byte)HandshakeAlert.DecodeError;
+                return false;
+            }
+
+            // These are the server's request, not a response to the ClientHello.
+            if (type is ExtensionType.SignatureAlgorithms
+                or ExtensionType.SignatureAlgorithmsCert
+                or ExtensionType.CertificateAuthorities
+                or ExtensionType.OidFilters)
+            {
+                continue;
+            }
+
+            if (!Offered(type))
+            {
+                alert = (byte)HandshakeAlert.UnsupportedExtension;
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private bool ResponseExtensionsAreOffered(ReadOnlySpan<byte> extensions, bool allowCookie, out byte alert)
