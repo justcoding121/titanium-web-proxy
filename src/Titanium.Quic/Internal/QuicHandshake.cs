@@ -777,6 +777,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         if (!IsClosed)
         {
             Emit(output);
+            SendHandshakeDoneOnce();
         }
 
         return !IsClosed;
@@ -1114,6 +1115,19 @@ internal sealed partial class QuicConnectionCore : IDisposable
         {
             SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
         }
+    }
+
+    private bool _sentHandshakeDone;
+
+    private void SendHandshakeDoneOnce()
+    {
+        if (_client || _sentHandshakeDone || !HandshakeComplete || _applicationSend is null)
+        {
+            return;
+        }
+
+        _sentHandshakeDone = true;
+        SendHandshakeDone();
     }
 
     internal void SendHandshakeDone()

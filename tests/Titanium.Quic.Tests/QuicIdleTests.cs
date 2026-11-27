@@ -90,7 +90,7 @@ public sealed class QuicIdleTests
         var ack = new QuicFrame
         {
             Kind = QuicFrameKind.Ack,
-            LargestAcknowledged = 0,
+            LargestAcknowledged = 1,
             AckRangeCount = 1,
         };
         int written = QuicFrameWriter.Write(in ack, ranges, frame);

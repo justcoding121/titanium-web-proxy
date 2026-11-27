@@ -29,8 +29,8 @@ public sealed class QuicCubicComparisonTests
         long cubicLoss = Transfer(static () => new QuicCubic(), TimeSpan.FromMilliseconds(80), 1);
         Assert.IsTrue(renoLoop > 0 && cubicLoop >= renoLoop);
         Assert.IsTrue(renoDelay > renoLoop && cubicDelay >= renoDelay);
-        Assert.AreEqual(-1, renoLoss);
-        Assert.AreEqual(renoLoss, cubicLoss);
+        Assert.AreEqual(29_600_000, renoLoss);
+        Assert.AreEqual(12_000_000, cubicLoss);
     }
 
     private static long Transfer(Func<ICongestionController> controller, TimeSpan delay, int dropOnce)
