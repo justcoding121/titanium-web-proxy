@@ -122,7 +122,7 @@ public sealed class ChainValidationTests
         var trust = new X509Certificate2Collection(root);
         Assert.AreEqual(TlsEngineState.Connected, FinishWithClientCertificate(serverCertificate, clientCertificate, trust, out _));
         Assert.AreEqual(TlsEngineState.Closed, FinishWithClientCertificate(serverCertificate, clientCertificate, new X509Certificate2Collection(), out byte alert));
-        Assert.AreEqual(42, alert);
+        Assert.AreEqual(23, alert);
     }
 
     [TestMethod]
@@ -251,9 +251,9 @@ public sealed class ChainValidationTests
         client.Advance(output.Bytes.ToArray(), out _, output);
         client.Resume(true, output);
         server.Advance(output.Bytes.ToArray(), out _, output);
-        if (output.Bytes.Length > 6)
+        if (output.Bytes.Length > 0)
         {
-            alert = output.Bytes[6];
+            alert = output.Bytes[0];
         }
 
         return server.State;

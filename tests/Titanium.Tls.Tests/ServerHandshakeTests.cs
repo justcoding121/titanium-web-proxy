@@ -175,11 +175,11 @@ public sealed class ServerHandshakeTests
         Assert.IsFalse(expired.Server.IsResumption);
 
         Assert.IsTrue(cache.TryGet("localhost", "tls", 5_001, out TlsResumptionTicket stored));
-        RejectOfferedTicket(certificate, tickets, cache, before: null, hello => hello[^1] ^= 0xFF);
-        RejectOfferedTicket(certificate, tickets, cache, before: () => stored.Ticket[3] ^= 0xFF, hello => { });
+        RejectOfferedTicket(certificate, tickets, cache, before: null, hello => hello[^1] ^= 0xFF, fallback: false);
+        RejectOfferedTicket(certificate, tickets, cache, before: () => stored.Ticket[3] ^= 0xFF, hello => { }, fallback: true);
     }
 
-    private static void RejectOfferedTicket(X509Certificate2 certificate, MemoryTicketProtector tickets, MemoryTlsSessionCache cache, Action? before, Action<byte[]> mutateHello)
+    private static void RejectOfferedTicket(X509Certificate2 certificate, MemoryTicketProtector tickets, MemoryTlsSessionCache cache, Action? before, Action<byte[]> mutateHello, bool fallback)
     {
         before?.Invoke();
         using var client = new TlsEngine(TlsRole.Client, serverName: "localhost", cache: cache) { UnixTimeSeconds = 5_010 };
@@ -191,7 +191,7 @@ public sealed class ServerHandshakeTests
         server.Advance(hello, out _, output);
         server.Resume(_ => new TlsServerSelection { Certificate = certificate, Tickets = tickets }, output);
         Assert.IsFalse(server.IsResumption);
-        Assert.AreEqual(TlsEngineState.WaitFinished, server.State);
+        Assert.AreEqual(fallback ? TlsEngineState.WaitFinished : TlsEngineState.Closed, server.State);
     }
 
     [TestMethod]

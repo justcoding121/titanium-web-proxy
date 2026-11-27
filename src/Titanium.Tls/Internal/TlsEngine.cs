@@ -105,6 +105,11 @@ internal sealed partial class TlsEngine : IDisposable
     private int _emptyRecords;
     private int _acceptedChangeCipherSpec;
     private bool _paused;
+    private bool _endOfRecord;
+    private bool _alertsEncrypted;
+    private bool _ignoreEarlyData;
+    private int _earlyDataSkipped;
+    private const int MaxIgnoredEarlyData = 16384;
     private readonly IEntropySource _entropy;
     private readonly string? _serverName;
     private readonly ITlsSessionCache? _cache;
@@ -182,27 +187,39 @@ internal sealed partial class TlsEngine : IDisposable
                 break;
             }
 
+            byte contentType = _stash[0];
             if (recordLength == 0)
             {
-                _emptyRecords++;
                 Consume(recordLength);
+                if (contentType != 23)
+                {
+                    Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    break;
+                }
+
+                _emptyRecords++;
                 if (_emptyRecords > MaxEmptyRecords)
                 {
                     Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    break;
                 }
 
                 continue;
             }
 
             _emptyRecords = 0;
-            byte contentType = _stash[0];
             if (contentType == 20)
             {
-                bool accepted = State != TlsEngineState.Connected && TlsPlaintextRecord.TryAcceptChangeCipherSpec(_stash.AsSpan(0, TlsRecordProtector.HeaderLength + recordLength), ref _acceptedChangeCipherSpec);
+                bool beforeHello = _role == TlsRole.Server && _firstHello is null;
+                bool accepted = !beforeHello &&
+                    _pendingHandshake == 0 &&
+                    State != TlsEngineState.Connected &&
+                    TlsPlaintextRecord.TryAcceptChangeCipherSpec(_stash.AsSpan(0, TlsRecordProtector.HeaderLength + recordLength), ref _acceptedChangeCipherSpec);
                 Consume(recordLength);
                 if (!accepted)
                 {
                     Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    break;
                 }
 
                 continue;
@@ -210,6 +227,13 @@ internal sealed partial class TlsEngine : IDisposable
 
             if (contentType == 21)
             {
+                if (_read != null)
+                {
+                    Consume(recordLength);
+                    Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    break;
+                }
+
                 byte description = recordLength == 2 ? _stash[6] : (byte)0;
                 Consume(recordLength);
                 if (recordLength != 2)
@@ -258,8 +282,43 @@ internal sealed partial class TlsEngine : IDisposable
                 RecordResult result = _read.TryUnprotect(_stash.AsSpan(0, TlsRecordProtector.HeaderLength + recordLength));
                 if (!result.Success)
                 {
+                    if (result.Alert == TlsRecordAlert.BadRecordMac &&
+                        _ignoreEarlyData &&
+                        State != TlsEngineState.Connected &&
+                        _earlyDataSkipped + recordLength <= MaxIgnoredEarlyData)
+                    {
+                        _earlyDataSkipped += recordLength;
+                        Consume(recordLength);
+                        continue;
+                    }
+
                     Consume(recordLength);
                     Fail(output, (byte)result.Alert);
+                    break;
+                }
+
+                _ignoreEarlyData = false;
+                if (result.ContentLength == 0 && result.ContentType is 20 or 21 or 22)
+                {
+                    Consume(recordLength);
+                    Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    break;
+                }
+
+                if (result.ContentType == 21)
+                {
+                    if (result.ContentLength != 2)
+                    {
+                        Consume(recordLength);
+                        Fail(output, (byte)HandshakeAlert.DecodeError);
+                        break;
+                    }
+
+                    byte description = _stash[TlsRecordProtector.HeaderLength + 1];
+                    Consume(recordLength);
+                    output.AddEvent(TlsEventKind.PeerAlert, description);
+                    State = TlsEngineState.Closed;
+                    _paused = false;
                     break;
                 }
 
@@ -433,6 +492,20 @@ internal sealed partial class TlsEngine : IDisposable
             }
 
             Enter(type, bodyLength, output);
+            if (_endOfRecord)
+            {
+                _endOfRecord = false;
+                if (State != TlsEngineState.Closed && _handshake.Pending > 0)
+                {
+                    Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    return false;
+                }
+            }
+
+            if (State == TlsEngineState.Closed || _paused)
+            {
+                return State != TlsEngineState.Closed;
+            }
         }
 
         return State != TlsEngineState.Closed;
@@ -450,7 +523,7 @@ internal sealed partial class TlsEngine : IDisposable
                 TlsEngineState.WaitCertificate => type == HandshakeType.Certificate,
                 TlsEngineState.WaitCertificateVerify => type == HandshakeType.CertificateVerify,
                 TlsEngineState.WaitFinished => type == HandshakeType.Finished,
-                TlsEngineState.Connected => type is HandshakeType.NewSessionTicket or HandshakeType.KeyUpdate,
+                TlsEngineState.Connected => type == HandshakeType.NewSessionTicket,
                 _ => false,
             };
         }
@@ -461,7 +534,7 @@ internal sealed partial class TlsEngine : IDisposable
             TlsEngineState.WaitClientCertificate => type == HandshakeType.Certificate,
             TlsEngineState.WaitClientCertificateVerify => type == HandshakeType.CertificateVerify,
             TlsEngineState.WaitFinished => type == HandshakeType.Finished,
-            TlsEngineState.Connected => type == HandshakeType.KeyUpdate,
+            TlsEngineState.Connected => false,
             _ => false,
         };
     }
@@ -481,6 +554,17 @@ internal sealed partial class TlsEngine : IDisposable
     {
         State = TlsEngineState.Closed;
         _paused = false;
+        if (_alertsEncrypted && _write != null)
+        {
+            Span<byte> plain = stackalloc byte[2];
+            plain[0] = 2;
+            plain[1] = description;
+            Span<byte> encrypted = stackalloc byte[32];
+            int written = _write.Protect(21, plain, encrypted);
+            output.AddBytes(encrypted[..written]);
+            return;
+        }
+
         Span<byte> alert = stackalloc byte[7];
         alert[0] = 21;
         alert[1] = 3;

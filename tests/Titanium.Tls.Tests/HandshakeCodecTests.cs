@@ -183,7 +183,7 @@ public sealed class HandshakeCodecTests
         Assert.IsFalse(HandshakeMessages.TryReadClientHello(BuildEmptyCipherVector(), out _, out HandshakeAlert empty));
         Assert.AreEqual(HandshakeAlert.DecodeError, empty);
         Assert.IsFalse(HandshakeMessages.TryReadClientHello(PatchExtensions(BuildClientHello(includeExtensions: false), [0x00, 0x30, 0x00, 0x00]), out _, out HandshakeAlert oidFilters));
-        Assert.AreEqual(HandshakeAlert.UnsupportedExtension, oidFilters);
+        Assert.AreEqual(HandshakeAlert.IllegalParameter, oidFilters);
         AssertRoundTrip(PatchExtensions(BuildClientHello(includeExtensions: false), []), static (message, copy) =>
         {
             Assert.IsTrue(HandshakeMessages.TryReadClientHello(message, out ClientHelloView view, out _));

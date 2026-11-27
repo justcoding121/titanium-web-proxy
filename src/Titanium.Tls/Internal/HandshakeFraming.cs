@@ -97,6 +97,8 @@ internal sealed class HandshakeReassembler
         _buffer = new byte[maxMessageBytes + HandshakeFraming.HeaderLength];
     }
 
+    internal int Pending => _length;
+
     internal bool TryAppend(ReadOnlySpan<byte> fragment, out HandshakeAlert alert)
     {
         alert = default;

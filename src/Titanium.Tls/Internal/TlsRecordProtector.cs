@@ -110,9 +110,9 @@ internal sealed class TlsRecordProtector : IDisposable
             throw new TlsRecordException(TlsRecordAlert.RecordOverflow);
         }
 
-        // RFC 8446 section 5.4: content, the content-type byte, and padding together stay within 2^14.
+        // RFC 8446 section 5.4: content plus padding stay within 2^14, and the inner plaintext adds the type byte.
         long innerLengthLong = (long)plaintext.Length + padding + 1;
-        if (innerLengthLong > MaxPlaintext)
+        if (plaintext.Length + padding > MaxPlaintext || innerLengthLong > MaxPlaintext + 1)
         {
             throw new TlsRecordException(TlsRecordAlert.RecordOverflow);
         }
@@ -182,7 +182,7 @@ internal sealed class TlsRecordProtector : IDisposable
         }
 
         int innerLength = cipherLength - TagLength;
-        if (innerLength > MaxPlaintext)
+        if (innerLength > MaxPlaintext + 1)
         {
             return Fail(TlsRecordAlert.RecordOverflow);
         }
@@ -201,9 +201,9 @@ internal sealed class TlsRecordProtector : IDisposable
             return Fail(TlsRecordAlert.BadRecordMac);
         }
 
-        if (!TryReadInner(inner, out byte contentType, out int contentLength))
+        if (!TryReadInner(inner, out byte contentType, out int contentLength) || contentLength > MaxPlaintext)
         {
-            return Fail(TlsRecordAlert.UnexpectedMessage);
+            return Fail(contentLength > MaxPlaintext ? TlsRecordAlert.RecordOverflow : TlsRecordAlert.UnexpectedMessage);
         }
 
         _sequence++;

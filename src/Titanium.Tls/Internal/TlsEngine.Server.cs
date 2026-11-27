@@ -104,9 +104,15 @@ internal sealed partial class TlsEngine
             return;
         }
 
+        _ignoreEarlyData = TryExtension(hello.Extensions, ExtensionType.EarlyData, out _);
         if (_hrrSeen)
         {
             ContinueAfterRetry(message, hello, output);
+            if (State != TlsEngineState.Closed)
+            {
+                _endOfRecord = true;
+            }
+
             return;
         }
 
@@ -127,6 +133,7 @@ internal sealed partial class TlsEngine
         _clientHelloInfo = new TlsClientHelloInfo(ReadServerName(hello.Extensions), message);
         State = TlsEngineState.WaitClientHelloDecision;
         _paused = true;
+        _endOfRecord = true;
         output.AddEvent(TlsEventKind.ClientHelloReceived);
     }
 
@@ -141,6 +148,11 @@ internal sealed partial class TlsEngine
         if (!HandshakeMessages.TryReadClientHello(_firstHello, out ClientHelloView hello, out _))
         {
             Fail(output, AlertInternalError);
+            return;
+        }
+
+        if (!RequireGroups(hello.Extensions, output))
+        {
             return;
         }
 
@@ -172,8 +184,14 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (!TryAcceptTicket(hello, _firstHello, out byte[]? psk))
+        if (!TryAcceptTicket(hello, _firstHello, out byte[]? psk, out byte pskAlert))
         {
+            if (pskAlert != 0)
+            {
+                Fail(output, pskAlert);
+                return;
+            }
+
             psk = null;
         }
 
@@ -189,27 +207,50 @@ internal sealed partial class TlsEngine
 
     private void ContinueAfterRetry(byte[] message, ClientHelloView hello, TlsOutput output)
     {
-        if (_schedule is null || _transcript is null || _selection is null)
+        if (_schedule is null || _transcript is null || _selection is null || _firstHello is null)
         {
             Fail(output, AlertInternalError);
             return;
         }
 
-        if (!ContainsCipher(hello.CipherSuites, _selectedCipher))
+        if (!OffersVersion(hello.Extensions, 0x0304))
+        {
+            Fail(output, AlertProtocolVersion);
+            return;
+        }
+
+        if (!OffersCompressionNull(hello.CompressionMethods))
         {
             Fail(output, AlertIllegalParameter);
             return;
         }
 
+        if (!HandshakeMessages.TryReadClientHello(_firstHello, out ClientHelloView first, out _) || !RetryHelloMatches(first, hello))
+        {
+            Fail(output, AlertIllegalParameter);
+            return;
+        }
+
+        if (!RequireGroups(hello.Extensions, output))
+        {
+            return;
+        }
+
         if (!TryKeyShare(hello.Extensions, _requestedGroup, out byte[]? share) || share is null)
         {
-            Fail(output, AlertHandshakeFailure);
+            Fail(output, AlertIllegalParameter);
             return;
         }
 
         Suite(_selectedCipher, out HashAlgorithmName hash, out TlsAeadSuite aead, out int keyLength);
-        if (!TryAcceptTicket(hello, message, out byte[]? psk))
+        if (!TryAcceptTicket(hello, message, out byte[]? psk, out byte pskAlert))
         {
+            if (pskAlert != 0)
+            {
+                Fail(output, pskAlert);
+                return;
+            }
+
             psk = null;
         }
 
@@ -273,11 +314,11 @@ internal sealed partial class TlsEngine
             byte[] certificate = CertificateMessage(_selection!.Certificate.RawData);
             _transcript.Append(certificate);
             _transcript.CurrentHash(transcriptHash);
-            if (!TrySign(_selection.Certificate, hash, transcriptHash, out ushort scheme, out byte[] signature))
-            {
-                Fail(output, AlertHandshakeFailure);
-                return;
-            }
+        if (!TrySign(_selection.Certificate, hash, transcriptHash, out ushort scheme, out byte[] signature, out byte signAlert))
+        {
+            Fail(output, signAlert);
+            return;
+        }
 
             byte[] verify = CertificateVerifyMessage(scheme, signature);
             _transcript.Append(verify);
@@ -315,6 +356,7 @@ internal sealed partial class TlsEngine
         }
 
         ProtectHandshake(output, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(flight));
+        _alertsEncrypted = true;
         State = _certificateRequested ? TlsEngineState.WaitClientCertificate : TlsEngineState.WaitFinished;
     }
 
@@ -324,6 +366,12 @@ internal sealed partial class TlsEngine
         if (!HandshakeMessages.TryReadCertificate(message, out CertificateView certificate, out HandshakeAlert alert))
         {
             Fail(output, (byte)alert);
+            return;
+        }
+
+        if (!certificate.RequestContext.IsEmpty)
+        {
+            Fail(output, AlertIllegalParameter);
             return;
         }
 
@@ -429,6 +477,7 @@ internal sealed partial class TlsEngine
         }
 
         State = TlsEngineState.Connected;
+        _endOfRecord = true;
         output.AddEvent(TlsEventKind.HandshakeCompleted);
     }
 
@@ -475,11 +524,12 @@ internal sealed partial class TlsEngine
         output.AddBytes(encrypted.AsSpan(0, written));
     }
 
-    private bool TrySign(X509Certificate2 leaf, HashAlgorithmName transcriptHash, ReadOnlySpan<byte> hash, out ushort scheme, out byte[] signature)
+    private bool TrySign(X509Certificate2 leaf, HashAlgorithmName transcriptHash, ReadOnlySpan<byte> hash, out ushort scheme, out byte[] signature, out byte alert)
     {
         scheme = 0;
         signature = [];
-        if (!TryOfferedSchemes(_firstHello!, out ushort[] offered))
+        alert = AlertHandshakeFailure;
+        if (!TryOfferedSchemes(_firstHello!, out ushort[] offered, out alert))
         {
             return false;
         }
@@ -506,34 +556,45 @@ internal sealed partial class TlsEngine
 
             if (scheme == 0 || !Contains(offered, scheme))
             {
+                alert = AlertHandshakeFailure;
                 return false;
             }
 
             signature = ecdsa.SignData(signedContent, scheme == 0x0403 ? HashAlgorithmName.SHA256 : HashAlgorithmName.SHA384, DSASignatureFormat.Rfc3279DerSequence);
+            alert = 0;
             return true;
         }
 
         RSA? rsa = CertificateKeys.Rsa(leaf);
         if (rsa is null || rsa.KeySize < 2048 || !Contains(offered, 0x0804))
         {
+            alert = AlertHandshakeFailure;
             return false;
         }
 
         scheme = 0x0804;
         signature = rsa.SignData(signedContent, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+        alert = 0;
         return true;
     }
 
-    private bool TryAcceptTicket(ClientHelloView hello, byte[] message, out byte[]? psk)
+    private bool TryAcceptTicket(ClientHelloView hello, byte[] message, out byte[]? psk, out byte alert)
     {
         psk = null;
+        alert = 0;
         _resumed = false;
         if (_selection?.Tickets is null || !TryExtension(hello.Extensions, ExtensionType.PreSharedKey, out ReadOnlySpan<byte> body))
         {
             return false;
         }
 
-        if (!OffersPskDhe(hello.Extensions) || !TryReadFirstTicket(body, out ReadOnlySpan<byte> identity, out ReadOnlySpan<byte> binder, out int binderTail))
+        if (!TryPskKeyExchange(hello.Extensions, out bool dhe, out alert) ||
+            !TryReadFirstTicket(body, out ReadOnlySpan<byte> identity, out ReadOnlySpan<byte> binder, out int binderTail, out alert))
+        {
+            return false;
+        }
+
+        if (!dhe)
         {
             return false;
         }
@@ -556,6 +617,7 @@ internal sealed partial class TlsEngine
         if (hashLength != TlsHkdf.HashLength(HashOf(_selectedCipher)))
         {
             CryptographicOperations.ZeroMemory(ticket.Psk);
+            alert = AlertIllegalParameter;
             return false;
         }
 
@@ -582,9 +644,16 @@ internal sealed partial class TlsEngine
         CryptographicOperations.ZeroMemory(binderKey);
         CryptographicOperations.ZeroMemory(finishedKey);
         bool binderMatches = CryptographicOperations.FixedTimeEquals(expected[..hashLength], binder);
-        if (!acceptable || !binderMatches)
+        if (!acceptable)
         {
             CryptographicOperations.ZeroMemory(ticket.Psk);
+            return false;
+        }
+
+        if (!binderMatches)
+        {
+            CryptographicOperations.ZeroMemory(ticket.Psk);
+            alert = AlertDecryptError;
             return false;
         }
 
@@ -801,22 +870,32 @@ internal sealed partial class TlsEngine
 
     private static bool OffersCompressionNull(ReadOnlySpan<byte> methods)
     {
-        foreach (byte method in methods)
+        return methods.Length == 1 && methods[0] == 0;
+    }
+
+    private bool RequireGroups(ReadOnlySpan<byte> extensions, TlsOutput output)
+    {
+        if (!TryExtension(extensions, ExtensionType.SupportedGroups, out ReadOnlySpan<byte> body))
         {
-            if (method == 0)
-            {
-                return true;
-            }
+            Fail(output, AlertMissingExtension);
+            return false;
         }
 
-        return false;
+        TlsReader reader = new(body);
+        if (!reader.TryReadVector16(out ReadOnlySpan<byte> groups) || reader.Remaining != 0 || groups.Length == 0 || (groups.Length & 1) != 0)
+        {
+            Fail(output, (byte)HandshakeAlert.DecodeError);
+            return false;
+        }
+
+        return true;
     }
 
     private static bool Advertised(ReadOnlySpan<byte> extensions, ushort group)
     {
         if (!TryExtension(extensions, ExtensionType.SupportedGroups, out ReadOnlySpan<byte> body))
         {
-            return TryKeyShare(extensions, group, out _);
+            return false;
         }
 
         TlsReader reader = new(body);
@@ -890,16 +969,26 @@ internal sealed partial class TlsEngine
         return System.Text.Encoding.ASCII.GetString(host);
     }
 
-    private static bool OffersPskDhe(ReadOnlySpan<byte> extensions)
+    private static bool TryPskKeyExchange(ReadOnlySpan<byte> extensions, out bool dhe, out byte alert)
     {
-        if (!TryExtension(extensions, ExtensionType.PskKeyExchangeModes, out ReadOnlySpan<byte> body) || body.IsEmpty)
+        dhe = false;
+        alert = 0;
+        if (!TryExtension(extensions, ExtensionType.PskKeyExchangeModes, out ReadOnlySpan<byte> body))
         {
+            alert = AlertMissingExtension;
+            return false;
+        }
+
+        if (body.IsEmpty)
+        {
+            alert = (byte)HandshakeAlert.DecodeError;
             return false;
         }
 
         int count = body[0];
         if (body.Length != 1 + count)
         {
+            alert = (byte)HandshakeAlert.DecodeError;
             return false;
         }
 
@@ -907,21 +996,33 @@ internal sealed partial class TlsEngine
         {
             if (body[1 + i] == 1)
             {
-                return true;
+                dhe = true;
             }
         }
 
-        return false;
+        return true;
     }
 
-    private static bool TryReadFirstTicket(ReadOnlySpan<byte> body, out ReadOnlySpan<byte> identity, out ReadOnlySpan<byte> binder, out int binderTail)
+    private static bool TryReadFirstTicket(ReadOnlySpan<byte> body, out ReadOnlySpan<byte> identity, out ReadOnlySpan<byte> binder, out int binderTail, out byte alert)
     {
         identity = default;
         binder = default;
         binderTail = 0;
+        alert = (byte)HandshakeAlert.DecodeError;
         TlsReader reader = new(body);
         if (!reader.TryReadVector16(out ReadOnlySpan<byte> identities) || !reader.TryReadVector16(out ReadOnlySpan<byte> binders) || reader.Remaining != 0)
         {
+            return false;
+        }
+
+        if (!CountVectors(identities, 4, out int identityCount) || !CountBinders(binders, out int binderCount))
+        {
+            return false;
+        }
+
+        if (identityCount != binderCount || identityCount == 0)
+        {
+            alert = AlertIllegalParameter;
             return false;
         }
 
@@ -938,21 +1039,68 @@ internal sealed partial class TlsEngine
         }
 
         binderTail = 2 + binders.Length;
+        alert = 0;
         return true;
     }
 
-    private static bool TryOfferedSchemes(byte[] hello, out ushort[] schemes)
+    private static bool CountBinders(ReadOnlySpan<byte> body, out int count)
+    {
+        count = 0;
+        TlsReader reader = new(body);
+        while (reader.Remaining > 0)
+        {
+            if (!reader.TryReadVector8(out ReadOnlySpan<byte> value) || value.IsEmpty)
+            {
+                return false;
+            }
+
+            count++;
+        }
+
+        return true;
+    }
+
+    private static bool CountVectors(ReadOnlySpan<byte> body, int trailing, out int count)
+    {
+        count = 0;
+        TlsReader reader = new(body);
+        while (reader.Remaining > 0)
+        {
+            if (!reader.TryReadVector16(out ReadOnlySpan<byte> value) || value.IsEmpty)
+            {
+                return false;
+            }
+
+            if (trailing > 0 && !reader.TryReadBytes(trailing, out _))
+            {
+                return false;
+            }
+
+            count++;
+        }
+
+        return true;
+    }
+
+    private static bool TryOfferedSchemes(byte[] hello, out ushort[] schemes, out byte alert)
     {
         schemes = [];
-        if (!HandshakeMessages.TryReadClientHello(hello, out ClientHelloView view, out _) ||
-            !TryExtension(view.Extensions, ExtensionType.SignatureAlgorithms, out ReadOnlySpan<byte> body))
+        alert = AlertMissingExtension;
+        if (!HandshakeMessages.TryReadClientHello(hello, out ClientHelloView view, out _))
+        {
+            alert = AlertInternalError;
+            return false;
+        }
+
+        if (!TryExtension(view.Extensions, ExtensionType.SignatureAlgorithms, out ReadOnlySpan<byte> body))
         {
             return false;
         }
 
         TlsReader reader = new(body);
-        if (!reader.TryReadVector16(out ReadOnlySpan<byte> list) || (list.Length & 1) != 0)
+        if (!reader.TryReadVector16(out ReadOnlySpan<byte> list) || reader.Remaining != 0 || (list.Length & 1) != 0 || list.Length == 0)
         {
+            alert = (byte)HandshakeAlert.DecodeError;
             return false;
         }
 
@@ -962,7 +1110,82 @@ internal sealed partial class TlsEngine
             schemes[i] = (ushort)((list[i * 2] << 8) | list[(i * 2) + 1]);
         }
 
-        return schemes.Length > 0;
+        alert = 0;
+        return true;
+    }
+
+    private static bool RetryHelloMatches(ClientHelloView first, ClientHelloView second)
+    {
+        if (first.LegacyVersion != second.LegacyVersion ||
+            !first.Random.SequenceEqual(second.Random) ||
+            !first.SessionId.SequenceEqual(second.SessionId) ||
+            !first.CipherSuites.SequenceEqual(second.CipherSuites) ||
+            !first.CompressionMethods.SequenceEqual(second.CompressionMethods))
+        {
+            return false;
+        }
+
+        return ExtensionsKept(first.Extensions, second.Extensions, fromFirst: true) &&
+            ExtensionsKept(second.Extensions, first.Extensions, fromFirst: false);
+    }
+
+    private static bool ExtensionsKept(ReadOnlySpan<byte> source, ReadOnlySpan<byte> other, bool fromFirst)
+    {
+        TlsReader reader = new(source);
+        while (reader.Remaining > 0)
+        {
+            if (!reader.TryReadUInt16(out ushort type) || !reader.TryReadVector16(out ReadOnlySpan<byte> body))
+            {
+                return false;
+            }
+
+            if (type is ExtensionType.KeyShare or ExtensionType.Cookie or ExtensionType.Padding)
+            {
+                continue;
+            }
+
+            if (type == ExtensionType.EarlyData)
+            {
+                if (fromFirst || TryExtension(other, type, out _))
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            if (type == ExtensionType.PreSharedKey)
+            {
+                if (!TryExtension(other, type, out ReadOnlySpan<byte> otherBody) || !SamePskIdentities(body, otherBody))
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (!TryExtension(other, type, out ReadOnlySpan<byte> match) || !body.SequenceEqual(match))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool SamePskIdentities(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.Length < 2 || right.Length < 2)
+        {
+            return false;
+        }
+
+        int leftLength = (left[0] << 8) | left[1];
+        int rightLength = (right[0] << 8) | right[1];
+        return leftLength == rightLength &&
+            left.Length >= 2 + leftLength &&
+            right.Length >= 2 + rightLength &&
+            left[..(2 + leftLength)].SequenceEqual(right[..(2 + rightLength)]);
     }
 
     private static bool TryReadAlpn(ReadOnlySpan<byte> body, out string[] protocols)

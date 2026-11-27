@@ -4,7 +4,7 @@ namespace Titanium.Tls;
 
 /// <summary>
 /// RFC 8446 section 4.2 allow-lists. A known extension on the wrong message is
-/// unsupported_extension. An unknown extension is kept. A duplicate of either is illegal_parameter.
+/// illegal_parameter. An unknown extension is kept. A duplicate of either is illegal_parameter.
 /// </summary>
 internal static class ExtensionRules
 {
@@ -52,7 +52,7 @@ internal static class ExtensionRules
 
             if (ExtensionType.IsKnown(type) && !IsAllowed(message, type))
             {
-                alert = HandshakeAlert.UnsupportedExtension;
+                alert = HandshakeAlert.IllegalParameter;
                 return false;
             }
         }
@@ -112,6 +112,7 @@ internal static class ExtensionRules
             HandshakeMessageKind.CertificateRequest => type is
                 ExtensionType.StatusRequest or
                 ExtensionType.SignatureAlgorithms or
+                ExtensionType.SignedCertificateTimestamp or
                 ExtensionType.CertificateAuthorities or
                 ExtensionType.OidFilters or
                 ExtensionType.SignatureAlgorithmsCert,

@@ -24,7 +24,7 @@ internal static class TlsPlaintextRecord
             return false;
         }
 
-        if (length > TlsRecordProtector.MaxCiphertext)
+        if (length > TlsRecordProtector.MaxPlaintext)
         {
             alert = TlsRecordAlert.RecordOverflow;
             return false;

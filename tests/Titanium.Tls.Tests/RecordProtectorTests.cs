@@ -75,8 +75,8 @@ public sealed class RecordProtectorTests
         Assert.AreEqual(TlsRecordAlert.BadRecordMac, badMac.Alert);
 
         byte[] atTheContentLimit = new byte[TlsRecordProtector.MaxPlaintext];
-        TlsRecordException contentTypeDoesNotFit = Assert.ThrowsException<TlsRecordException>(() => write.Protect(23, atTheContentLimit, new byte[atTheContentLimit.Length + 64]));
-        Assert.AreEqual(TlsRecordAlert.RecordOverflow, contentTypeDoesNotFit.Alert);
+        int full = write.Protect(23, atTheContentLimit, new byte[atTheContentLimit.Length + 64]);
+        Assert.AreEqual(TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxPlaintext + 1 + TlsRecordProtector.TagLength, full);
         byte[] largest = new byte[TlsRecordProtector.MaxPlaintext - 1];
         int largestWritten = write.Protect(23, largest, new byte[TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxPlaintext + TlsRecordProtector.TagLength]);
         Assert.AreEqual(TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxPlaintext + TlsRecordProtector.TagLength, largestWritten);
@@ -86,7 +86,7 @@ public sealed class RecordProtectorTests
         TlsRecordException paddedPastTheLimit = Assert.ThrowsException<TlsRecordException>(() => write.Protect(23, new byte[8], new byte[64], padding: int.MaxValue));
         Assert.AreEqual(TlsRecordAlert.RecordOverflow, paddedPastTheLimit.Alert);
 
-        int oversizeCipher = TlsRecordProtector.MaxPlaintext + 1 + TlsRecordProtector.TagLength;
+        int oversizeCipher = TlsRecordProtector.MaxPlaintext + 2 + TlsRecordProtector.TagLength;
         byte[] oversize = new byte[TlsRecordProtector.HeaderLength + oversizeCipher];
         oversize[0] = 23;
         oversize[1] = 3;

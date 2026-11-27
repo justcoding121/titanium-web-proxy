@@ -20,6 +20,9 @@ internal sealed partial class TlsEngine
 
     private static ReadOnlySpan<byte> DowngradeTls11 => [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x00];
 
+    private readonly ushort[] _offered = new ushort[12];
+    private int _offeredCount;
+    private bool _certificateAllowsP256;
     private IPrivateKeyShare? _share;
     private readonly byte[] _clientRandom = new byte[32];
     private readonly byte[] _legacySessionId = new byte[32];
@@ -114,15 +117,13 @@ internal sealed partial class TlsEngine
 
         if (type == HandshakeType.EncryptedExtensions)
         {
-            TlsEngineState next = _pskSelected ? TlsEngineState.WaitFinished : TlsEngineState.WaitCertificateRequestOrCertificate;
-            OnSimple(type, bodyLength, output, static message => HandshakeMessages.TryReadEncryptedExtensions(message, out _, out HandshakeAlert alert) ? default : alert, next);
+            OnEncryptedExtensions(bodyLength, output);
             return;
         }
 
         if (type == HandshakeType.CertificateRequest)
         {
-            _certificateRequested = true;
-            OnSimple(type, bodyLength, output, static message => HandshakeMessages.TryReadCertificateRequest(message, out _, out _, out HandshakeAlert alert) ? default : alert, TlsEngineState.WaitCertificate);
+            OnCertificateRequest(bodyLength, output);
             return;
         }
 
@@ -147,18 +148,6 @@ internal sealed partial class TlsEngine
         if (type == HandshakeType.NewSessionTicket)
         {
             OnTicket(bodyLength, output);
-            return;
-        }
-
-        if (type == HandshakeType.KeyUpdate)
-        {
-            if (!HandshakeMessages.TryReadKeyUpdate(Message(type, bodyLength), out _, out HandshakeAlert alert))
-            {
-                Fail(output, (byte)alert);
-                return;
-            }
-
-            output.AddEvent(TlsEventKind.KeyUpdateRequired);
         }
     }
 
@@ -177,6 +166,12 @@ internal sealed partial class TlsEngine
             return;
         }
 
+        if (!ResponseExtensionsAreOffered(hello.Extensions, hello.IsHelloRetryRequest, out byte extensionAlert))
+        {
+            Fail(output, extensionAlert);
+            return;
+        }
+
         if (!hello.SessionId.SequenceEqual(_legacySessionId))
         {
             Fail(output, AlertIllegalParameter);
@@ -189,16 +184,16 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (!IsTls13(hello, out bool sentinel))
+        if (!TryServerVersion(hello, out byte versionAlert, out bool legacyServer))
         {
-            if (sentinel)
+            if (legacyServer)
             {
-                Fail(output, AlertIllegalParameter);
-                return;
+                State = TlsEngineState.Closed;
+                throw new TlsVersionNotSupportedException();
             }
 
-            State = TlsEngineState.Closed;
-            throw new TlsVersionNotSupportedException();
+            Fail(output, versionAlert);
+            return;
         }
 
         if (hello.CipherSuite != CipherAes128GcmSha256 || (_hrrSeen && hello.CipherSuite != _selectedCipher))
@@ -236,6 +231,7 @@ internal sealed partial class TlsEngine
         CryptographicOperations.ZeroMemory(secret);
         InstallHandshakeKeys(hash);
         State = TlsEngineState.WaitEncryptedExtensions;
+        _endOfRecord = true;
     }
 
     private void InstallHandshakeKeys(ReadOnlySpan<byte> transcriptHash)
@@ -251,6 +247,10 @@ internal sealed partial class TlsEngine
         TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, _serverHandshakeSecret.Span, key, iv);
         _read?.Dispose();
         _read = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
+        TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, _clientHandshakeSecret.Span, key, iv);
+        _write?.Dispose();
+        _write = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
+        _alertsEncrypted = true;
         CryptographicOperations.ZeroMemory(key);
         CryptographicOperations.ZeroMemory(iv);
     }
@@ -263,9 +263,10 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (hello.CipherSuite != CipherAes128GcmSha256 || !IsTls13(hello, out _))
+        bool tls13 = TryServerVersion(hello, out byte versionAlert, out _);
+        if (hello.CipherSuite != CipherAes128GcmSha256 || !tls13)
         {
-            Fail(output, AlertIllegalParameter);
+            Fail(output, versionAlert == 0 ? AlertIllegalParameter : versionAlert);
             return;
         }
 
@@ -283,7 +284,7 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (hasGroup && group == _shareGroup && !hasCookie)
+        if (hasGroup && group == _shareGroup)
         {
             Fail(output, AlertIllegalParameter);
             return;
@@ -312,9 +313,27 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (!TryCopyLeaf(certificate.CertificateList))
+        if (!certificate.RequestContext.IsEmpty)
         {
             Fail(output, AlertIllegalParameter);
+            return;
+        }
+
+        if (certificate.CertificateList.IsEmpty)
+        {
+            Fail(output, (byte)HandshakeAlert.DecodeError);
+            return;
+        }
+
+        if (!CertificateEntriesAreOffered(certificate.CertificateList, out byte entryAlert))
+        {
+            Fail(output, entryAlert);
+            return;
+        }
+
+        if (!TryCopyLeaf(certificate.CertificateList))
+        {
+            Fail(output, (byte)HandshakeAlert.DecodeError);
             return;
         }
 
@@ -393,25 +412,20 @@ internal sealed partial class TlsEngine
         byte[]? verifyMessage = null;
         if (_certificateRequested)
         {
-            if (LocalCertificate is null)
-            {
-                _transcript.Append(EmptyCertificate);
-                clientCertificate = EmptyCertificate;
-            }
-            else
+            if (LocalCertificate is not null && _certificateAllowsP256 && CanSignP256(LocalCertificate))
             {
                 certificateMessage = CertificateMessage(LocalCertificate.RawData);
                 _transcript.Append(certificateMessage);
                 _transcript.CurrentHash(hash);
-                if (!TrySignClientCertificate(hash, out verifyMessage))
-                {
-                    Fail(output, AlertHandshakeFailure);
-                    return;
-                }
-
+                verifyMessage = SignClientCertificate(hash);
                 _transcript.Append(verifyMessage);
                 clientCertificate = certificateMessage;
                 clientVerify = verifyMessage;
+            }
+            else
+            {
+                _transcript.Append(EmptyCertificate);
+                clientCertificate = EmptyCertificate;
             }
 
             _transcript.CurrentHash(hash);
@@ -428,6 +442,7 @@ internal sealed partial class TlsEngine
         _resumptionMaster = new SecretBuffer(32);
         _schedule.ResumptionMaster(hash, _resumptionMaster.Span);
         State = TlsEngineState.Connected;
+        _endOfRecord = true;
         output.AddEvent(TlsEventKind.HandshakeCompleted);
     }
 
@@ -471,23 +486,22 @@ internal sealed partial class TlsEngine
         State = next;
     }
 
-    private bool TrySignClientCertificate(ReadOnlySpan<byte> hash, out byte[] verify)
+    private byte[] SignClientCertificate(ReadOnlySpan<byte> hash)
     {
-        verify = [];
-        ECDsa? key = CertificateKeys.Ecdsa(LocalCertificate!);
-        if (key is null || key.ExportParameters(false).Curve.Oid.Value != "1.2.840.10045.3.1.7")
-        {
-            return false;
-        }
-
+        ECDsa key = CertificateKeys.Ecdsa(LocalCertificate!)!;
         Span<byte> content = stackalloc byte[64 + 33 + 1 + 32];
         content[..64].Fill(0x20);
         "TLS 1.3, client CertificateVerify"u8.CopyTo(content[64..]);
         content[64 + 33] = 0;
         hash.CopyTo(content[(64 + 33 + 1)..]);
         byte[] signature = key.SignData(content, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
-        verify = CertificateVerifyMessage(0x0403, signature);
-        return true;
+        return CertificateVerifyMessage(0x0403, signature);
+    }
+
+    private static bool CanSignP256(X509Certificate2 certificate)
+    {
+        ECDsa? key = CertificateKeys.Ecdsa(certificate);
+        return key is not null && key.ExportParameters(false).Curve.Oid.Value == "1.2.840.10045.3.1.7";
     }
 
     private void SendClientFinished(TlsOutput output, ReadOnlySpan<byte> verifyData, ReadOnlySpan<byte> clientApp, ReadOnlySpan<byte> serverApp, ReadOnlySpan<byte> clientCertificate, ReadOnlySpan<byte> clientVerify)
@@ -533,6 +547,7 @@ internal sealed partial class TlsEngine
 
     private byte[] BuildClientHello()
     {
+        _offeredCount = 0;
         Span<byte> share = stackalloc byte[128];
         _share!.WritePublicKey(share[.._publicLength]);
         var buffer = new byte[1024];
@@ -549,14 +564,14 @@ internal sealed partial class TlsEngine
         writer.TryWriteVector8([0]);
         int extensionsAt = writer.Written;
         writer.TryReserveLength(2, out int extensionsLengthAt);
-        WriteExtension(ref writer, ExtensionType.SupportedGroups, [0x00, 0x04, 0x00, 0x1D, 0x00, 0x17]);
-        WriteExtension(ref writer, ExtensionType.SignatureAlgorithms, [0x00, 0x02, 0x04, 0x03]);
-        WriteExtension(ref writer, ExtensionType.SupportedVersions, [0x02, 0x03, 0x04]);
+        WriteOffered(ref writer, ExtensionType.SupportedGroups, [0x00, 0x04, 0x00, 0x1D, 0x00, 0x17]);
+        WriteOffered(ref writer, ExtensionType.SignatureAlgorithms, [0x00, 0x02, 0x04, 0x03]);
+        WriteOffered(ref writer, ExtensionType.SupportedVersions, [0x02, 0x03, 0x04]);
         byte[] shareBytes = share[.._publicLength].ToArray();
         WriteKeyShare(ref writer, shareBytes);
         if (_cookie is not null)
         {
-            WriteExtension(ref writer, ExtensionType.Cookie, _cookie);
+            WriteOffered(ref writer, ExtensionType.Cookie, _cookie);
         }
 
         if (_serverName is not null)
@@ -566,7 +581,7 @@ internal sealed partial class TlsEngine
 
         if (_psk is not null)
         {
-            WriteExtension(ref writer, ExtensionType.PskKeyExchangeModes, [0x01, 0x01]);
+            WriteOffered(ref writer, ExtensionType.PskKeyExchangeModes, [0x01, 0x01]);
             WritePreSharedKey(ref writer);
         }
 
@@ -588,7 +603,7 @@ internal sealed partial class TlsEngine
         body[4] = (byte)(share.Length >> 8);
         body[5] = (byte)share.Length;
         share.CopyTo(body.AsSpan(6));
-        WriteExtension(ref writer, ExtensionType.KeyShare, body);
+        WriteOffered(ref writer, ExtensionType.KeyShare, body);
     }
 
     private void WritePreSharedKey(ref TlsWriter writer)
@@ -611,7 +626,7 @@ internal sealed partial class TlsEngine
         body[offset++] = 0;
         body[offset++] = (byte)(1 + 32);
         body[offset++] = 32;
-        WriteExtension(ref writer, ExtensionType.PreSharedKey, body);
+        WriteOffered(ref writer, ExtensionType.PreSharedKey, body);
     }
 
     private void PatchBinder(byte[] hello)
@@ -738,15 +753,175 @@ internal sealed partial class TlsEngine
         return true;
     }
 
-    private static bool IsTls13(ServerHelloView hello, out bool sentinel)
+    private static bool TryServerVersion(ServerHelloView hello, out byte alert, out bool legacyServer)
     {
-        sentinel = hello.Random[^8..].SequenceEqual(DowngradeTls12) || hello.Random[^8..].SequenceEqual(DowngradeTls11);
+        alert = 0;
+        legacyServer = false;
+        bool sentinel = hello.Random[^8..].SequenceEqual(DowngradeTls12) || hello.Random[^8..].SequenceEqual(DowngradeTls11);
         if (!TryExtension(hello.Extensions, ExtensionType.SupportedVersions, out ReadOnlySpan<byte> version))
+        {
+            if (sentinel)
+            {
+                alert = AlertIllegalParameter;
+                return false;
+            }
+
+            legacyServer = true;
+            return false;
+        }
+
+        if (version.Length != 2)
+        {
+            alert = (byte)HandshakeAlert.DecodeError;
+            return false;
+        }
+
+        if (version[0] != 3 || version[1] != 4 || sentinel)
+        {
+            alert = AlertIllegalParameter;
+            return false;
+        }
+
+        return true;
+    }
+
+    private void OnEncryptedExtensions(int bodyLength, TlsOutput output)
+    {
+        byte[] message = Message(HandshakeType.EncryptedExtensions, bodyLength);
+        if (!HandshakeMessages.TryReadEncryptedExtensions(message, out ReadOnlySpan<byte> extensions, out HandshakeAlert alert))
+        {
+            Fail(output, (byte)alert);
+            return;
+        }
+
+        if (!ResponseExtensionsAreOffered(extensions, false, out byte extensionAlert))
+        {
+            Fail(output, extensionAlert);
+            return;
+        }
+
+        _transcript!.Append(message);
+        State = _pskSelected ? TlsEngineState.WaitFinished : TlsEngineState.WaitCertificateRequestOrCertificate;
+    }
+
+    private void OnCertificateRequest(int bodyLength, TlsOutput output)
+    {
+        byte[] message = Message(HandshakeType.CertificateRequest, bodyLength);
+        if (!HandshakeMessages.TryReadCertificateRequest(message, out ReadOnlySpan<byte> context, out ReadOnlySpan<byte> extensions, out HandshakeAlert alert))
+        {
+            Fail(output, (byte)alert);
+            return;
+        }
+
+        if (!context.IsEmpty)
+        {
+            Fail(output, AlertIllegalParameter);
+            return;
+        }
+
+        if (!TryExtension(extensions, ExtensionType.SignatureAlgorithms, out ReadOnlySpan<byte> schemes))
+        {
+            Fail(output, AlertMissingExtension);
+            return;
+        }
+
+        if (!ResponseExtensionsAreOffered(extensions, false, out byte extensionAlert))
+        {
+            Fail(output, extensionAlert);
+            return;
+        }
+
+        if (!TryListedScheme(schemes, 0x0403, out bool listed))
+        {
+            Fail(output, (byte)HandshakeAlert.DecodeError);
+            return;
+        }
+
+        _certificateRequested = true;
+        _certificateAllowsP256 = listed;
+        _transcript!.Append(message);
+        State = TlsEngineState.WaitCertificate;
+    }
+
+    private bool ResponseExtensionsAreOffered(ReadOnlySpan<byte> extensions, bool allowCookie, out byte alert)
+    {
+        alert = 0;
+        TlsReader reader = new(extensions);
+        while (reader.Remaining > 0)
+        {
+            if (!reader.TryReadUInt16(out ushort type) || !reader.TryReadVector16(out _))
+            {
+                alert = (byte)HandshakeAlert.DecodeError;
+                return false;
+            }
+
+            if (allowCookie && type == ExtensionType.Cookie)
+            {
+                continue;
+            }
+
+            if (!Offered(type))
+            {
+                alert = (byte)HandshakeAlert.UnsupportedExtension;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool CertificateEntriesAreOffered(ReadOnlySpan<byte> list, out byte alert)
+    {
+        alert = 0;
+        TlsReader reader = new(list);
+        while (reader.Remaining > 0)
+        {
+            if (!reader.TryReadVector24(out _) || !reader.TryReadVector16(out ReadOnlySpan<byte> extensions))
+            {
+                alert = (byte)HandshakeAlert.DecodeError;
+                return false;
+            }
+
+            if (!ResponseExtensionsAreOffered(extensions, false, out alert))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool Offered(ushort type)
+    {
+        for (int i = 0; i < _offeredCount; i++)
+        {
+            if (_offered[i] == type)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryListedScheme(ReadOnlySpan<byte> body, ushort scheme, out bool listed)
+    {
+        listed = false;
+        TlsReader reader = new(body);
+        if (!reader.TryReadVector16(out ReadOnlySpan<byte> list) || reader.Remaining != 0 || (list.Length & 1) != 0)
         {
             return false;
         }
 
-        return version.Length == 2 && version[0] == 3 && version[1] == 4;
+        for (int i = 0; i + 1 < list.Length; i += 2)
+        {
+            if (((list[i] << 8) | list[i + 1]) == scheme)
+            {
+                listed = true;
+            }
+        }
+
+        return true;
     }
 
     private static bool TryHelloRetryGroup(ReadOnlySpan<byte> extensions, out ushort group)
@@ -805,13 +980,24 @@ internal sealed partial class TlsEngine
         output.AddBytes(record);
     }
 
+    private void WriteOffered(ref TlsWriter writer, ushort type, ReadOnlySpan<byte> body)
+    {
+        if (_offeredCount == _offered.Length)
+        {
+            throw new TlsProtocolViolation("The ClientHello offers more extensions than the engine records.");
+        }
+
+        _offered[_offeredCount++] = type;
+        WriteExtension(ref writer, type, body);
+    }
+
     private static void WriteExtension(ref TlsWriter writer, ushort type, ReadOnlySpan<byte> body)
     {
         writer.TryWriteUInt16(type);
         writer.TryWriteVector16(body);
     }
 
-    private static void WriteServerName(ref TlsWriter writer, string name)
+    private void WriteServerName(ref TlsWriter writer, string name)
     {
         byte[] ascii = System.Text.Encoding.ASCII.GetBytes(name);
         var body = new byte[2 + 1 + 2 + ascii.Length];
@@ -821,7 +1007,7 @@ internal sealed partial class TlsEngine
         body[3] = (byte)(ascii.Length >> 8);
         body[4] = (byte)ascii.Length;
         ascii.CopyTo(body.AsSpan(5));
-        WriteExtension(ref writer, ExtensionType.ServerName, body);
+        WriteOffered(ref writer, ExtensionType.ServerName, body);
     }
 
     private uint ObfuscatedAge()
