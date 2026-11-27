@@ -38,6 +38,33 @@ public sealed class QuicCampaignTests
     }
 
     [TestMethod]
+    public void AFlippedHandshakeDatagramDoesNotThrow()
+    {
+        using X509Certificate2 certificate = Certificate();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.StartClient(Path, ClientId, ServerId, Parameters(client: true));
+        server.StartServer(ServerId, certificate, Parameters(client: false));
+        byte[] buffer = new byte[16384];
+        int count = client.PollTransmit(Now, buffer, out PathInfo path);
+        Assert.IsTrue(count > 16);
+        byte[] mutant = buffer.AsSpan(0, count).ToArray();
+        mutant[count / 2] ^= 0x01;
+        server.HandleDatagram(Now, mutant, path);
+        var sim = new QuicSimulator();
+        DateTimeOffset time = Now;
+        Assert.IsTrue(Run(client, server, sim, ref time, static (left, right) => left.HandshakeComplete && right.HandshakeComplete));
+    }
+
+    [TestMethod]
+    public void AnEmptyDatagramIsDropped()
+    {
+        var sim = new QuicSimulator();
+        sim.Submit(toServer: true, ReadOnlySpan<byte>.Empty, Now);
+        Assert.IsNull(sim.NextDelivery());
+    }
+
+    [TestMethod]
     public void ABlackholeDropsThePayload()
     {
         byte[] payload = Pattern(32);

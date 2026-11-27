@@ -82,4 +82,4 @@ BenchmarkDotNet on linuxmini compared this stack with System.Net.Quic. The hands
 
 ## BH-2
 
-The campaign ledger is `BUG-LEDGER.md`. The in-process network can corrupt one datagram and can drop every datagram after the handshake. Two hundred and fifty-six bytes still arrive once and in order when the network delays, reorders, and duplicates them. A flipped bit is not delivered as stream data. A black hole delivers none of the following payload. The interop runner, h3spec, Stryker, and the 30 minute soak have not run.
+The campaign ledger is `BUG-LEDGER.md`. The in-process network can corrupt one datagram and can drop every datagram after the handshake. Two hundred and fifty-six bytes still arrive once and in order when the network delays, reorders, and duplicates them. A flipped bit is not delivered as stream data. A black hole delivers none of the following payload. A bit-flipped Initial does not throw, and the handshake still completes. An empty datagram is not queued. The interop runner, h3spec, Stryker, and the 30 minute soak have not run.
