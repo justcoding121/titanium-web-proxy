@@ -61,6 +61,14 @@ public sealed class FingerprintProfileTests
     }
 
     [TestMethod]
+    public void ConstantExtensionBodiesMatchTheCapture()
+    {
+        byte[] captured = File.ReadAllBytes(Find("hello-001.bin"));
+        byte[] generated = Build(new ChromeFingerprintProfile(new CountingEntropy(), TlsFingerprintFidelity.Full), ChromeContext());
+        ChromeHelloInvariants.AssertMatch(captured, generated);
+    }
+
+    [TestMethod]
     public void HelloRetryRequestKeepsExtensionOrder()
     {
         var profile = new ChromeFingerprintProfile(new CountingEntropy(), TlsFingerprintFidelity.Full);
