@@ -1,4 +1,4 @@
-This map is the read-only survey for the Phase 3 seam. It was taken from `src/Titanium.Web.Proxy` on `feat/managed-tls-quic-stack`. No proxy file was edited.
+This map is the survey for the Phase 3 seam. `ProxyServer.UseManagedTlsStack` and `ProxyServer.UseManagedQuicStack` default to false. No creation site reads them yet.
 
 A file is a creation site when it constructs `SslStream`, calls `QuicConnection.ConnectAsync`, or calls `QuicListener.ListenAsync`. A use site calls a member those types own on an object it did not construct. A capability site branches on the runtime type. Comment-only mentions are not a seam.
 

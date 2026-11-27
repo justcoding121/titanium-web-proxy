@@ -101,6 +101,10 @@ Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations.get -> bool
 Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations.set -> void
 Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.set -> void
+Titanium.Web.Proxy.ProxyServer.UseManagedQuicStack.get -> bool
+Titanium.Web.Proxy.ProxyServer.UseManagedQuicStack.set -> void
+Titanium.Web.Proxy.ProxyServer.UseManagedTlsStack.get -> bool
+Titanium.Web.Proxy.ProxyServer.UseManagedTlsStack.set -> void
 Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors.get -> bool
 Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors.set -> void
 Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported() -> bool
