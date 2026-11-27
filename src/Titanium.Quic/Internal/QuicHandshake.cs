@@ -11,6 +11,10 @@ internal sealed partial class QuicConnectionCore : IDisposable
 {
     private readonly byte[] _secretScratch = new byte[32];
 
+    private readonly QuicLossRecovery _loss = new(new QuicNewReno());
+
+    private DateTimeOffset _now;
+
     private TlsEngine? _engine;
 
     private X509Certificate2? _certificate;
@@ -316,12 +320,29 @@ internal sealed partial class QuicConnectionCore : IDisposable
     private void TakePayload(QuicPacketKind kind, ReadOnlySpan<byte> plaintext)
     {
         var reader = new QuicFrameReader(plaintext, kind);
-        Span<QuicAckRange> ranges = new QuicAckRange[1];
+        Span<QuicAckRange> ranges = new QuicAckRange[QuicFrameReader.MaxAckRanges];
         while (reader.TryNext(ranges, out QuicFrame frame))
         {
             if (IsClosed)
             {
                 return;
+            }
+
+            if (frame.Kind == QuicFrameKind.Ack)
+            {
+                TimeSpan delay = TimeSpan.FromTicks((long)frame.AckDelay * 80);
+                if (!_loss.OnAck(kind, frame.LargestAcknowledged, delay, ranges, frame.AckRangeCount, _now))
+                {
+                    MarkClosed(QuicFrameReader.ProtocolViolation, send: true);
+                    return;
+                }
+
+                foreach (QuicRetransmit item in _loss.Pending)
+                {
+                    Retransmit(item.Kind, item.Payload);
+                }
+
+                continue;
             }
 
             if (frame.Kind == QuicFrameKind.ConnectionClose && !frame.ApplicationClose)
@@ -507,7 +528,18 @@ internal sealed partial class QuicConnectionCore : IDisposable
         }
     }
 
-    private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram)
+    private void Retransmit(QuicPacketKind kind, byte[] payload)
+    {
+        QuicPacketProtector? protector = Protector(kind, send: true);
+        if (protector is null || payload.Length == 0 || !_hasPath || IsClosed)
+        {
+            return;
+        }
+
+        SealAndStage(kind, protector, payload, 0, probe: true);
+    }
+
+    private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram, bool probe = false)
     {
         byte[] packet = ArrayPool<byte>.Shared.Rent(Math.Max(minimumDatagram, payload.Length) + 128);
         try
@@ -521,7 +553,8 @@ internal sealed partial class QuicConnectionCore : IDisposable
             int written = kind == QuicPacketKind.OneRtt
                 ? QuicPackets.SealShort(packet, DestinationId(), number, payload, protector)
                 : QuicPackets.SealLong(packet, kind, DestinationId(), _localId, number, payload, protector, minimumDatagram);
-            if (written == 0 || !TryStageTransmit(_path, packet.AsSpan(0, written)))
+            byte[] copy = payload.ToArray();
+            if (written == 0 || !TryStageTransmit(_path, packet.AsSpan(0, written), track: true, kind, number, copy, probe))
             {
                 return 0;
             }

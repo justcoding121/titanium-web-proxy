@@ -70,16 +70,13 @@ public sealed class QuicConnectionCoreTests
     }
 
     [TestMethod]
-    public void HandleTimeoutFiresWithoutASocket()
+    public void AReceivedDatagramDoesNotArmALossTimer()
     {
         var core = new QuicConnectionCore();
         Assert.IsNull(core.NextTimeout());
         core.HandleDatagram(Now, Datagram([0x01], 50), Path);
-        Assert.AreEqual(Now + QuicConnectionCore.ScheduleHook, core.NextTimeout());
-        Assert.IsFalse(core.HandleTimeout(Now));
-        Assert.IsTrue(core.HandleTimeout(Now + QuicConnectionCore.ScheduleHook));
         Assert.IsNull(core.NextTimeout());
-        Assert.IsFalse(core.HandleTimeout(Now + QuicConnectionCore.ScheduleHook));
+        Assert.IsFalse(core.HandleTimeout(Now + TimeSpan.FromSeconds(1)));
     }
 
     private static byte[] Datagram(byte[] connectionId, int size)

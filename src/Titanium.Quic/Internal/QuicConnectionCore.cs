@@ -214,21 +214,36 @@ internal sealed class QuicConnectionTable
 /// </summary>
 internal sealed partial class QuicConnectionCore
 {
-    /// <summary>Stand-in deadline until loss recovery supplies the real one.</summary>
-    internal static readonly TimeSpan ScheduleHook = TimeSpan.FromSeconds(1);
-
     private readonly List<PathState> _paths = [];
 
     private readonly List<Staged> _staged = [];
 
-    private DateTimeOffset? _timeout;
+    internal DateTimeOffset? NextTimeout()
+    {
+        DateTimeOffset? loss = _loss.Timeout;
+        DateTimeOffset? pace = PaceDeadline();
+        if (loss is null)
+        {
+            return pace;
+        }
 
-    internal DateTimeOffset? NextTimeout() => _timeout;
+        if (pace is null || loss.Value <= pace.Value)
+        {
+            return loss;
+        }
+
+        return pace;
+    }
 
     internal void HandleDatagram(DateTimeOffset now, ReadOnlySpan<byte> datagram, in PathInfo path)
     {
+        _now = now;
+        if (HandshakeComplete)
+        {
+            _loss.HandshakeConfirmed = true;
+        }
+
         AddReceived(path, datagram.Length);
-        _timeout ??= now + ScheduleHook;
         _path = path;
         _hasPath = true;
         if (_engine is not null && !IsClosed)
@@ -239,13 +254,24 @@ internal sealed partial class QuicConnectionCore
 
     internal bool HandleTimeout(DateTimeOffset now)
     {
-        if (_timeout is not DateTimeOffset due || now < due)
+        _now = now;
+        if (HandshakeComplete)
         {
-            return false;
+            _loss.HandshakeConfirmed = true;
         }
 
-        _timeout = null;
-        return true;
+        if (_loss.Timeout is DateTimeOffset due && now >= due)
+        {
+            _loss.OnTimeout(now);
+            foreach (QuicRetransmit probe in _loss.Pending)
+            {
+                Retransmit(probe.Kind, probe.Payload);
+            }
+
+            return true;
+        }
+
+        return NextTimeout() is DateTimeOffset pace && now >= pace;
     }
 
     internal void MarkAddressValidated(in PathInfo path)
@@ -262,7 +288,14 @@ internal sealed partial class QuicConnectionCore
         _paths[index] = state;
     }
 
-    internal bool TryStageTransmit(in PathInfo path, ReadOnlySpan<byte> datagram)
+    internal bool TryStageTransmit(
+        in PathInfo path,
+        ReadOnlySpan<byte> datagram,
+        bool track = false,
+        QuicPacketKind kind = default,
+        ulong number = 0,
+        byte[]? payload = null,
+        bool probe = false)
     {
         if (datagram.IsEmpty || datagram.Length > 65535)
         {
@@ -271,18 +304,33 @@ internal sealed partial class QuicConnectionCore
 
         byte[] rented = ArrayPool<byte>.Shared.Rent(datagram.Length);
         datagram.CopyTo(rented);
-        _staged.Add(new Staged { Buffer = rented, Length = datagram.Length, Path = path });
+        _staged.Add(new Staged
+        {
+            Buffer = rented,
+            Length = datagram.Length,
+            Path = path,
+            Track = track,
+            Kind = kind,
+            Number = number,
+            Payload = payload,
+            Probe = probe,
+        });
         return true;
     }
 
     internal int PollTransmit(DateTimeOffset now, Span<byte> destination, out PathInfo path)
     {
-        _ = now;
+        _now = now;
         path = default;
         for (int i = 0; i < _staged.Count; i++)
         {
             Staged staged = _staged[i];
             if (destination.Length < staged.Length || !Fits(staged.Path, staged.Length, out int pathIndex))
+            {
+                continue;
+            }
+
+            if (staged.Track && !staged.Probe && !_loss.Allows(staged.Length))
             {
                 continue;
             }
@@ -294,10 +342,29 @@ internal sealed partial class QuicConnectionCore
             state.Sent += staged.Length;
             _paths[pathIndex] = state;
             path = staged.Path;
+            if (staged.Track && staged.Payload is not null)
+            {
+                _loss.OnPacketSent(staged.Kind, staged.Number, staged.Length, now, staged.Payload);
+            }
+
             return staged.Length;
         }
 
         return 0;
+    }
+
+    private DateTimeOffset? PaceDeadline()
+    {
+        for (int i = 0; i < _staged.Count; i++)
+        {
+            Staged staged = _staged[i];
+            if (staged.Track && !staged.Probe && !_loss.Allows(staged.Length))
+            {
+                return _now + _loss.SmoothedRtt;
+            }
+        }
+
+        return null;
     }
 
     internal long BytesReceived(in PathInfo path)
@@ -375,5 +442,15 @@ internal sealed partial class QuicConnectionCore
         internal int Length;
 
         internal PathInfo Path;
+
+        internal bool Track;
+
+        internal bool Probe;
+
+        internal QuicPacketKind Kind;
+
+        internal ulong Number;
+
+        internal byte[]? Payload;
     }
 }
