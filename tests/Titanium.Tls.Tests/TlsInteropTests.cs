@@ -96,6 +96,7 @@ public sealed class TlsInteropTests
     [Timeout(60000)]
     public async Task ClientReadsAKestrelResponse()
     {
+        PlatformSsl.RequireTls13();
         using X509Certificate2 certificate = Issue(InteropCert.EcdsaP256, client: false).Certificate;
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(options =>

@@ -852,13 +852,16 @@ internal sealed class ScriptedServer : IDisposable
 
     internal byte[] EncryptedExtensionsMessage() => Encrypted([8, 0, 0, 2, 0, 0]);
 
-    internal byte[] EncryptedCertificateRequestMessage() => Encrypted(
+    internal byte[] EncryptedCertificateRequestMessage() => Encrypted(CertificateRequestMessageBytes);
+
+    private static readonly byte[] CertificateRequestMessageBytes =
     [
-        13, 0, 0, 11,
+        13, 0, 0, 18,
         0,
-        0, 8,
+        0, 15,
         0, 13, 0, 4, 0, 2, 4, 3,
-    ]);
+        0, 27, 0, 3, 2, 0, 1,
+    ];
 
     internal byte[] EncryptedCertificateMessage() => Encrypted(CertificateMessage(_certificate.RawData));
 
@@ -869,13 +872,7 @@ internal sealed class ScriptedServer : IDisposable
     internal (byte[] Verify, byte[] Finished) CertificateRequestProof()
     {
         byte[] extensions = [8, 0, 0, 2, 0, 0];
-        byte[] request =
-        [
-            13, 0, 0, 11,
-            0,
-            0, 8,
-            0, 13, 0, 4, 0, 2, 4, 3,
-        ];
+        byte[] request = CertificateRequestMessageBytes;
         byte[] certificate = CertificateMessage(_certificate.RawData);
         using var transcript = new TranscriptStore(HashAlgorithmName.SHA256);
         transcript.Append(_clientHello);

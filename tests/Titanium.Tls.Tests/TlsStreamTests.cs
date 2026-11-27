@@ -9,6 +9,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Tls.Tests.Support;
 
 namespace Titanium.Tls.Tests;
 
@@ -207,6 +208,7 @@ public sealed class TlsStreamTests
     [TestMethod]
     public async Task ClientSpeaksToAnSslStreamServer()
     {
+        PlatformSsl.RequireTls13();
         using X509Certificate2 certificate = Certificate();
         using TcpListener listener = Listen();
         Task server = Task.Run(async () =>
@@ -231,6 +233,7 @@ public sealed class TlsStreamTests
     [TestMethod]
     public async Task ServerSpeaksToAnSslStreamClient()
     {
+        PlatformSsl.RequireTls13();
         using X509Certificate2 certificate = Certificate();
         using TcpListener listener = Listen();
         Task server = Task.Run(async () =>

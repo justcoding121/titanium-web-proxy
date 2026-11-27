@@ -115,7 +115,8 @@ internal static class ExtensionRules
                 ExtensionType.SignedCertificateTimestamp or
                 ExtensionType.CertificateAuthorities or
                 ExtensionType.OidFilters or
-                ExtensionType.SignatureAlgorithmsCert,
+                ExtensionType.SignatureAlgorithmsCert or
+                ExtensionType.CompressCertificate,
             HandshakeMessageKind.NewSessionTicket => type == ExtensionType.EarlyData,
             _ => false,
         };

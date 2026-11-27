@@ -933,10 +933,13 @@ internal sealed partial class TlsEngine
             }
 
             // These are the server's request, not a response to the ClientHello.
+            // compress_certificate is legal on this message. OpenSSL 3.5.5 sends it
+            // when the ClientHello did not, and an uncompressed certificate still satisfies it.
             if (type is ExtensionType.SignatureAlgorithms
                 or ExtensionType.SignatureAlgorithmsCert
                 or ExtensionType.CertificateAuthorities
-                or ExtensionType.OidFilters)
+                or ExtensionType.OidFilters
+                or ExtensionType.CompressCertificate)
             {
                 continue;
             }

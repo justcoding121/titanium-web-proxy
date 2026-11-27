@@ -124,7 +124,7 @@ public sealed class HybridKeyExchangeTests
         Assert.IsNotNull(share);
         Assert.AreEqual(HybridKeyExchange.ClientShareLength, share.Length);
         using MLKem kem = MLKem.ImportEncapsulationKey(MLKemAlgorithm.MLKem768, share.AsSpan(0, HybridKeyExchange.EncapsulationKeyLength));
-        Assert.ThrowsExactly<CryptographicException>(() => MLKem.ImportEncapsulationKey(MLKemAlgorithm.MLKem768, share.AsSpan(32, HybridKeyExchange.EncapsulationKeyLength)));
+        Assert.ThrowsException<CryptographicException>(() => MLKem.ImportEncapsulationKey(MLKemAlgorithm.MLKem768, share.AsSpan(32, HybridKeyExchange.EncapsulationKeyLength)));
     }
 
     private static bool Supported()

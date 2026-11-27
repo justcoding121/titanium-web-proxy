@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Tls.Tests.Support;
 
 namespace Titanium.Tls.Tests;
 
@@ -94,6 +95,7 @@ public sealed class ChainValidationTests
     [TestMethod]
     public void PolicyErrorsMatchSslStream()
     {
+        PlatformSsl.RequireTls13();
         using X509Certificate2 certificate = Authority("CN=localhost");
         SslPolicyErrors streamErrors = CaptureSslStreamErrors(certificate, "localhost");
         using TlsCertificateCheck check = TlsChainValidator.Evaluate(CertificateList(null, null, certificate), "localhost", trustAnchors: null, serverCertificate: true);
@@ -103,6 +105,7 @@ public sealed class ChainValidationTests
     [TestMethod]
     public void RejectionMessageMatchesSslStream()
     {
+        PlatformSsl.RequireTls13();
         using X509Certificate2 certificate = Authority("CN=localhost");
         string invalid = CaptureRejection(certificate, "localhost", callback: false);
         using TlsCertificateCheck check = TlsChainValidator.Evaluate(CertificateList(null, null, certificate), "localhost", trustAnchors: null, serverCertificate: true);
