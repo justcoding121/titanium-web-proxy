@@ -183,9 +183,14 @@ internal sealed class QuicLossRecovery
             return;
         }
 
-        int probe = ProbeSpace();
-        if (probe >= 0 && Oldest(probe) is Flight packet)
+        // A lost Handshake packet must be resent even while an Initial packet is still in flight.
+        for (int probe = 0; probe < 3; probe++)
         {
+            if (Oldest(probe) is not Flight packet)
+            {
+                continue;
+            }
+
             Pending.Add(new QuicRetransmit { Kind = packet.Kind, Payload = packet.Payload });
             _lastAckEliciting[probe] = now;
         }
@@ -462,19 +467,6 @@ internal sealed class QuicLossRecovery
         }
 
         return space;
-    }
-
-    private int ProbeSpace()
-    {
-        for (int i = 0; i < 3; i++)
-        {
-            if (_flight[i].Count > 0)
-            {
-                return i;
-            }
-        }
-
-        return -1;
     }
 
     private Flight? Oldest(int space)
