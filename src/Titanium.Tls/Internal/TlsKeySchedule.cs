@@ -44,9 +44,11 @@ internal sealed class TlsKeySchedule : IDisposable
     {
         EnsureStage(KeyScheduleStage.None);
         Span<byte> salt = stackalloc byte[_hashLength];
+        salt.Clear();
         if (psk.IsEmpty)
         {
             Span<byte> zeros = stackalloc byte[_hashLength];
+            zeros.Clear();
             TlsHkdf.Extract(_hash, zeros, salt, _early.Span);
         }
         else
@@ -73,6 +75,7 @@ internal sealed class TlsKeySchedule : IDisposable
         if (sharedSecret.IsEmpty)
         {
             Span<byte> zeros = stackalloc byte[_hashLength];
+            zeros.Clear();
             TlsHkdf.Extract(_hash, zeros, derived, _handshake.Span);
         }
         else
@@ -90,6 +93,7 @@ internal sealed class TlsKeySchedule : IDisposable
         Span<byte> derived = stackalloc byte[_hashLength];
         Span<byte> emptyHash = stackalloc byte[_hashLength];
         Span<byte> zeros = stackalloc byte[_hashLength];
+        zeros.Clear();
         HashEmpty(emptyHash);
         TlsHkdf.DeriveSecret(_hash, _handshake.Span, "derived"u8, emptyHash, derived);
         CryptographicOperations.ZeroMemory(_handshake.Span);

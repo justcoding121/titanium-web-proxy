@@ -74,9 +74,29 @@ public sealed class RecordProtectorTests
         TlsRecordException badMac = Assert.ThrowsException<TlsRecordException>(() => read2.Unprotect(tampered, out _));
         Assert.AreEqual(TlsRecordAlert.BadRecordMac, badMac.Alert);
 
+        byte[] atTheContentLimit = new byte[TlsRecordProtector.MaxPlaintext];
+        TlsRecordException contentTypeDoesNotFit = Assert.ThrowsException<TlsRecordException>(() => write.Protect(23, atTheContentLimit, new byte[atTheContentLimit.Length + 64]));
+        Assert.AreEqual(TlsRecordAlert.RecordOverflow, contentTypeDoesNotFit.Alert);
+        byte[] largest = new byte[TlsRecordProtector.MaxPlaintext - 1];
+        int largestWritten = write.Protect(23, largest, new byte[TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxPlaintext + TlsRecordProtector.TagLength]);
+        Assert.AreEqual(TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxPlaintext + TlsRecordProtector.TagLength, largestWritten);
         byte[] huge = new byte[TlsRecordProtector.MaxPlaintext + 1];
         TlsRecordException overflow = Assert.ThrowsException<TlsRecordException>(() => write.Protect(23, huge, new byte[huge.Length + 64]));
         Assert.AreEqual(TlsRecordAlert.RecordOverflow, overflow.Alert);
+        TlsRecordException paddedPastTheLimit = Assert.ThrowsException<TlsRecordException>(() => write.Protect(23, new byte[8], new byte[64], padding: int.MaxValue));
+        Assert.AreEqual(TlsRecordAlert.RecordOverflow, paddedPastTheLimit.Alert);
+
+        int oversizeCipher = TlsRecordProtector.MaxPlaintext + 1 + TlsRecordProtector.TagLength;
+        byte[] oversize = new byte[TlsRecordProtector.HeaderLength + oversizeCipher];
+        oversize[0] = 23;
+        oversize[1] = 3;
+        oversize[2] = 3;
+        oversize[3] = (byte)(oversizeCipher >> 8);
+        oversize[4] = (byte)oversizeCipher;
+        using var limit = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
+        RecordResult oversizeResult = limit.TryUnprotect(oversize);
+        Assert.IsFalse(oversizeResult.Success);
+        Assert.AreEqual(TlsRecordAlert.RecordOverflow, oversizeResult.Alert);
 
         byte[] shortRecord = [23, 3, 3, 0, 0];
         TlsRecordException empty = Assert.ThrowsException<TlsRecordException>(() => read2.Unprotect(shortRecord, out _));

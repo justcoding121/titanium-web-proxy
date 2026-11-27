@@ -105,12 +105,19 @@ internal sealed class TlsRecordProtector : IDisposable
     internal int Protect(byte contentType, ReadOnlySpan<byte> plaintext, Span<byte> destination, int padding = 0)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (plaintext.Length > MaxPlaintext || padding < 0 || plaintext.Length + padding > MaxPlaintext)
+        if (padding < 0)
         {
             throw new TlsRecordException(TlsRecordAlert.RecordOverflow);
         }
 
-        int innerLength = plaintext.Length + 1 + padding;
+        // RFC 8446 section 5.4: content, the content-type byte, and padding together stay within 2^14.
+        long innerLengthLong = (long)plaintext.Length + padding + 1;
+        if (innerLengthLong > MaxPlaintext)
+        {
+            throw new TlsRecordException(TlsRecordAlert.RecordOverflow);
+        }
+
+        int innerLength = (int)innerLengthLong;
         int cipherLength = innerLength + TagLength;
         if (cipherLength > MaxCiphertext)
         {
@@ -175,6 +182,10 @@ internal sealed class TlsRecordProtector : IDisposable
         }
 
         int innerLength = cipherLength - TagLength;
+        if (innerLength > MaxPlaintext)
+        {
+            return Fail(TlsRecordAlert.RecordOverflow);
+        }
         Span<byte> nonce = stackalloc byte[12];
         Span<byte> aad = stackalloc byte[HeaderLength];
         WriteNonce(nonce);
