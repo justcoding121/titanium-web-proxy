@@ -173,6 +173,63 @@ public sealed class QuicFrameTests
     }
 
     [TestMethod]
+    public void FrameEdgesAreEncodingOrProtocolErrors()
+    {
+        AssertRaw([0x07, 0x00], QuicPacketKind.OneRtt, QuicFrameReader.FrameEncodingError);
+        AssertRaw([0x1a, 1, 2, 3, 4, 5, 6, 7], QuicPacketKind.OneRtt, QuicFrameReader.FrameEncodingError);
+        AssertRaw([0x1e], QuicPacketKind.Initial, QuicFrameReader.ProtocolViolation);
+        AssertRaw([0x1d, 0x00, 0x00], QuicPacketKind.Initial, QuicFrameReader.ProtocolViolation);
+        AssertRaw([0x08, 0x00, 0x01], QuicPacketKind.Handshake, QuicFrameReader.ProtocolViolation);
+        AssertRaw([0x03, 0x00, 0x00, 0x00, 0x00], QuicPacketKind.OneRtt, QuicFrameReader.FrameEncodingError);
+
+        byte[] over = new byte[9];
+        over[0] = 0x12;
+        Assert.AreEqual(8, QuicVarInt.Encode((1UL << 60) + 1, over.AsSpan(1)));
+        AssertRaw(over, QuicPacketKind.OneRtt, QuicFrameReader.FrameEncodingError);
+
+        byte[] retired = new byte[21];
+        retired[0] = 0x18;
+        retired[2] = 0x01;
+        retired[3] = 0x01;
+        retired[4] = 0xaa;
+        AssertRaw(retired, QuicPacketKind.OneRtt, QuicFrameReader.FrameEncodingError);
+
+        byte[] emptyId = new byte[4];
+        emptyId[0] = 0x18;
+        emptyId[1] = 0x01;
+        AssertRaw(emptyId, QuicPacketKind.OneRtt, QuicFrameReader.FrameEncodingError);
+
+        byte[] crypto = new byte[11];
+        crypto[0] = 0x06;
+        Assert.AreEqual(8, QuicVarInt.Encode(QuicVarInt.MaxValue, crypto.AsSpan(1)));
+        crypto[9] = 0x01;
+        crypto[10] = 0x01;
+        AssertRaw(crypto, QuicPacketKind.OneRtt, QuicFrameReader.FrameEncodingError);
+    }
+
+    [TestMethod]
+    public void AFrameFitsItsOwnLengthAndNotOneByteLess()
+    {
+        byte[] id = new byte[20];
+        id[0] = 0x20;
+        byte[] token = new byte[16];
+        token[0] = 0x21;
+        Fits(new QuicFrame { Kind = QuicFrameKind.Stream, StreamId = 4, HasLength = true, Data = [0x0c] });
+        Fits(new QuicFrame { Kind = QuicFrameKind.Datagram, HasLength = true, Data = [0x44, 0x45] });
+        Fits(new QuicFrame { Kind = QuicFrameKind.Datagram, HasLength = false, Data = [0x09] });
+        Fits(new QuicFrame { Kind = QuicFrameKind.Crypto, Offset = 3, Data = [0x0a, 0x0b] });
+        Fits(new QuicFrame { Kind = QuicFrameKind.NewToken, Data = [0x11] });
+        Fits(new QuicFrame { Kind = QuicFrameKind.NewConnectionId, Sequence = 4, RetirePriorTo = 1, Data = id, Token = token });
+        Fits(new QuicFrame { Kind = QuicFrameKind.ConnectionClose, ErrorCode = 7, TriggeringFrame = 8, Data = "bye"u8.ToArray() });
+        Fits(new QuicFrame { Kind = QuicFrameKind.PathChallenge, Data = [1, 2, 3, 4, 5, 6, 7, 8] });
+        Fits(new QuicFrame { Kind = QuicFrameKind.MaxStreams, Limit = QuicFrameReader.MaxStreamsLimit });
+        Fits(new QuicFrame { Kind = QuicFrameKind.StreamsBlocked, Unidirectional = true, Limit = QuicFrameReader.MaxStreamsLimit });
+
+        var tooLong = new QuicFrame { Kind = QuicFrameKind.NewConnectionId, Sequence = 1, Data = new byte[21], Token = token };
+        Assert.AreEqual(0, QuicFrameWriter.Write(tooLong, [], new byte[64]));
+    }
+
+    [TestMethod]
     public void TwoFramesAreReadInOrder()
     {
         byte[] payload = [0x01, 0x00];
@@ -184,6 +241,20 @@ public sealed class QuicFrameTests
         Assert.AreEqual(QuicFrameKind.Padding, second.Kind);
         Assert.IsFalse(reader.TryNext(ranges, out _));
         Assert.IsTrue(reader.Completed);
+    }
+
+    private static void Fits(QuicFrame frame)
+    {
+        byte[] wide = new byte[128];
+        int written = QuicFrameWriter.Write(frame, [], wide);
+        Assert.IsTrue(written > 1, frame.Kind.ToString());
+        Assert.AreEqual(written, QuicFrameWriter.Write(frame, [], wide.AsSpan(0, written)), frame.Kind.ToString());
+        Assert.AreEqual(0, QuicFrameWriter.Write(frame, [], wide.AsSpan(0, written - 1)), frame.Kind.ToString());
+        var reader = new QuicFrameReader(wide.AsSpan(0, written), QuicPacketKind.OneRtt);
+        Assert.IsTrue(reader.TryNext(new QuicAckRange[QuicFrameReader.MaxAckRanges], out QuicFrame decoded), frame.Kind.ToString());
+        Assert.AreEqual(frame.Kind, decoded.Kind);
+        Assert.AreEqual(frame.Limit, decoded.Limit);
+        Assert.IsTrue(reader.Completed || reader.Error == 0);
     }
 
     private static void RoundTrip(QuicFrame frame, QuicPacketKind packet = QuicPacketKind.OneRtt)
