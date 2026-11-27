@@ -344,6 +344,47 @@ public sealed class QuicHandshakeEdgeTests
         return packet[..written];
     }
 
+    [TestMethod]
+    public void AnApplicationPacketValidatesTheHandshakePath()
+    {
+        using X509Certificate2 certificate = Certificate();
+        var local = new IPEndPoint(IPAddress.Loopback, 9);
+        var remote = new IPEndPoint(IPAddress.Loopback, 10);
+        PathInfo path = QuicConnectionSession.PathOf(local, remote);
+        byte[] clientId = QuicConnectionSession.NewConnectionId();
+        byte[] serverId = QuicConnectionSession.NewConnectionId();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.StartClient(path, clientId, serverId, Limits(clientId, idleMs: 0, server: false));
+        server.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        byte[] buffer = new byte[8192];
+        for (int turn = 0; turn < 80 && !client.HandshakeComplete; turn++)
+        {
+            int count = client.PollTransmit(Now, buffer, out PathInfo sent);
+            if (count > 0 && !IsHandshakePacket(buffer[0]))
+            {
+                server.HandleDatagram(Now, buffer.AsSpan(0, count), sent);
+            }
+
+            count = server.PollTransmit(Now, buffer, out sent);
+            if (count > 0)
+            {
+                client.HandleDatagram(Now, buffer.AsSpan(0, count), sent);
+            }
+        }
+
+        Assert.IsTrue(client.HandshakeComplete);
+        Assert.IsFalse(server.IsPathValidated(path));
+        Assert.AreEqual(4, client.SendStream(0, [1, 2, 3, 4]));
+        int sentCount = client.PollTransmit(Now, buffer, out PathInfo oneRtt);
+        Assert.IsTrue(sentCount > 0);
+        server.HandleDatagram(Now, buffer.AsSpan(0, sentCount), oneRtt);
+        Assert.IsFalse(server.IsClosed);
+        Assert.IsTrue(server.IsPathValidated(path));
+    }
+
+    private static bool IsHandshakePacket(byte first) => (first & 0x80) != 0 && ((first >> 4) & 0x03) == 2;
+
     private static void Pump(QuicConnectionCore left, QuicConnectionCore right)
     {
         byte[] buffer = new byte[16384];

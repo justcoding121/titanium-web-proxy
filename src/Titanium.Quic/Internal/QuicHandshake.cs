@@ -273,6 +273,10 @@ internal sealed partial class QuicConnectionCore : IDisposable
         _staged.Clear();
     }
 
+    private bool _sawInitialPath;
+
+    private PathInfo _initialPath;
+
     private void AcceptDatagram(ReadOnlySpan<byte> datagram)
     {
         while (_hasPath && !datagram.IsEmpty && !IsClosed && _engine is not null)
@@ -347,7 +351,13 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 }
 
                 Remember(kind, packetNumber);
-                if (kind == QuicPacketKind.Handshake)
+                if (kind == QuicPacketKind.Initial && !_sawInitialPath)
+                {
+                    _initialPath = _path;
+                    _sawInitialPath = true;
+                }
+
+                if (kind == QuicPacketKind.Handshake || (kind == QuicPacketKind.OneRtt && _sawInitialPath && _path.Equals(_initialPath)))
                 {
                     MarkAddressValidated(_path);
                 }
