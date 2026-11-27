@@ -11,4 +11,4 @@ Self-review checklists. Each item cites evidence. A consult happens only when an
 | P11 names | `DESIGN.md` "Names". No public type exists yet besides the assembly marker, so there is nothing to collide. The guard test lands with the harness. |
 | P8 fingerprints | `DESIGN.md` "Fingerprints", backed by the Chrome 158 captures and `SPIKES.md`. The engine does not exist yet, so the "no Chrome outside the profile" rule has no violating code. |
 
-Open, and not a roadblock: incremental transcript, `RecordResult` instead of exceptions, secret pooling, X25519 speed. Those are specified and still to implement.
+Closed after C1: the transcript hash is incremental, `TryUnprotect` returns `RecordResult`, and stage secrets are rented from `SecretBufferPool`. The X25519 60 µs target is missed; the measurements are in `PROGRESS.md`.

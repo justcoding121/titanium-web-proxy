@@ -1,4 +1,7 @@
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Security.Cryptography;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Tls.Tests.Support;
 
@@ -63,12 +66,95 @@ public sealed class X25519Tests
     }
 
     [TestMethod]
+    [TestCategory("Slow")]
+    [Timeout(900_000)]
+    public void IteratedScalarMultMatchesRfc7748AfterOneMillion()
+    {
+        byte[] scalar = new byte[32];
+        byte[] u = new byte[32];
+        scalar[0] = 9;
+        u[0] = 9;
+        Span<byte> result = stackalloc byte[32];
+        Span<byte> previousScalar = stackalloc byte[32];
+        for (int i = 0; i < 1_000_000; i++)
+        {
+            scalar.AsSpan().CopyTo(previousScalar);
+            X25519.ScalarMult(scalar, u, result);
+            result.CopyTo(scalar);
+            previousScalar.CopyTo(u);
+        }
+
+        Assert.IsTrue(scalar.AsSpan().SequenceEqual(Hex("7c3911e0ab2586fd864497297e575e6f3bc601c0883c30df5f4dd2d24f665424")));
+    }
+
+    [TestMethod]
+    public void AgreementIsCommutative()
+    {
+        Span<byte> alice = stackalloc byte[32];
+        Span<byte> bob = stackalloc byte[32];
+        RandomNumberGenerator.Fill(alice);
+        RandomNumberGenerator.Fill(bob);
+        Span<byte> alicePublic = stackalloc byte[32];
+        Span<byte> bobPublic = stackalloc byte[32];
+        X25519.PublicKey(alice, alicePublic);
+        X25519.PublicKey(bob, bobPublic);
+        Span<byte> aliceShared = stackalloc byte[32];
+        Span<byte> bobShared = stackalloc byte[32];
+        Assert.IsTrue(X25519.TryAgree(alice, bobPublic, aliceShared));
+        Assert.IsTrue(X25519.TryAgree(bob, alicePublic, bobShared));
+        Assert.IsTrue(aliceShared.SequenceEqual(bobShared));
+    }
+
+    [TestMethod]
+    public void LadderSourceDoesNotCallThePlatform()
+    {
+        DirectoryInfo? dir = new(AppContext.BaseDirectory);
+        string? path = null;
+        while (dir is not null)
+        {
+            string candidate = Path.Combine(dir.FullName, "src", "Titanium.Tls", "Internal", "X25519.cs");
+            if (File.Exists(candidate))
+            {
+                path = candidate;
+                break;
+            }
+
+            dir = dir.Parent;
+        }
+
+        Assert.IsNotNull(path);
+        string source = File.ReadAllText(path);
+        StringAssert.DoesNotMatch(source, new System.Text.RegularExpressions.Regex("DllImport|ECDiffieHellman|\\bunsafe\\b"));
+    }
+
+    [TestMethod]
     public void LowOrderPublicKeyIsRejected()
     {
         Span<byte> shared = stackalloc byte[32];
         shared.Fill(1);
         Assert.IsFalse(X25519.TryAgree(new byte[32], new byte[32], shared));
         Assert.IsTrue(shared.SequenceEqual(new byte[32]));
+    }
+
+    [TestMethod]
+    public void ScalarMultStaysUnderTheRegressionCeiling()
+    {
+        byte[] scalar = new byte[32];
+        byte[] point = new byte[32];
+        scalar[0] = 9;
+        point[0] = 9;
+        Span<byte> result = stackalloc byte[32];
+        X25519.ScalarMult(scalar, point, result);
+        var watch = Stopwatch.StartNew();
+        const int iterations = 200;
+        for (int i = 0; i < iterations; i++)
+        {
+            X25519.ScalarMult(scalar, point, result);
+        }
+
+        watch.Stop();
+        double microseconds = watch.Elapsed.TotalMicroseconds / iterations;
+        Assert.IsTrue(microseconds <= 900, $"X25519 scalar multiplication took {microseconds:F1} µs.");
     }
 
     private static byte[] Hex(string text)

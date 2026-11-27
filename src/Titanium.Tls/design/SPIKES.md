@@ -96,4 +96,4 @@ A QUIC packet on this CPU is two native calls (AES-GCM plus one AES block) at a 
 
 ## S3
 
-S3 is the managed X25519 implementation, landed as T1.4. Its JIT disassembly, timing statistic, and speed budget are still open inside T1.4.
+S3 is the managed X25519 implementation, landed as T1.4. Release on this PC: 1240 µs with dedicated squaring, 817 µs after `Math.BigMul` and eager carries, 462 µs after leaving addition unreduced. The 60 µs budget is missed. BouncyCastle 2.6.2 measured 253 µs in the same loop. The million-iteration RFC 7748 vector, 10,000 BouncyCastle pairs, 50 OpenSSL samples, and the Wycheproof file match. JIT disassembly and the timing statistic are still open.

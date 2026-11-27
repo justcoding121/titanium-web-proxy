@@ -1,4 +1,6 @@
 using System;
+using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
 namespace Titanium.Tls;
@@ -18,6 +20,7 @@ internal static class X25519
         ScalarMult(scalar, BasePoint, publicKey);
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
     internal static void ScalarMult(ReadOnlySpan<byte> scalar, ReadOnlySpan<byte> uCoordinate, Span<byte> result)
     {
         if (scalar.Length != 32 || uCoordinate.Length != 32 || result.Length < 32)
@@ -153,7 +156,32 @@ internal static class X25519
             packed.CopyTo(destination);
         }
 
-        internal FieldElement Square() => this * this;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal FieldElement Square()
+        {
+            ulong a0 = _z0;
+            ulong a1 = _z1;
+            ulong a2 = _z2;
+            ulong a3 = _z3;
+            ulong a4 = _z4;
+            ulong z0 = 0, z0h = 0, z1 = 0, z1h = 0, z2 = 0, z2h = 0, z3 = 0, z3h = 0, z4 = 0, z4h = 0;
+            Product(ref z0, ref z0h, a0, a0);
+            Product(ref z0, ref z0h, a1, a4, 38);
+            Product(ref z0, ref z0h, a2, a3, 38);
+            Product(ref z1, ref z1h, a0, a1, 2);
+            Product(ref z1, ref z1h, a2, a4, 38);
+            Product(ref z1, ref z1h, a3, a3, 19);
+            Product(ref z2, ref z2h, a0, a2, 2);
+            Product(ref z2, ref z2h, a1, a1);
+            Product(ref z2, ref z2h, a3, a4, 38);
+            Product(ref z3, ref z3h, a0, a3, 2);
+            Product(ref z3, ref z3h, a1, a2, 2);
+            Product(ref z3, ref z3h, a4, a4, 19);
+            Product(ref z4, ref z4h, a0, a4, 2);
+            Product(ref z4, ref z4h, a1, a3, 2);
+            Product(ref z4, ref z4h, a2, a2);
+            return CarryWide(z0, z0h, z1, z1h, z2, z2h, z3, z3h, z4, z4h);
+        }
 
         internal FieldElement Invert()
         {
@@ -181,6 +209,7 @@ internal static class X25519
             Swap(ref left._z4, ref right._z4, mask);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FieldElement operator +(FieldElement left, FieldElement right)
         {
             FieldElement sum = default;
@@ -189,9 +218,10 @@ internal static class X25519
             sum._z2 = left._z2 + right._z2;
             sum._z3 = left._z3 + right._z3;
             sum._z4 = left._z4 + right._z4;
-            return CarryFull(sum);
+            return sum;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FieldElement operator -(FieldElement left, FieldElement right)
         {
             FieldElement difference = default;
@@ -200,39 +230,58 @@ internal static class X25519
             difference._z2 = (left._z2 + 0xFFFFFFFFFFFFEUL) - right._z2;
             difference._z3 = (left._z3 + 0xFFFFFFFFFFFFEUL) - right._z3;
             difference._z4 = (left._z4 + 0xFFFFFFFFFFFFEUL) - right._z4;
-            return CarryFull(difference);
+            return difference;
         }
 
         public static FieldElement operator *(FieldElement left, ulong small)
         {
-            return CarryWide(
-                (UInt128)left._z0 * small,
-                (UInt128)left._z1 * small,
-                (UInt128)left._z2 * small,
-                (UInt128)left._z3 * small,
-                (UInt128)left._z4 * small);
+            ulong z0 = 0, z0h = 0, z1 = 0, z1h = 0, z2 = 0, z2h = 0, z3 = 0, z3h = 0, z4 = 0, z4h = 0;
+            Product(ref z0, ref z0h, left._z0, small);
+            Product(ref z1, ref z1h, left._z1, small);
+            Product(ref z2, ref z2h, left._z2, small);
+            Product(ref z3, ref z3h, left._z3, small);
+            Product(ref z4, ref z4h, left._z4, small);
+            return CarryWide(z0, z0h, z1, z1h, z2, z2h, z3, z3h, z4, z4h);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FieldElement operator *(FieldElement left, FieldElement right)
         {
-            UInt128 z0 = (UInt128)left._z0 * right._z0;
-            UInt128 z1 = ((UInt128)left._z0 * right._z1) + ((UInt128)left._z1 * right._z0);
-            UInt128 z2 = ((UInt128)left._z0 * right._z2) + ((UInt128)left._z1 * right._z1) + ((UInt128)left._z2 * right._z0);
-            UInt128 z3 = ((UInt128)left._z0 * right._z3) + ((UInt128)left._z1 * right._z2) + ((UInt128)left._z2 * right._z1) + ((UInt128)left._z3 * right._z0);
-            UInt128 z4 = ((UInt128)left._z0 * right._z4) + ((UInt128)left._z1 * right._z3) + ((UInt128)left._z2 * right._z2) + ((UInt128)left._z3 * right._z1) + ((UInt128)left._z4 * right._z0);
-            z0 += (((UInt128)left._z1 * right._z4) + ((UInt128)left._z2 * right._z3) + ((UInt128)left._z3 * right._z2) + ((UInt128)left._z4 * right._z1)) * 19;
-            z1 += (((UInt128)left._z2 * right._z4) + ((UInt128)left._z3 * right._z3) + ((UInt128)left._z4 * right._z2)) * 19;
-            z2 += (((UInt128)left._z3 * right._z4) + ((UInt128)left._z4 * right._z3)) * 19;
-            z3 += ((UInt128)left._z4 * right._z4) * 19;
-            return CarryWide(z0, z1, z2, z3, z4);
+            ulong z0 = 0, z0h = 0, z1 = 0, z1h = 0, z2 = 0, z2h = 0, z3 = 0, z3h = 0, z4 = 0, z4h = 0;
+            Product(ref z0, ref z0h, left._z0, right._z0);
+            Product(ref z1, ref z1h, left._z0, right._z1);
+            Product(ref z1, ref z1h, left._z1, right._z0);
+            Product(ref z2, ref z2h, left._z0, right._z2);
+            Product(ref z2, ref z2h, left._z1, right._z1);
+            Product(ref z2, ref z2h, left._z2, right._z0);
+            Product(ref z3, ref z3h, left._z0, right._z3);
+            Product(ref z3, ref z3h, left._z1, right._z2);
+            Product(ref z3, ref z3h, left._z2, right._z1);
+            Product(ref z3, ref z3h, left._z3, right._z0);
+            Product(ref z4, ref z4h, left._z0, right._z4);
+            Product(ref z4, ref z4h, left._z1, right._z3);
+            Product(ref z4, ref z4h, left._z2, right._z2);
+            Product(ref z4, ref z4h, left._z3, right._z1);
+            Product(ref z4, ref z4h, left._z4, right._z0);
+            Product(ref z0, ref z0h, left._z1, right._z4, 19);
+            Product(ref z0, ref z0h, left._z2, right._z3, 19);
+            Product(ref z0, ref z0h, left._z3, right._z2, 19);
+            Product(ref z0, ref z0h, left._z4, right._z1, 19);
+            Product(ref z1, ref z1h, left._z2, right._z4, 19);
+            Product(ref z1, ref z1h, left._z3, right._z3, 19);
+            Product(ref z1, ref z1h, left._z4, right._z2, 19);
+            Product(ref z2, ref z2h, left._z3, right._z4, 19);
+            Product(ref z2, ref z2h, left._z4, right._z3, 19);
+            Product(ref z3, ref z3h, left._z4, right._z4, 19);
+            return CarryWide(z0, z0h, z1, z1h, z2, z2h, z3, z3h, z4, z4h);
         }
 
         private static FieldElement CarryFull(FieldElement value)
         {
-            return CarryWide(value._z0, value._z1, value._z2, value._z3, value._z4);
+            return CarryLimbs(value._z0, value._z1, value._z2, value._z3, value._z4);
         }
 
-        private static FieldElement CarryWide(UInt128 z0, UInt128 z1, UInt128 z2, UInt128 z3, UInt128 z4)
+        private static FieldElement CarryLimbs(ulong z0, ulong z1, ulong z2, ulong z3, ulong z4)
         {
             for (int pass = 0; pass < 2; pass++)
             {
@@ -250,43 +299,97 @@ internal static class X25519
 
             z1 += z0 >> LimbBits;
             z0 &= LimbMask;
-            z2 += z1 >> LimbBits;
-            z1 &= LimbMask;
-            z3 += z2 >> LimbBits;
-            z2 &= LimbMask;
-            z4 += z3 >> LimbBits;
-            z3 &= LimbMask;
-            z0 += (z4 >> LimbBits) * 19;
-            z4 &= LimbMask;
-            z1 += z0 >> LimbBits;
-            z0 &= LimbMask;
+            FieldElement result = default;
+            result._z0 = z0;
+            result._z1 = z1;
+            result._z2 = z2;
+            result._z3 = z3;
+            result._z4 = z4;
+            return result;
+        }
+
+        private static FieldElement CarryWide(
+            ulong z0, ulong z0h, ulong z1, ulong z1h, ulong z2, ulong z2h, ulong z3, ulong z3h, ulong z4, ulong z4h)
+        {
+            Propagate(ref z0, ref z0h, ref z1, ref z1h);
+            Propagate(ref z1, ref z1h, ref z2, ref z2h);
+            Propagate(ref z2, ref z2h, ref z3, ref z3h);
+            Propagate(ref z3, ref z3h, ref z4, ref z4h);
+            Wrap(ref z4, ref z4h, ref z0, ref z0h);
+            Propagate(ref z0, ref z0h, ref z1, ref z1h);
+            Propagate(ref z1, ref z1h, ref z2, ref z2h);
+            Propagate(ref z2, ref z2h, ref z3, ref z3h);
+            Propagate(ref z3, ref z3h, ref z4, ref z4h);
+            Wrap(ref z4, ref z4h, ref z0, ref z0h);
+            Propagate(ref z0, ref z0h, ref z1, ref z1h);
 
             FieldElement result = default;
-            result._z0 = (ulong)z0;
-            result._z1 = (ulong)z1;
-            result._z2 = (ulong)z2;
-            result._z3 = (ulong)z3;
-            result._z4 = (ulong)z4;
+            result._z0 = z0;
+            result._z1 = z1;
+            result._z2 = z2;
+            result._z3 = z3;
+            result._z4 = z4;
             return result;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void Product(ref ulong lo, ref ulong hi, ulong left, ulong right)
+        {
+            ulong high = Math.BigMul(left, right, out ulong low);
+            ulong sum = lo + low;
+            hi += high + (sum < lo ? 1UL : 0UL);
+            lo = sum;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void Product(ref ulong lo, ref ulong hi, ulong left, ulong right, ulong scale)
+        {
+            ulong high = Math.BigMul(left, right, out ulong low);
+            ulong scaledHigh = Math.BigMul(low, scale, out ulong scaledLow);
+            _ = Math.BigMul(high, scale, out ulong highScaleLow);
+            ulong sum = lo + scaledLow;
+            ulong carry = sum < lo ? 1UL : 0UL;
+            ulong mid = scaledHigh + highScaleLow;
+            ulong midCarry = mid < scaledHigh ? 1UL : 0UL;
+            ulong hiSum = hi + mid + carry;
+            lo = sum;
+            hi = hiSum + midCarry;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void Propagate(ref ulong lo, ref ulong hi, ref ulong next, ref ulong nextHi)
+        {
+            ulong carry = (lo >> LimbBits) | (hi << (64 - LimbBits));
+            ulong carryHi = hi >> LimbBits;
+            lo &= LimbMask;
+            hi = 0;
+            ulong sum = next + carry;
+            nextHi += carryHi + (sum < next ? 1UL : 0UL);
+            next = sum;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void Wrap(ref ulong lo, ref ulong hi, ref ulong next, ref ulong nextHi)
+        {
+            ulong carry = (lo >> LimbBits) | (hi << (64 - LimbBits));
+            ulong carryHi = hi >> LimbBits;
+            lo &= LimbMask;
+            hi = 0;
+            ulong high = Math.BigMul(carry, 19, out ulong low);
+            _ = Math.BigMul(carryHi, 19, out ulong carryHiLow);
+            ulong sum = next + low;
+            nextHi += high + carryHiLow + (sum < next ? 1UL : 0UL);
+            next = sum;
         }
 
         private static ulong Load(ReadOnlySpan<byte> bytes, int offset)
         {
-            ulong value = 0;
-            for (int i = 0; i < 8; i++)
-            {
-                value |= (ulong)bytes[offset + i] << (8 * i);
-            }
-
-            return value;
+            return BinaryPrimitives.ReadUInt64LittleEndian(bytes.Slice(offset, 8));
         }
 
         private static void Store(Span<byte> destination, int offset, ulong value)
         {
-            for (int i = 0; i < 8; i++)
-            {
-                destination[offset + i] = (byte)(value >> (8 * i));
-            }
+            BinaryPrimitives.WriteUInt64LittleEndian(destination.Slice(offset, 8), value);
         }
 
         private static void Swap(ref ulong left, ref ulong right, ulong mask)
