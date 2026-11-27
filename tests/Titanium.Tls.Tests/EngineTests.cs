@@ -87,22 +87,34 @@ public sealed class EngineTests
     }
 
     [TestMethod]
-    public void TooManyEmptyRecordsAreRejected()
+    public void EmptyApplicationRecordBeforeTheHandshakeIsRejected()
     {
         var client = new TlsEngine(TlsRole.Client);
         var output = new TlsOutput();
         client.Advance([], out _, output);
-        byte[] empty = [23, 3, 3, 0, 0];
-        for (int i = 0; i < TlsEngine.MaxEmptyRecords; i++)
-        {
-            client.Advance(empty, out int consumed, output);
-            Assert.AreEqual(empty.Length, consumed);
-            Assert.AreEqual(TlsEngineState.WaitServerHelloOrHrr, client.State);
-        }
-
-        client.Advance(empty, out _, output);
+        client.Advance([23, 3, 3, 0, 0], out _, output);
         AssertAlert(output, (byte)TlsRecordAlert.UnexpectedMessage);
         Assert.AreEqual(TlsEngineState.Closed, client.State);
+    }
+
+    [TestMethod]
+    public void TooManyProtectedEmptyRecordsAreRejected()
+    {
+        using HandshakePair pair = HandshakePair.Run();
+        var output = new TlsOutput();
+        var record = new byte[64];
+        for (int i = 0; i < TlsEngine.MaxEmptyRecords; i++)
+        {
+            int written = pair.Client.ProtectApplication([], record);
+            pair.Server.Advance(record.AsSpan(0, written), out int consumed, output);
+            Assert.AreEqual(written, consumed, i.ToString());
+            Assert.AreEqual(TlsEngineState.Connected, pair.Server.State);
+        }
+
+        int last = pair.Client.ProtectApplication([], record);
+        pair.Server.Advance(record.AsSpan(0, last), out _, output);
+        Assert.AreEqual(TlsEngineState.Closed, pair.Server.State);
+        Assert.AreEqual((byte)TlsRecordAlert.UnexpectedMessage, pair.Server.LastLocalAlert);
     }
 
     [TestMethod]

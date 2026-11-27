@@ -227,23 +227,10 @@ internal sealed partial class TlsEngine : IDisposable
             if (recordLength == 0)
             {
                 Consume(recordLength);
-                if (contentType != 23)
-                {
-                    Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
-                    break;
-                }
-
-                _emptyRecords++;
-                if (_emptyRecords > MaxEmptyRecords)
-                {
-                    Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
-                    break;
-                }
-
-                continue;
+                Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                break;
             }
 
-            _emptyRecords = 0;
             if (contentType == 20)
             {
                 bool beforeHello = _role == TlsRole.Server && _firstHello is null;
@@ -324,6 +311,7 @@ internal sealed partial class TlsEngine : IDisposable
                         _earlyDataSkipped + recordLength <= MaxIgnoredEarlyData)
                     {
                         _earlyDataSkipped += recordLength;
+                        _emptyRecords = 0;
                         Consume(recordLength);
                         continue;
                     }
@@ -340,6 +328,28 @@ internal sealed partial class TlsEngine : IDisposable
                     Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
                     break;
                 }
+
+                if (result.ContentType == 23 && result.ContentLength == 0)
+                {
+                    if (State != TlsEngineState.Connected)
+                    {
+                        Consume(recordLength);
+                        Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                        break;
+                    }
+
+                    _emptyRecords++;
+                    Consume(recordLength);
+                    if (_emptyRecords > MaxEmptyRecords)
+                    {
+                        Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                        break;
+                    }
+
+                    continue;
+                }
+
+                _emptyRecords = 0;
 
                 if (result.ContentType == 21)
                 {

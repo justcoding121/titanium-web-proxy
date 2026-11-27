@@ -122,6 +122,28 @@ public sealed class RecordProtectorTests
     }
 
     [TestMethod]
+    public void SequenceNearOverflowRejectsTheNextRecord()
+    {
+        using var write = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, new byte[16], new byte[12]);
+        using var read = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, new byte[16], new byte[12]);
+        write.SetSequence(ulong.MaxValue - 1);
+        read.SetSequence(ulong.MaxValue - 1);
+        byte[] record = new byte[64];
+        int written = write.Protect(23, [1, 2, 3], record);
+        Assert.AreEqual(ulong.MaxValue, write.Sequence);
+        byte[] opened = record[..written];
+        byte type = read.Unprotect(opened, out int length);
+        Assert.AreEqual(23, type);
+        Assert.AreEqual(3, length);
+        Assert.AreEqual(ulong.MaxValue, read.Sequence);
+        TlsRecordException protect = Assert.ThrowsException<TlsRecordException>(() => write.Protect(23, [1], record));
+        Assert.AreEqual(TlsRecordAlert.RecordOverflow, protect.Alert);
+        RecordResult blocked = read.TryUnprotect(opened);
+        Assert.IsFalse(blocked.Success);
+        Assert.AreEqual(TlsRecordAlert.RecordOverflow, blocked.Alert);
+    }
+
+    [TestMethod]
     public void DisposeZeroesTheIv()
     {
         byte[] iv = new byte[12];

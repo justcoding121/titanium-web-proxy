@@ -36,7 +36,7 @@ The server does not accept a post-handshake Certificate. Early data is not negot
 
 | Condition | Alert |
 | --- | --- |
-| Message not legal in the current state, a second retry, CCS before the first ClientHello or in the middle of a handshake message, an empty handshake or alert record, or more than 32 consecutive empty application records | `unexpected_message` (10) |
+| Message not legal in the current state, a second retry, CCS before the first ClientHello or in the middle of a handshake message, a zero-length record, or more than 32 consecutive protected empty application records | `unexpected_message` (10) |
 | A plaintext record longer than 2^14 bytes, or an inner plaintext longer than 2^14 + 1 | `record_overflow` (22) |
 | No common cipher or group, a client certificate the client cannot sign, or `Resume(false)` on the server hello | `handshake_failure` (40) |
 | Client certificate chain does not build for `clientAuth`, or the caller rejects the server certificate | `bad_certificate` (42) |

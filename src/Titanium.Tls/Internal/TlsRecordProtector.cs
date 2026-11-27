@@ -84,6 +84,8 @@ internal sealed class TlsRecordProtector : IDisposable
 
     internal ulong Sequence => _sequence;
 
+    internal void SetSequence(ulong sequence) => _sequence = sequence;
+
     internal bool KeyUpdateDue => _sequence >= _keyUpdateAfter;
 
     internal bool IvIsZeroed
