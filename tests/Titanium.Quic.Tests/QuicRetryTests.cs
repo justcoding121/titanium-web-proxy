@@ -48,4 +48,27 @@ public sealed class QuicRetryTests
         other[0] ^= 0x01;
         Assert.IsFalse(QuicRetry.TryVerify(other, Sample));
     }
+
+    [TestMethod]
+    public void ShortInputsAndTheConnectionIdLimitAreEdges()
+    {
+        var tag = new byte[16];
+        ReadOnlySpan<byte> body = Sample.AsSpan(0, Sample.Length - 16);
+        Assert.IsFalse(QuicRetry.TryWriteTag(OriginalDestinationConnectionId, body, tag.AsSpan(0, 15)));
+        Assert.IsFalse(QuicRetry.TryVerify(OriginalDestinationConnectionId, Sample.AsSpan(0, 15)));
+
+        Assert.IsTrue(QuicRetry.TryWriteTag(OriginalDestinationConnectionId, ReadOnlySpan<byte>.Empty, tag));
+        Assert.IsTrue(QuicRetry.TryVerify(OriginalDestinationConnectionId, tag));
+
+        byte[] twenty = new byte[20];
+        Assert.IsTrue(QuicRetry.TryWriteTag(twenty, body, tag));
+        byte[] packet = new byte[body.Length + tag.Length];
+        body.CopyTo(packet);
+        tag.CopyTo(packet.AsSpan(body.Length));
+        Assert.IsTrue(QuicRetry.TryVerify(twenty, packet));
+
+        byte[] tooLong = new byte[21];
+        Assert.IsFalse(QuicRetry.TryWriteTag(tooLong, body, tag));
+        Assert.IsFalse(QuicRetry.TryVerify(tooLong, Sample));
+    }
 }
