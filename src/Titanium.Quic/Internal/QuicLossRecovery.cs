@@ -498,40 +498,23 @@ internal sealed class QuicLossRecovery
 
     private void AddFinalFrame(int space)
     {
-        if (Newest(space) is not Flight newest || !IsFinalStream(newest.Payload))
-        {
-            return;
-        }
-
-        if (Oldest(space) is Flight oldest && oldest.Number == newest.Number)
-        {
-            return;
-        }
-
-        Pending.Add(new QuicRetransmit { Kind = newest.Kind, Payload = newest.Payload });
-    }
-
-    private static bool IsFinalStream(byte[] payload) =>
-        payload.Length > 0 && (payload[0] & 0xF8) == 0x08 && (payload[0] & 0x01) != 0;
-
-    private Flight? Newest(int space)
-    {
-        Flight? newest = null;
+        // A keepalive sent after the file becomes the newest packet. The final frame sits
+        // in the middle of the flight and would otherwise wait there until the peer gives up.
+        ulong? oldest = Oldest(space)?.Number;
         foreach (Flight packet in _flight[space])
         {
-            if (packet.Pmtu)
+            if (packet.Pmtu || packet.Number == oldest || !IsFinalStream(packet.Payload))
             {
                 continue;
             }
 
-            if (newest is null || packet.Number > newest.Value.Number)
-            {
-                newest = packet;
-            }
+            Pending.Add(new QuicRetransmit { Kind = packet.Kind, Payload = packet.Payload });
+            return;
         }
-
-        return newest;
     }
+
+    private static bool IsFinalStream(byte[] payload) =>
+        payload.Length > 0 && (payload[0] & 0xF8) == 0x08 && (payload[0] & 0x01) != 0;
 
     private Flight? Oldest(int space)
     {
