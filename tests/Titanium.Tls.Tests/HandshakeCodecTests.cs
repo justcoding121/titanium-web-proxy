@@ -127,6 +127,67 @@ public sealed class HandshakeCodecTests
     }
 
     [TestMethod]
+    public void MultiByteLengthsRoundTrip()
+    {
+        byte[] buffer = new byte[16];
+        TlsWriter writer = TlsWriter.Over(buffer);
+        Assert.IsTrue(writer.TryWriteUInt24(0x010203));
+        Assert.IsTrue(writer.TryWriteUInt32(0x01020304));
+        Assert.IsTrue(buffer.AsSpan(0, 7).SequenceEqual(new byte[] { 0x01, 0x02, 0x03, 0x01, 0x02, 0x03, 0x04 }));
+
+        TlsReader reader = new(new byte[] { 0x01, 0x02, 0x03, 0x04 });
+        Assert.IsTrue(reader.TryReadUInt32(out uint value));
+        Assert.AreEqual(0x01020304u, value);
+
+        byte[] framed = new byte[4 + 0x010203];
+        framed[0] = (byte)HandshakeType.Certificate;
+        framed[1] = 0x01;
+        framed[2] = 0x02;
+        framed[3] = 0x03;
+        framed[4] = 0xAB;
+        Assert.IsTrue(HandshakeFraming.TryReadHeader(framed, out HandshakeType type, out int headerLength));
+        Assert.AreEqual(HandshakeType.Certificate, type);
+        Assert.AreEqual(0x010203, headerLength);
+        HandshakeReassembler reassembler = new();
+        Assert.IsTrue(reassembler.TryAppend(framed, out HandshakeAlert alert));
+        Assert.AreEqual(default, alert);
+        byte[] body = new byte[0x010203];
+        Assert.IsTrue(reassembler.TryTake(body, out type, out int bodyLength, out bool needMore, out alert));
+        Assert.IsFalse(needMore);
+        Assert.AreEqual(default, alert);
+        Assert.AreEqual(HandshakeType.Certificate, type);
+        Assert.AreEqual(0x010203, bodyLength);
+        Assert.AreEqual(0xAB, body[0]);
+    }
+
+    [TestMethod]
+    public void LengthAtTheCapIsDistinctFromOnePastIt()
+    {
+        int maxRecord = TlsRecordProtector.MaxCiphertext;
+        byte[] record = new byte[5];
+        record[0] = 22;
+        record[1] = 3;
+        record[2] = 3;
+        record[3] = (byte)(maxRecord >> 8);
+        record[4] = (byte)maxRecord;
+        Assert.IsFalse(HandshakeFraming.TryUnwrapHandshakeRecord(record, out _, out bool incomplete, out HandshakeAlert alert));
+        Assert.IsTrue(incomplete);
+        Assert.AreEqual(default, alert);
+
+        int over = HandshakeFraming.DefaultMaxMessageBytes + 256;
+        byte[] header =
+        [
+            (byte)HandshakeType.Certificate,
+            (byte)(over >> 16),
+            (byte)(over >> 8),
+            (byte)over,
+        ];
+        HandshakeReassembler reassembler = new();
+        Assert.IsFalse(reassembler.TryAppend(header, out alert));
+        Assert.AreEqual(HandshakeAlert.DecodeError, alert);
+    }
+
+    [TestMethod]
     public void ClientHelloCorpusDoesNotThrow()
     {
         string directory = FindFixture(Path.Combine("..", "..", "fuzz", "corpus", "client-hello"));

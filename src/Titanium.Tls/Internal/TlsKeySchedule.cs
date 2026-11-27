@@ -73,6 +73,7 @@ internal sealed class TlsKeySchedule : IDisposable
         Span<byte> salt = stackalloc byte[_hashLength];
         Span<byte> zeros = stackalloc byte[_hashLength];
         salt.Clear();
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         zeros.Clear();
         TlsHkdf.Extract(_hash, zeros, salt, _early.Span);
     }
@@ -96,6 +97,7 @@ internal sealed class TlsKeySchedule : IDisposable
             TlsHkdf.Extract(_hash, sharedSecret, derived, _handshake.Span);
         }
 
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(derived);
         _stage = KeyScheduleStage.Handshake;
     }
@@ -106,11 +108,13 @@ internal sealed class TlsKeySchedule : IDisposable
         Span<byte> derived = stackalloc byte[_hashLength];
         Span<byte> emptyHash = stackalloc byte[_hashLength];
         Span<byte> zeros = stackalloc byte[_hashLength];
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         zeros.Clear();
         HashEmpty(emptyHash);
         TlsHkdf.DeriveSecret(_hash, _handshake.Span, "derived"u8, emptyHash, derived);
         CryptographicOperations.ZeroMemory(_handshake.Span);
         TlsHkdf.Extract(_hash, zeros, derived, _master.Span);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(derived);
         _stage = KeyScheduleStage.Master;
     }
@@ -213,6 +217,7 @@ internal sealed class TlsKeySchedule : IDisposable
         TlsHkdf.DeriveSecret(hash, exporterMaster, label, emptyHash, derived);
         TlsHkdf.Hash(hash, context, contextHash);
         TlsHkdf.ExpandLabel(hash, derived, "exporter"u8, contextHash, output);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(derived);
     }
 

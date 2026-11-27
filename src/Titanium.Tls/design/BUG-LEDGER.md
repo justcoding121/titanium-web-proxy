@@ -15,4 +15,12 @@ One row per bug found by the Part K campaigns. A row stays until the fix commit 
 
 `ScalarMultTimingDoesNotSeparateFixedFromRandom` and the four allocation gates ran on this PC, linuxmini, and macmini. The numbers are in `PROGRESS.md`. Welch's t was 0.31, 0.20, and 0.86.
 
-Not run yet: a mutation score, the 30-minute soak, the nightly 10,000, and the public-host sweep.
+Stryker 5.1.0, Standard, Debug, four workers, scored the thirteen handshake, codec, key schedule, and record files. The run excluded `Slow`, `TimingSideChannel`, `TlsInteropTests`, `HandshakeOracleTests`, and `ScalarMultStaysUnderTheRegressionCeiling`. It tested 2417 mutants. The score is 70.06 percent: 1880 killed, 109 timed out, 428 survived, and 422 with no coverage. Timeouts count as detected. No-coverage mutants stay in the denominator.
+
+One hundred mutants are ignored as equivalent. Fifty-six are a byte stored from a shift: an unsigned shift matches the arithmetic shift for a non-negative value, and a left shift cast to that byte is zero while the value stays under the shift width. Thirty-three wipe a temporary after its bytes have been copied and are not read again. Eleven are a `return` after a handshake-type test whose following conditions do not match that type. The comments naming those reasons sit on the statements.
+
+The assertions that killed the rest of the length mutants are `HandshakeCodecTests.MultiByteLengthsRoundTrip`, `HandshakeCodecTests.LengthAtTheCapIsDistinctFromOnePastIt`, `ClientHandshakeTests.HelloRetryForAnUnlistedGroupIsIllegal`, `ClientHandshakeTests.ClientHelloEncodesWideServerNameAndProtocolList`, and `ClientHandshakeTests.PreSharedKeyEncodesAWideIdentityAndAge`.
+
+The 428 survivors stay for the phase report. They fall into four groups. An unsigned shift of a non-negative length shares its statement with a killed left shift, so that statement stays in the score. Peer parsers for a group id, a selected PSK index, and a ticket timestamp still see a zero high byte in this suite. `Dispose` and the wipes of `_psk` and `ticket.Psk` have no assertion after they run. `TlsEngine.Traffic.cs` (42.34 percent), `TlsEngine.cs` (63.69 percent), and `TlsEngine.Server.cs` (65.34 percent) are the files under 70 percent; the thirteen files together are 70.06 percent.
+
+Still to run: the 30-minute soak, the nightly 10,000, and the public-host sweep.

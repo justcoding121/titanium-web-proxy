@@ -220,6 +220,7 @@ internal sealed partial class TlsEngine
         Span<byte> next = stackalloc byte[48];
         TlsKeySchedule.NextTrafficSecret(hash, current.Span, next[..hashLength]);
         next[..hashLength].CopyTo(current.Span);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(next);
         Suite(_selectedCipher == 0 ? (ushort)0x1301 : _selectedCipher, out _, out TlsAeadSuite aead, out int keyLength);
         Span<byte> key = stackalloc byte[32];
@@ -236,7 +237,9 @@ internal sealed partial class TlsEngine
             _write = new TlsRecordProtector(aead, key[..keyLength], iv);
         }
 
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(key);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(iv);
     }
 

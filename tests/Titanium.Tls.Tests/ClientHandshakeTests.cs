@@ -157,6 +157,60 @@ public sealed class ClientHandshakeTests
     }
 
     [TestMethod]
+    public void HelloRetryForAnUnlistedGroupIsIllegal()
+    {
+        using var client = new TlsEngine(TlsRole.Client);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        byte[] session = SessionId(output.Bytes.ToArray());
+        client.Advance(Record(HelloRetry(session, 0x0117, cookie: null)), out _, output);
+        AssertAlert(output, 47);
+    }
+
+    [TestMethod]
+    public void ClientHelloEncodesWideServerNameAndProtocolList()
+    {
+        string name = new string('a', 256);
+        string[] protocols = new string[130];
+        Array.Fill(protocols, "a");
+        using var client = new TlsEngine(TlsRole.Client, serverName: name) { ApplicationProtocols = protocols };
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        byte[] sni = ExtensionBody(output.Bytes.ToArray(), 0x0000);
+        Assert.AreEqual(0x01, sni[0]);
+        Assert.AreEqual(0x03, sni[1]);
+        Assert.AreEqual(0x01, sni[3]);
+        Assert.AreEqual(0x00, sni[4]);
+        byte[] alpn = ExtensionBody(output.Bytes.ToArray(), 0x0010);
+        Assert.AreEqual(0x01, alpn[0]);
+        Assert.AreEqual(0x04, alpn[1]);
+    }
+
+    [TestMethod]
+    public void PreSharedKeyEncodesAWideIdentityAndAge()
+    {
+        byte[] identity = new byte[256];
+        identity[0] = 0xAB;
+        var psk = new byte[32];
+        var cache = new MemoryTlsSessionCache();
+        cache.Store("localhost", "tls", new TlsResumptionTicket(identity, 60, 0x01020304, [0], psk, 0x1301, 1_000));
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost", cache: cache) { UnixTimeSeconds = 1_000 };
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        byte[] body = ExtensionBody(output.Bytes.ToArray(), 0x0029);
+        Assert.AreEqual(0x01, body[0]);
+        Assert.AreEqual(0x06, body[1]);
+        Assert.AreEqual(0x01, body[2]);
+        Assert.AreEqual(0x00, body[3]);
+        Assert.AreEqual(0xAB, body[4]);
+        int ageAt = 4 + identity.Length;
+        Assert.AreEqual(0x01, body[ageAt]);
+        Assert.AreEqual(0x02, body[ageAt + 1]);
+        Assert.AreEqual(0x03, body[ageAt + 2]);
+        Assert.AreEqual(0x04, body[ageAt + 3]);
+    }
+
+    [TestMethod]
     public void ServerHelloNegativesFailClosed()
     {
         AssertAlert(Feed(static (session, random) => ServerHello(session, random, 0x1302, includeVersion: true, includeShare: true)), 47);
@@ -527,6 +581,22 @@ public sealed class ClientHandshakeTests
         }
 
         return last;
+    }
+
+    private static byte[] ExtensionBody(byte[] record, ushort type)
+    {
+        ReadOnlySpan<byte> hello = record.AsSpan(5);
+        TlsReader reader = new(hello[ExtensionStart(hello)..]);
+        while (reader.TryReadUInt16(out ushort found) && reader.TryReadVector16(out ReadOnlySpan<byte> body))
+        {
+            if (found == type)
+            {
+                return body.ToArray();
+            }
+        }
+
+        Assert.Fail("The ClientHello is missing extension " + type.ToString("x4") + ".");
+        return [];
     }
 
     private static int ExtensionStart(ReadOnlySpan<byte> hello)

@@ -125,42 +125,49 @@ internal sealed partial class TlsEngine
         if (type == HandshakeType.ServerHello)
         {
             OnServerHello(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.EncryptedExtensions)
         {
             OnEncryptedExtensions(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.CertificateRequest)
         {
             OnCertificateRequest(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.Certificate)
         {
             OnCertificate(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.CertificateVerify)
         {
             OnCertificateVerify(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.Finished)
         {
             OnFinished(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.NewSessionTicket)
         {
             OnTicket(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
@@ -247,6 +254,7 @@ internal sealed partial class TlsEngine
         Span<byte> hash = stackalloc byte[32];
         _transcript.CurrentHash(hash);
         _schedule!.AdvanceToHandshake(secret);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(secret);
         InstallHandshakeKeys(hash);
         State = TlsEngineState.WaitEncryptedExtensions;
@@ -270,7 +278,9 @@ internal sealed partial class TlsEngine
         _write?.Dispose();
         _write = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
         _alertsEncrypted = true;
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(key);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(iv);
     }
 
@@ -408,6 +418,7 @@ internal sealed partial class TlsEngine
         _transcript!.CurrentHash(hash);
         TlsKeySchedule.FinishedKey(HashAlgorithmName.SHA256, _serverHandshakeSecret!.Span, finishedKey);
         HMACSHA256.HashData(finishedKey, hash, expected);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(finishedKey);
         if (!CryptographicOperations.FixedTimeEquals(expected, verifyData))
         {
@@ -453,10 +464,14 @@ internal sealed partial class TlsEngine
 
         TlsKeySchedule.FinishedKey(HashAlgorithmName.SHA256, _clientHandshakeSecret!.Span, finishedKey);
         HMACSHA256.HashData(finishedKey, hash, expected);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(finishedKey);
         SendClientFinished(output, expected, clientApp, serverApp, clientCertificate, clientVerify);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(clientApp);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(serverApp);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(exporter);
         _transcript.CurrentHash(hash);
         _resumptionMaster = new SecretBuffer(32);
@@ -554,7 +569,9 @@ internal sealed partial class TlsEngine
         _read = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
         TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, clientApp, key, iv);
         _write = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(key);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(iv);
     }
 
@@ -678,7 +695,9 @@ internal sealed partial class TlsEngine
         _schedule!.DeriveEarly("res binder"u8, empty, binderKey);
         TlsKeySchedule.FinishedKey(HashAlgorithmName.SHA256, binderKey, finishedKey);
         HMACSHA256.HashData(finishedKey, hash, hello.AsSpan(hello.Length - 32));
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(binderKey);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(finishedKey);
     }
 
@@ -1050,6 +1069,7 @@ internal sealed partial class TlsEngine
     {
         var message = new byte[4 + bodyLength];
         message[0] = (byte)type;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[1] = (byte)(bodyLength >> 16);
         message[2] = (byte)(bodyLength >> 8);
         message[3] = (byte)bodyLength;

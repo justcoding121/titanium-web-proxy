@@ -71,6 +71,7 @@ internal static class TlsHkdf
             }
 
             block[..output.Length].CopyTo(output);
+            // Stryker disable once statement: the temporary is not read after the bytes are copied
             CryptographicOperations.ZeroMemory(block);
             return;
         }
@@ -109,6 +110,7 @@ internal static class TlsHkdf
 
     private static void WriteInfo(Span<byte> info, int length, ReadOnlySpan<byte> label, ReadOnlySpan<byte> context)
     {
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         info[0] = (byte)(length >> 8);
         info[1] = (byte)length;
         int labelLength = LabelPrefix.Length + label.Length;

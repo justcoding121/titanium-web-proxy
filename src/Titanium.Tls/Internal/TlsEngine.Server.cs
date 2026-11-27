@@ -76,24 +76,28 @@ internal sealed partial class TlsEngine
         if (type == HandshakeType.ClientHello)
         {
             OnClientHello(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.Certificate)
         {
             OnClientCertificate(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.CertificateVerify)
         {
             OnClientCertificateVerify(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
         if (type == HandshakeType.Finished)
         {
             OnClientFinished(bodyLength, output);
+            // Stryker disable once statement: the following handshake type does not match
             return;
         }
 
@@ -207,6 +211,7 @@ internal sealed partial class TlsEngine
         _schedule.InitializeEarly(psk ?? ReadOnlySpan<byte>.Empty);
         if (psk is not null)
         {
+            // Stryker disable once statement: the temporary is not read after the bytes are copied
             CryptographicOperations.ZeroMemory(psk);
         }
 
@@ -304,6 +309,7 @@ internal sealed partial class TlsEngine
         Span<byte> transcriptHash = stackalloc byte[48];
         _transcript.CurrentHash(transcriptHash);
         _schedule!.AdvanceToHandshake(secret[..secretWritten]);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(secret[..secretWritten]);
         InstallServerHandshakeKeys(hash, aead, keyLength, hashLength, transcriptHash);
         byte[] ee = EncryptedExtensionsMessage(_selectedAlpn);
@@ -340,10 +346,13 @@ internal sealed partial class TlsEngine
         Span<byte> verifyData = stackalloc byte[48];
         TlsKeySchedule.FinishedKey(hash, _serverHandshakeSecret!.Span, finishedKey[..hashLength]);
         Mac(hash, finishedKey[..hashLength], transcriptHash[..hashLength], verifyData[..hashLength]);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(finishedKey);
         var finished = new byte[4 + hashLength];
         finished[0] = (byte)HandshakeType.Finished;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         finished[1] = (byte)(hashLength >> 16);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         finished[2] = (byte)(hashLength >> 8);
         finished[3] = (byte)hashLength;
         verifyData[..hashLength].CopyTo(finished.AsSpan(4));
@@ -469,6 +478,7 @@ internal sealed partial class TlsEngine
         _transcript!.CurrentHash(transcriptHash);
         TlsKeySchedule.FinishedKey(hash, _clientHandshakeSecret!.Span, finishedKey[..hashLength]);
         Mac(hash, finishedKey[..hashLength], transcriptHash[..hashLength], expected[..hashLength]);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(finishedKey);
         if (!CryptographicOperations.FixedTimeEquals(expected[..hashLength], verifyData))
         {
@@ -507,7 +517,9 @@ internal sealed partial class TlsEngine
         TlsKeySchedule.DeriveTrafficKeys(hash, _serverHandshakeSecret.Span, key[..keyLength], iv);
         _write?.Dispose();
         _write = new TlsRecordProtector(aead, key[..keyLength], iv);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(key);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(iv);
     }
 
@@ -523,7 +535,9 @@ internal sealed partial class TlsEngine
         TlsKeySchedule.DeriveTrafficKeys(hash, _serverApplication!.Span, key[..keyLength], iv);
         _write?.Dispose();
         _write = new TlsRecordProtector(aead, key[..keyLength], iv);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(key);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(iv);
     }
 
@@ -651,7 +665,9 @@ internal sealed partial class TlsEngine
         early.DeriveEarly("res binder"u8, empty[..hashLength], binderKey[..hashLength]);
         TlsKeySchedule.FinishedKey(HashOf(_selectedCipher), binderKey[..hashLength], finishedKey[..hashLength]);
         Mac(HashOf(_selectedCipher), finishedKey[..hashLength], transcriptHash[..hashLength], expected);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(binderKey);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(finishedKey);
         bool binderMatches = CryptographicOperations.FixedTimeEquals(expected[..hashLength], binder);
         if (!acceptable)
@@ -679,8 +695,10 @@ internal sealed partial class TlsEngine
         var psk = new byte[TlsHkdf.HashLength(hash)];
         TlsKeySchedule.ResumptionPsk(hash, _resumptionMaster!.Span, nonce, psk);
         byte[] plain = WriteTicket(_selectedCipher, psk, _clientHelloInfo?.ServerName, _selectedAlpn, Now(), DefaultTicketLifetime, SHA256.HashData(_selection!.Certificate.RawData));
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(psk);
         byte[] identity = _selection.Tickets!.Protect(plain);
+        // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(plain);
         var age = new byte[4];
         _entropy.Fill(age);
@@ -1266,13 +1284,16 @@ internal sealed partial class TlsEngine
 
     private static byte[] VersionExtension() => [0x03, 0x04];
 
+    // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
     private static byte[] GroupOnly(ushort group) => [(byte)(group >> 8), (byte)group];
 
     private static byte[] KeyShareEntry(ushort group, ReadOnlySpan<byte> share)
     {
         var body = new byte[4 + share.Length];
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         body[0] = (byte)(group >> 8);
         body[1] = (byte)group;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         body[2] = (byte)(share.Length >> 8);
         body[3] = (byte)share.Length;
         share.CopyTo(body.AsSpan(4));
@@ -1296,10 +1317,13 @@ internal sealed partial class TlsEngine
         body.Add((byte)(cipher >> 8));
         body.Add((byte)cipher);
         body.Add(0);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         body.Add((byte)(extensions.Count >> 8));
         body.Add((byte)extensions.Count);
         body.AddRange(extensions);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         body[1] = (byte)((body.Count - 4) >> 16);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         body[2] = (byte)((body.Count - 4) >> 8);
         body[3] = (byte)(body.Count - 4);
         return body.ToArray();
@@ -1320,10 +1344,13 @@ internal sealed partial class TlsEngine
         name.CopyTo(body.AsSpan(3));
         AddExtension(extensions, ExtensionType.ApplicationLayerProtocolNegotiation, body);
         var message = new System.Collections.Generic.List<byte> { 8, 0, 0, 0 };
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message.Add((byte)(extensions.Count >> 8));
         message.Add((byte)extensions.Count);
         message.AddRange(extensions);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[1] = (byte)((message.Count - 4) >> 16);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[2] = (byte)((message.Count - 4) >> 8);
         message[3] = (byte)(message.Count - 4);
         return message.ToArray();
@@ -1343,6 +1370,7 @@ internal sealed partial class TlsEngine
     private static byte[] CertificateMessage(byte[] der)
     {
         var entry = new byte[3 + der.Length + 2];
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         entry[0] = (byte)(der.Length >> 16);
         entry[1] = (byte)(der.Length >> 8);
         entry[2] = (byte)der.Length;
@@ -1350,9 +1378,11 @@ internal sealed partial class TlsEngine
         var message = new byte[8 + entry.Length];
         message[0] = 11;
         int body = 4 + entry.Length;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[1] = (byte)(body >> 16);
         message[2] = (byte)(body >> 8);
         message[3] = (byte)body;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[5] = (byte)(entry.Length >> 16);
         message[6] = (byte)(entry.Length >> 8);
         message[7] = (byte)entry.Length;
@@ -1365,10 +1395,12 @@ internal sealed partial class TlsEngine
         var message = new byte[8 + signature.Length];
         message[0] = 15;
         int body = 4 + signature.Length;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[2] = (byte)(body >> 8);
         message[3] = (byte)body;
         message[4] = (byte)(scheme >> 8);
         message[5] = (byte)scheme;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[6] = (byte)(signature.Length >> 8);
         message[7] = (byte)signature.Length;
         signature.CopyTo(message.AsSpan(8));
@@ -1380,7 +1412,9 @@ internal sealed partial class TlsEngine
         int body = 4 + 4 + 1 + nonce.Length + 2 + ticket.Length + 2;
         var message = new byte[4 + body];
         message[0] = 4;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[1] = (byte)(body >> 16);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[2] = (byte)(body >> 8);
         message[3] = (byte)body;
         WriteUint(message, 4, lifetime);
@@ -1388,6 +1422,7 @@ internal sealed partial class TlsEngine
         message[12] = (byte)nonce.Length;
         nonce.CopyTo(message.AsSpan(13));
         int at = 13 + nonce.Length;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message[at] = (byte)(ticket.Length >> 8);
         message[at + 1] = (byte)ticket.Length;
         ticket.CopyTo(message.AsSpan(at + 2));
@@ -1405,6 +1440,7 @@ internal sealed partial class TlsEngine
         plain[at++] = (byte)psk.Length;
         psk.CopyTo(plain.AsSpan(at));
         at += psk.Length;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         plain[at++] = (byte)(name.Length >> 8);
         plain[at++] = (byte)name.Length;
         name.CopyTo(plain.AsSpan(at));
@@ -1458,6 +1494,7 @@ internal sealed partial class TlsEngine
         record[0] = 22;
         record[1] = 3;
         record[2] = 3;
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         record[3] = (byte)(handshake.Length >> 8);
         record[4] = (byte)handshake.Length;
         handshake.CopyTo(record.AsSpan(5));
@@ -1466,8 +1503,10 @@ internal sealed partial class TlsEngine
 
     private static void AddExtension(System.Collections.Generic.List<byte> destination, ushort type, byte[] body)
     {
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         destination.Add((byte)(type >> 8));
         destination.Add((byte)type);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         destination.Add((byte)(body.Length >> 8));
         destination.Add((byte)body.Length);
         destination.AddRange(body);
@@ -1475,8 +1514,11 @@ internal sealed partial class TlsEngine
 
     private static void WriteUint(byte[] destination, int at, uint value)
     {
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         destination[at] = (byte)(value >> 24);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         destination[at + 1] = (byte)(value >> 16);
+        // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         destination[at + 2] = (byte)(value >> 8);
         destination[at + 3] = (byte)value;
     }
