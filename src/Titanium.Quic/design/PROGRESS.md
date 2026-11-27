@@ -15,3 +15,7 @@ Packet numbers follow RFC 9000 Appendix A. The encoder uses the appendix width: 
 ## T2.4
 
 Initial secrets use the RFC 9001 salt and `TlsHkdf`. Client and server keys, IVs, and header-protection keys match Appendix A for connection ID `8394c8f03e515708`. AES header protection is one cached ECB encryption of the 16-byte sample. The ChaCha20 block matches the RFC 8439 block vector, and the Appendix A.5 short-header mask uses that block with the counter taken from the sample. Protect and remove are the same exclusive-or, with the packet-number length read after the first byte is uncovered.
+
+## T2.5
+
+The Retry integrity tag is AES-128-GCM over the pseudo-packet: the original destination connection ID length, that connection ID, then the Retry packet without its tag. The published key and nonce match the Expand-Label of the RFC secret. The Appendix A.4 sample verifies. A flipped tag is discarded, and so is a Retry whose original destination connection ID does not match.
