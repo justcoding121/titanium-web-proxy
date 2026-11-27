@@ -42,9 +42,12 @@ internal static class ClientCertificateHandshake
         }
     }
 
-    internal static void Capture(TcpClientConnection connection, SslStream stream, ClientCertificateMode mode)
+    internal static void Capture(TcpClientConnection connection, SslStream stream, ClientCertificateMode mode) =>
+        Capture(connection, stream.RemoteCertificate, mode);
+
+    internal static void Capture(TcpClientConnection connection, X509Certificate? remoteCertificate, ClientCertificateMode mode)
     {
-        if (mode == ClientCertificateMode.None || stream.RemoteCertificate is not X509Certificate remote)
+        if (mode == ClientCertificateMode.None || remoteCertificate is not X509Certificate remote)
         {
             return;
         }

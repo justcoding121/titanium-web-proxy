@@ -6,6 +6,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Tls;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -104,6 +105,74 @@ public partial class ProxyServer
                     X509Certificate2? certificate = endPoint.GenericCertificate;
                     try
                     {
+                        if (UseManagedTlsStack)
+                        {
+                            var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+                            try
+                            {
+                                var managedBindings = endPoint.SniCertificates;
+                                var managedCertMode = endPoint.ClientCertificateMode;
+                                var managedRequestsClientCert = Certificates.ClientCertificateHandshake.RequestsCertificate(managedCertMode);
+                                var managedHasSniBindings = managedBindings is { Count: > 0 };
+                                var managedTrustedRoots = endPoint.ClientCertificateTrustedRoots;
+
+                                SslServerAuthenticationOptions BuildManagedOptions(X509Certificate2 serverCertificate)
+                                {
+                                    var built = new SslServerAuthenticationOptions
+                                    {
+                                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                                        ApplicationProtocols = SslExtensions.Http11ProtocolAsList,
+                                        AllowRenegotiation = false
+                                    };
+                                    ApplyListenerTlsPolicy(built);
+                                    CertificateManager.ConfigureServerCertificate(built, serverCertificate);
+                                    Certificates.ClientCertificateHandshake.Apply(built, managedCertMode, managedTrustedRoots);
+                                    return built;
+                                }
+
+                                if (managedHasSniBindings)
+                                {
+                                    var bindings = managedBindings!;
+                                    var fallback = certificate ?? bindings[0].Certificate;
+                                    await AwaitPendingClientHelloAsync(clientConnection);
+                                    await managed.AuthenticateAsServerAsync(
+                                        (_, hello, _, _) => new ValueTask<SslServerAuthenticationOptions>(
+                                            BuildManagedOptions(Certificates.SniCertificateSelector.Select(hello.ServerName, bindings)
+                                                         ?? fallback)),
+                                        null, cancellationToken);
+                                }
+                                else
+                                {
+                                    var options = managedRequestsClientCert ? null : endPoint.CachedServerAuthOptions;
+                                    if (options == null)
+                                    {
+                                        options = BuildManagedOptions(certificate!);
+                                        if (!managedRequestsClientCert)
+                                        {
+                                            endPoint.CachedServerAuthOptions = options;
+                                        }
+                                    }
+
+                                    await AwaitPendingClientHelloAsync(clientConnection);
+                                    await managed.AuthenticateAsServerAsync(options, cancellationToken);
+                                }
+
+                                Certificates.ClientCertificateHandshake.Capture(clientConnection, managed.RemoteCertificate, managedCertMode);
+                                RecordClientHandshakeSuccess(httpsHostName);
+                                clientConnection.NegotiatedApplicationProtocol = managed.NegotiatedApplicationProtocol;
+                                clientConnection.SslProtocol = managed.SslProtocol;
+                                clientStream = new HttpClientStream(this, clientConnection, managed, BufferPool,
+                                    cancellationToken);
+                                isHttps = !endPoint.ForwardCleartext;
+                            }
+                            catch
+                            {
+                                await managed.DisposeAsync();
+                                throw;
+                            }
+                        }
+                        else
+                        {
                         // Construct SslStream before WaitForData completes so construction overlaps
                         // ClientHello arrival (Kestrel: Start WaitForData, then middleware builds SslStream).
                         sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
@@ -168,6 +237,7 @@ public partial class ProxyServer
                             cancellationToken);
                         sslStream = null;
                         isHttps = !endPoint.ForwardCleartext;
+                        }
                     }
                     catch (Exception e)
                     {
@@ -334,6 +404,59 @@ public partial class ProxyServer
                     {
                     try
                     {
+                        if (UseManagedTlsStack)
+                        {
+                            var managed = new TlsStream(clientStream, leaveInnerStreamOpen: false);
+                            try
+                            {
+                                var managedCertMode = endPoint.ClientCertificateMode;
+                                var managedTrustedRoots = endPoint.ClientCertificateTrustedRoots;
+                                var offerHttp2 = http2Supported;
+
+                                SslServerAuthenticationOptions BuildManagedOptions(X509Certificate2 serverCertificate)
+                                {
+                                    var built = new SslServerAuthenticationOptions
+                                    {
+                                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                                    };
+                                    ApplyListenerTlsPolicy(built);
+                                    CertificateManager.ConfigureServerCertificate(built, serverCertificate);
+                                    Certificates.ClientCertificateHandshake.Apply(built, managedCertMode, managedTrustedRoots);
+                                    built.ApplicationProtocols = offerHttp2
+                                        ? SslExtensions.Http2AndHttp11ProtocolAsList
+                                        : SslExtensions.Http11ProtocolAsList;
+                                    return built;
+                                }
+
+                                if (endPoint.SniCertificates is { Count: > 0 } handshakeBindings)
+                                {
+                                    var fallbackCert = certificate;
+                                    await managed.AuthenticateAsServerAsync(
+                                        (_, hello, _, _) => new ValueTask<SslServerAuthenticationOptions>(
+                                            BuildManagedOptions(Certificates.SniCertificateSelector.Select(hello.ServerName,
+                                                handshakeBindings) ?? fallbackCert)),
+                                        null, cancellationToken);
+                                }
+                                else
+                                {
+                                    await managed.AuthenticateAsServerAsync(BuildManagedOptions(certificate), cancellationToken);
+                                }
+
+                                Certificates.ClientCertificateHandshake.Capture(clientStream.Connection, managed.RemoteCertificate, managedCertMode);
+                                RecordClientHandshakeSuccess(httpsHostName);
+                                clientStream.Connection.NegotiatedApplicationProtocol = managed.NegotiatedApplicationProtocol;
+                                clientStream = new HttpClientStream(this, clientStream.Connection, managed, BufferPool,
+                                    cancellationToken);
+                                isHttps = !endPoint.ForwardCleartext;
+                            }
+                            catch
+                            {
+                                await managed.DisposeAsync();
+                                throw;
+                            }
+                        }
+                        else
+                        {
                         sslStream = new SslStream(clientStream, false);
 
                         var peekClientCertMode = endPoint.ClientCertificateMode;
@@ -379,6 +502,7 @@ public partial class ProxyServer
                             cancellationToken);
                         sslStream = null;
                         isHttps = !endPoint.ForwardCleartext;
+                        }
                     }
                     catch (Exception e)
                     {
