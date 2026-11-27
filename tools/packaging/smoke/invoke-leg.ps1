@@ -31,6 +31,10 @@ if (@($args).Count -lt 1 -or $args[0] -ne '--self-test') {
     throw 'usage: dot-source invoke-leg.ps1, or invoke-leg.ps1 --self-test'
 }
 
+# The Windows product-smoke step runs this file in-process. Deleting
+# LIFECYCLE_ENFORCE here used to turn every later enforce.ps1 call into an advisory.
+$callerEnforce = $env:LIFECYCLE_ENFORCE
+$env:LIFECYCLE_ENFORCE = 'true'
 $root = Join-Path ([IO.Path]::GetTempPath()) ('smoke-leg-' + [guid]::NewGuid().ToString('n'))
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 try {
@@ -50,7 +54,6 @@ try {
 
     Invoke-SmokeLeg { & $passScript }
 
-    $env:LIFECYCLE_ENFORCE = 'true'
     $enforce = Join-Path $PSScriptRoot 'enforce.ps1'
     $threw = $false
     try {
@@ -78,7 +81,15 @@ exit `$LASTEXITCODE
 
     Write-Host 'invoke-leg self-test ok'
 } finally {
-    Remove-Item Env:LIFECYCLE_ENFORCE -ErrorAction SilentlyContinue
+    $env:LIFECYCLE_ENFORCE = 'true'
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
+if ($env:LIFECYCLE_ENFORCE -ne 'true') {
+    throw 'self-test: cleared LIFECYCLE_ENFORCE for the caller'
+}
+if ([string]::IsNullOrEmpty($callerEnforce)) {
+    Remove-Item Env:LIFECYCLE_ENFORCE -ErrorAction SilentlyContinue
+} else {
+    $env:LIFECYCLE_ENFORCE = $callerEnforce
 }
 exit 0

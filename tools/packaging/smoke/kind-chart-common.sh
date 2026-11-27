@@ -223,6 +223,9 @@ kind_chart_ensure_gateway_tls_secret() {
 }
 
 kind_chart_assert_no_instance_leftovers() {
+  # "strict" reports kept ConfigMaps and Secrets. The default still clears them
+  # so the pre-upgrade wait can finish; the final uninstall check is strict.
+  local mode="${1:-clean}"
   local scope=()
   if [[ "${which:-}" == gateway ]]; then
     scope=(-A)
@@ -244,8 +247,13 @@ kind_chart_assert_no_instance_leftovers() {
       return 0
     fi
     if [[ "$attempt" -eq 1 || "$attempt" -eq 5 || "$attempt" -eq 15 ]]; then
-      kubectl delete pods,rs,deploy,sts,pvc,configmap,secret -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" \
-        --force --grace-period=0 >/dev/null 2>&1 || true
+      if [[ "$mode" == "strict" ]]; then
+        kubectl delete pods,rs,deploy,sts,pvc -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" \
+          --force --grace-period=0 >/dev/null 2>&1 || true
+      else
+        kubectl delete pods,rs,deploy,sts,pvc,configmap,secret -l "app.kubernetes.io/instance=${rel}" "${scope[@]}" \
+          --force --grace-period=0 >/dev/null 2>&1 || true
+      fi
     fi
     sleep 2
   done
