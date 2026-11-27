@@ -144,7 +144,10 @@ internal sealed class QuicConnectionSession : IDisposable
         {
             if (_core.IsClosed)
             {
-                throw new QuicException(QuicError.ConnectionAborted, null, "The connection is closed.");
+                string why = _core.ClosedByStatelessReset
+                    ? "a stateless reset"
+                    : "error 0x" + _core.CloseError.ToString("x", System.Globalization.CultureInfo.InvariantCulture);
+                throw new QuicException(QuicError.ConnectionAborted, (long)_core.CloseError, "The connection closed with " + why + ".");
             }
 
             int queued = _core.SendStream(streamId, data);

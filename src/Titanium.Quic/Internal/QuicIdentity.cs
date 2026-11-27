@@ -12,7 +12,7 @@ internal sealed class QuicIdentity
 {
     internal const ulong ConnectionIdLimitError = 0x09;
 
-    internal const int ActiveLimit = 2;
+    internal const int ActiveLimit = 8;
 
     private readonly List<Issued> _issued = [];
 
@@ -54,6 +54,25 @@ internal sealed class QuicIdentity
 
             return count;
         }
+    }
+
+    internal byte[]? ActivePeer()
+    {
+        Peer? chosen = null;
+        foreach (Peer peer in _peers)
+        {
+            if (peer.Retired)
+            {
+                continue;
+            }
+
+            if (chosen is null || peer.Sequence >= chosen.Value.Sequence)
+            {
+                chosen = peer;
+            }
+        }
+
+        return chosen?.Id;
     }
 
     internal void AddIssued(ReadOnlySpan<byte> id)

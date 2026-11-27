@@ -40,7 +40,7 @@ internal sealed class QuicTransportParameters
 
     internal QuicPreferredAddress PreferredAddress = new();
 
-    internal ulong ActiveConnectionIdLimit = 2;
+    internal ulong ActiveConnectionIdLimit = 8;
 
     internal ulong MaxDatagramFrameSize;
 

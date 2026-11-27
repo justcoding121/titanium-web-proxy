@@ -57,6 +57,28 @@ public sealed class QuicCampaignTests
     }
 
     [TestMethod]
+    public void ADatagramFrameClosesTheConnection()
+    {
+        using X509Certificate2 certificate = Certificate();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        var sim = new QuicSimulator();
+        client.StartClient(Path, ClientId, ServerId, Parameters(client: true));
+        server.StartServer(ServerId, certificate, Parameters(client: false));
+        DateTimeOffset time = Now;
+        Assert.IsTrue(Run(client, server, sim, ref time, static (left, right) => left.HandshakeComplete && right.HandshakeComplete));
+        byte[] payload = [9, 9, 9];
+        var frame = new QuicFrame { Kind = QuicFrameKind.Datagram, Data = payload };
+        byte[] encoded = new byte[16];
+        int written = QuicFrameWriter.Write(frame, [], encoded);
+        Assert.IsTrue(written > 1);
+        server.InjectApplicationPayload(encoded.AsSpan(0, written));
+        Assert.IsTrue(server.IsClosed);
+        Assert.AreEqual(QuicFrameReader.ProtocolViolation, server.CloseError);
+        Assert.AreEqual(0, server.ReceivedStream.Length);
+    }
+
+    [TestMethod]
     public void AnEmptyDatagramIsDropped()
     {
         var sim = new QuicSimulator();

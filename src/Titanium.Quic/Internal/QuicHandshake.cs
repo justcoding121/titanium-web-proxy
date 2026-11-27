@@ -132,7 +132,6 @@ internal sealed partial class QuicConnectionCore : IDisposable
         _originalDestinationId = remoteId.ToArray();
         _initialToken = token.ToArray();
         _ids.AddIssued(localId);
-        _ids.AddPeer(remoteId);
         _path = path;
         _hasPath = true;
         AddReceived(path, 0);
@@ -253,33 +252,15 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     private void AcceptDatagram(ReadOnlySpan<byte> datagram)
     {
-        if (!_hasPath || datagram.IsEmpty || IsClosed || _engine is null)
+        while (_hasPath && !datagram.IsEmpty && !IsClosed && _engine is not null)
         {
-            return;
-        }
-
-        if (_client && datagram[0] == 0xF0)
-        {
-            AcceptRetry(datagram);
-            return;
-        }
-
-        if (!TryLocate(datagram, out QuicPacketKind kind, out int packetLength, out int packetNumberOffset, out int sourceOffset, out int sourceLength, out int tokenOffset, out int tokenLength))
-        {
-            if (_ids.MatchesReset(datagram))
+            if (_client && datagram[0] == 0xF0)
             {
-                DrainReset();
+                AcceptRetry(datagram);
+                return;
             }
 
-            return;
-        }
-
-        byte[] rented = ArrayPool<byte>.Shared.Rent(packetLength);
-        byte[] plain = ArrayPool<byte>.Shared.Rent(packetLength);
-        try
-        {
-            datagram[..packetLength].CopyTo(rented);
-            if (!TryOpen(kind, rented.AsSpan(0, packetLength), packetNumberOffset, plain, out ulong packetNumber, out int plainLength))
+            if (!TryLocate(datagram, out QuicPacketKind kind, out int packetLength, out int packetNumberOffset, out int sourceOffset, out int sourceLength, out int tokenOffset, out int tokenLength))
             {
                 if (_ids.MatchesReset(datagram))
                 {
@@ -289,51 +270,82 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 return;
             }
 
-            if (kind == QuicPacketKind.Initial && _peerSourceId is null)
+            byte[] rented = ArrayPool<byte>.Shared.Rent(packetLength);
+            byte[] plain = ArrayPool<byte>.Shared.Rent(packetLength);
+            bool opened = false;
+            try
             {
-                _peerSourceId = datagram.Slice(sourceOffset, sourceLength).ToArray();
-                _ids.AddPeer(_peerSourceId);
-            }
-
-            if (kind == QuicPacketKind.Initial && _retryArmed && tokenLength == 0)
-            {
-                SendRetry();
-                return;
-            }
-
-            if (kind == QuicPacketKind.Initial && _expectedRetryToken is not null)
-            {
-                ReadOnlySpan<byte> token = datagram.Slice(tokenOffset, tokenLength);
-                if (token.Length != _expectedRetryToken.Length || !CryptographicOperations.FixedTimeEquals(token, _expectedRetryToken))
+                datagram[..packetLength].CopyTo(rented);
+                if (!TryOpen(kind, rented.AsSpan(0, packetLength), packetNumberOffset, plain, out ulong packetNumber, out int plainLength))
                 {
+                    if (packetLength < datagram.Length)
+                    {
+                        datagram = datagram[packetLength..];
+                        continue;
+                    }
+
+                    if (_ids.MatchesReset(datagram))
+                    {
+                        DrainReset();
+                    }
+
                     return;
                 }
 
-                ReceivedInitialToken = token.ToArray();
-                _expectedRetryToken = null;
+                opened = true;
+                if (kind == QuicPacketKind.Initial && _peerSourceId is null)
+                {
+                    _peerSourceId = datagram.Slice(sourceOffset, sourceLength).ToArray();
+                    _ids.AddPeer(_peerSourceId);
+                }
+
+                if (kind == QuicPacketKind.Initial && _retryArmed && tokenLength == 0)
+                {
+                    SendRetry();
+                    return;
+                }
+
+                if (kind == QuicPacketKind.Initial && _expectedRetryToken is not null)
+                {
+                    ReadOnlySpan<byte> token = datagram.Slice(tokenOffset, tokenLength);
+                    if (token.Length != _expectedRetryToken.Length || !CryptographicOperations.FixedTimeEquals(token, _expectedRetryToken))
+                    {
+                        return;
+                    }
+
+                    ReceivedInitialToken = token.ToArray();
+                    _expectedRetryToken = null;
+                }
+
+                Remember(kind, packetNumber);
+                if (kind == QuicPacketKind.Handshake)
+                {
+                    MarkAddressValidated(_path);
+                }
+
+                bool eliciting = TakePayload(kind, plain.AsSpan(0, plainLength));
+                if (eliciting && !IsClosed)
+                {
+                    StageAck(kind, packetNumber);
+                }
+
+                if (!IsClosed)
+                {
+                    NotePeerPacket();
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented, clearArray: true);
+                ArrayPool<byte>.Shared.Return(plain, clearArray: true);
             }
 
-            Remember(kind, packetNumber);
-            if (kind == QuicPacketKind.Handshake)
+            if (!opened || packetLength >= datagram.Length)
             {
-                MarkAddressValidated(_path);
+                return;
             }
 
-            bool eliciting = TakePayload(kind, plain.AsSpan(0, plainLength));
-            if (eliciting && !IsClosed)
-            {
-                StageAck(kind, packetNumber);
-            }
-
-            if (!IsClosed)
-            {
-                NotePeerPacket();
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: true);
-            ArrayPool<byte>.Shared.Return(plain, clearArray: true);
+            datagram = datagram[packetLength..];
         }
     }
 
@@ -587,6 +599,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
             {
                 MarkAddressValidated(_path);
                 continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.Datagram)
+            {
+                MarkClosed(QuicFrameReader.ProtocolViolation, send: true);
+                return false;
             }
 
             if (frame.Kind == QuicFrameKind.Crypto && !TakeCrypto(kind, frame.Offset, frame.Data))
@@ -1515,7 +1533,15 @@ internal sealed partial class QuicConnectionCore : IDisposable
         return true;
     }
 
-    private byte[] DestinationId() => _client ? _remoteId : _peerSourceId ?? [];
+    private byte[] DestinationId()
+    {
+        if (!_client)
+        {
+            return _peerSourceId ?? [];
+        }
+
+        return _ids.ActivePeer() ?? _peerSourceId ?? _remoteId;
+    }
 
     private static bool Same(byte[]? value, byte[]? expected)
     {
