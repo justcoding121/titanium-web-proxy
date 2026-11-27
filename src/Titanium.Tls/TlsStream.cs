@@ -22,6 +22,7 @@ public sealed class TlsStream : Stream
     private readonly SemaphoreSlim _readLock = new(1, 1);
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly byte[] _encrypt = new byte[TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxPlaintext + 1 + TlsRecordProtector.TagLength];
+    private readonly TlsOutput _pull = new();
     private TlsEngine? _engine;
     private SslClientAuthenticationOptions? _clientOptions;
     private SslServerAuthenticationOptions? _serverOptions;
@@ -882,15 +883,15 @@ public sealed class TlsStream : Stream
                 FillSync();
             }
 
-            var output = new TlsOutput();
-            _engine.Advance(Unconsumed(), out int consumed, output);
+            _pull.Clear();
+            _engine.Advance(Unconsumed(), out int consumed, _pull);
             _inboundUsed += consumed;
-            if (output.Bytes.Length > 0)
+            if (_pull.Bytes.Length > 0)
             {
-                _inner.Write(output.Bytes);
+                _inner.Write(_pull.Bytes);
             }
 
-            NoteReadEvents(output);
+            NoteReadEvents(_pull);
             TrySendKeyUpdateFromReaderSync();
             if (consumed == 0 && _engine.PlaintextAvailable == 0 && !_readClosed)
             {
@@ -909,15 +910,15 @@ public sealed class TlsStream : Stream
                 await FillAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var output = new TlsOutput();
-            _engine.Advance(Unconsumed(), out int consumed, output);
+            _pull.Clear();
+            _engine.Advance(Unconsumed(), out int consumed, _pull);
             _inboundUsed += consumed;
-            if (output.Bytes.Length > 0)
+            if (_pull.Bytes.Length > 0)
             {
-                await _inner.WriteAsync(output.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
+                await _inner.WriteAsync(_pull.WrittenMemory, cancellationToken).ConfigureAwait(false);
             }
 
-            NoteReadEvents(output);
+            NoteReadEvents(_pull);
             if (_engine.KeyUpdateResponseNeeded)
             {
                 await TrySendKeyUpdateFromReaderAsync(cancellationToken).ConfigureAwait(false);

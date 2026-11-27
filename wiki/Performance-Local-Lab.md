@@ -252,3 +252,39 @@ Local Win smoke 2026-08-29 (`rps-ramp-20260829-104306.csv`): c=64, warmup 2s / m
 | `twp-cli-logging-http1` | **33,218** | 120 MiB | **0.96×** | ≥0.90 |
 | `twp-cli-lb-leasttime-http1` | **31,995** | 131 MiB | ÷route **0.89×** | ≥0.85 |
 | `twp-cli-dialect-twp-http1` | **36,532** | 116 MiB | **1.06×** | ≥0.90 |
+
+## Managed TLS on this PC
+
+These rows are `TlsStream` against `SslStream` on this machine, not the laptop table above. Do not paste them onto [Performance](Performance).
+
+| | |
+| --- | --- |
+| OS | Windows 11 (10.0.26300) |
+| CPU | AMD Ryzen 5 7640HS, 6 cores / 12 threads |
+| RAM | 13.8 GiB |
+| SDK / runtime | .NET SDK 10.0.404, runtime 10.0.15 |
+| Harness | BenchmarkDotNet 0.14.0, one warmup, 10 iterations. The runner switched the power plan to High performance for the timed job and restored Balanced afterwards. |
+| Handshake | ECDSA P-256, X25519, AES-128-GCM. Both peers are in one process. The certificate callback accepts the self-signed leaf. |
+
+A ratio is managed throughput divided by platform throughput, from medians. Above 1.00 the managed stack is faster. JSON exports are in `src/Titanium.Tls/design/perf-baselines/`.
+
+| Cell | Platform median | Managed median | Ratio | Gate |
+| --- | ---: | ---: | ---: | --- |
+| Full handshake, loopback | 3.405 ms | 4.545 ms | 0.75 | 0.90, missed |
+| Full handshake, in-memory | 2.638 ms | 3.803 ms | 0.69 | 0.90, missed |
+| Resumed handshake, loopback | 3.528 ms | 2.823 ms | 1.25 | not a resumption gate: the platform cell was not faster than its full handshake |
+| Resumed handshake, in-memory | 2.806 ms | 2.287 ms | 1.23 | same limit; the error bar is wider than the gap |
+| 256 MiB, loopback, 16 KiB writes | 271.2 ms | 273.9 ms | 0.99 | median is above 0.95; the error-bar bound is about 0.93 |
+| 256 MiB, loopback, 64 KiB writes | 271.0 ms | 269.3 ms | 1.01 | 0.95, met |
+| 256 MiB, in-memory, 16 KiB writes | 83.7 ms | 73.8 ms | 1.13 | 0.95 on the median |
+| 256 MiB, in-memory, 64 KiB writes | 80.6 ms | 70.9 ms | 1.14 | 0.95 on the median |
+| 100-byte exchange, loopback | 35.1 µs | 30.6 µs | 1.15 | within 3 percent, met |
+| 1 KiB exchange, loopback | 48.6 µs | 33.2 µs | 1.47 | within 3 percent, met |
+
+The platform resumed cell is not faster than its full handshake, so that row is a managed resume against a full platform handshake. The managed resume still offers `psk_dhe_ke`, so it still runs the key exchange. The second 16 KiB exchange allocates 0 bytes on the calling thread for both stacks. That probe is the synchronous API. A 256 MiB transfer still shows about 18 KB in the process-wide BenchmarkDotNet column. Loopback bulk sits on the socket; the in-memory rows are where the stacks separate. AES-256, an RSA leaf, and the hybrid group are not in this table: the managed client does not offer them.
+
+One X25519 scalar multiplication on the High performance plan, 200 calls after one warmup, was 767 µs. A managed-to-managed handshake calls the ladder for each side's public key and each side's agreement. Those calls were not timed inside the handshake, so the 0.75 ratio is not attributed to a ladder count. The portable ladder stays.
+
+Idle connections use the in-memory pair, whose two 32 KiB pipes are in both GC figures. At 8,000 connections the managed GC heap was 961 KB each and the platform heap was 84 KB each. Most of the managed heap is the engine's handshake buffers (three 128 KiB arrays per endpoint) plus the stream's record buffers. The working-set deltas were 165 KB and 116 KB; untouched large-object pages make the working set smaller than the committed heap. At 50,000 the platform run finished and the managed run ran out of memory. That is commit charge, about a gigabyte per thousand managed connections, on a 13.8 GiB machine.
+
+A burst of 200 handshakes, not 10,000, ran 32 quiet exchanges. The slowest sample was 47 ms on the platform and 93 ms on the managed stack. That sample is the maximum of 32, not a p99, and the 10,000-client storm was not run.

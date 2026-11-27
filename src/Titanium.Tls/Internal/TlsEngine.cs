@@ -55,6 +55,8 @@ internal sealed class TlsOutput
 
     internal ReadOnlySpan<byte> Bytes => _bytes.AsSpan(0, _length);
 
+    internal ReadOnlyMemory<byte> WrittenMemory => _bytes.AsMemory(0, _length);
+
     internal int EventCount => _eventCount;
 
     internal TlsEvent Event(int index) => _events[index];
