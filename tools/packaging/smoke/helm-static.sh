@@ -41,7 +41,11 @@ done
 # Stable reuses the beta chart semver (8.0.N → 1.0.N). Ignore prerelease
 # releases so a GA dry-run/cut does not fail on the beta's titanium-1.0.N.tgz.
 # Beta cuts still scan every non-draft release so a missed bump cannot overwrite.
-if [[ -n "${GH_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+# source=release-tag is a check of an already published release, so the chart
+# archive is supposed to be there.
+if [[ "${SOURCE:-}" == "release-tag" ]]; then
+  echo "skip published-chart overwrite guard (SOURCE=release-tag)"
+elif [[ -n "${GH_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
   if [[ "$version" == *-* ]]; then
     jq_filter='[.[] | select(.draft==false) | .assets[].name | select(test("^titanium-[0-9]+\\.[0-9]+\\.[0-9]+\\.tgz$"))][0]'
   else

@@ -1787,7 +1787,9 @@ internal static class SmokeApp
         {
             if (!await app.CaptureIsListeningAsync())
                 return Fail(1, "uninstall-proxy-clear: capture did not start");
-            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
+            // The capture listener is allowed 45s. A 20s proxy wait expired once
+            // on a slow runner while msiexec /i was still bringing the proxy up.
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(45)))
                 return Fail(1, "uninstall-proxy-clear: system proxy not on. " + ProxySnapshot());
 
             if (string.Equals(mode, "orphan", StringComparison.OrdinalIgnoreCase))
