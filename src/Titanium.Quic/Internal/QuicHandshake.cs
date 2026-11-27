@@ -579,8 +579,10 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 continue;
             }
 
-            if (frame.Kind == QuicFrameKind.ConnectionClose && !frame.ApplicationClose)
+            if (frame.Kind == QuicFrameKind.ConnectionClose)
             {
+                // An application close is how a finished transfer ends. Keepalives after it
+                // are undecryptable on the next connection that reuses an empty connection id.
                 MarkClosed(frame.ErrorCode, send: false);
                 return false;
             }
