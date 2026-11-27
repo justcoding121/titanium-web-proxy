@@ -64,6 +64,19 @@ internal sealed class TlsKeySchedule : IDisposable
         _stage = KeyScheduleStage.Early;
     }
 
+    /// <summary>
+    /// The binder used the offered PSK. A ServerHello that does not select it continues with the all-zero early secret.
+    /// </summary>
+    internal void AbandonPreSharedKey()
+    {
+        EnsureStage(KeyScheduleStage.Early);
+        Span<byte> salt = stackalloc byte[_hashLength];
+        Span<byte> zeros = stackalloc byte[_hashLength];
+        salt.Clear();
+        zeros.Clear();
+        TlsHkdf.Extract(_hash, zeros, salt, _early.Span);
+    }
+
     internal void AdvanceToHandshake(ReadOnlySpan<byte> sharedSecret)
     {
         EnsureStage(KeyScheduleStage.Early);

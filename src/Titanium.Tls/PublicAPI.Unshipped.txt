@@ -30,3 +30,5 @@ Titanium.Tls.TlsFingerprintFidelity.ReducedNoPostQuantum = 1 -> Titanium.Tls.Tls
 Titanium.Tls.TlsFingerprintProfile
 Titanium.Tls.TlsFingerprintProfile.TlsFingerprintProfile() -> void
 Titanium.Tls.TlsFingerprintProfiles
+Titanium.Tls.TlsVersionNotSupportedException
+Titanium.Tls.TlsVersionNotSupportedException.TlsVersionNotSupportedException() -> void

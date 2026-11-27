@@ -11,7 +11,8 @@ internal enum TlsRole
 internal enum TlsEngineState
 {
     Start = 0,
-    WaitServerHello = 1,
+    WaitServerHelloOrHrr = 1,
+    WaitCertificateRequestOrCertificate = 11,
     WaitEncryptedExtensions = 2,
     WaitCertificate = 3,
     WaitCertificateDecision = 4,
@@ -44,7 +45,7 @@ internal readonly struct TlsEvent
 /// <summary>Bytes to write and events from one <see cref="TlsEngine.Advance"/> or <see cref="TlsEngine.Resume"/>.</summary>
 internal sealed class TlsOutput
 {
-    private readonly byte[] _bytes = new byte[1024];
+    private readonly byte[] _bytes = new byte[16384];
     private readonly TlsEvent[] _events = new TlsEvent[8];
     private int _length;
     private int _eventCount;
@@ -87,7 +88,7 @@ internal sealed class TlsOutput
 /// Sans-IO handshake driver. The flight bytes are a stub until the client and server machines replace them.
 /// The transition table is the one those machines plug into.
 /// </summary>
-internal sealed class TlsEngine
+internal sealed partial class TlsEngine : IDisposable
 {
     internal const int MaxEmptyRecords = 32;
     internal const int DefaultMaxBufferedBytes = HandshakeFraming.DefaultMaxMessageBytes + TlsRecordProtector.HeaderLength;
@@ -102,17 +103,43 @@ internal sealed class TlsEngine
     private int _emptyRecords;
     private int _acceptedChangeCipherSpec;
     private bool _paused;
+    private readonly IEntropySource _entropy;
+    private readonly string? _serverName;
+    private readonly ITlsSessionCache? _cache;
+    private readonly TranscriptStore? _transcript;
+    private readonly TlsKeySchedule? _schedule;
+    private bool _disposed;
 
-    internal TlsEngine(TlsRole role, int maxHandshakeMessage = HandshakeFraming.DefaultMaxMessageBytes, int maxBufferedBytes = DefaultMaxBufferedBytes)
+    internal TlsEngine(
+        TlsRole role,
+        int maxHandshakeMessage = HandshakeFraming.DefaultMaxMessageBytes,
+        int maxBufferedBytes = DefaultMaxBufferedBytes,
+        IEntropySource? entropy = null,
+        string? serverName = null,
+        ITlsSessionCache? cache = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBufferedBytes);
         _role = role;
         _maxBufferedBytes = maxBufferedBytes;
+        _entropy = entropy ?? new SystemEntropy();
+        _serverName = serverName;
+        _cache = cache;
         _stash = new byte[Math.Max(maxBufferedBytes, TlsRecordProtector.HeaderLength + 1)];
         _body = new byte[maxHandshakeMessage];
         _handshake = new HandshakeReassembler(maxHandshakeMessage);
-        State = role == TlsRole.Client ? TlsEngineState.Start : TlsEngineState.WaitClientHello;
+        if (role == TlsRole.Client)
+        {
+            _transcript = new TranscriptStore(System.Security.Cryptography.HashAlgorithmName.SHA256);
+            _schedule = new TlsKeySchedule(System.Security.Cryptography.HashAlgorithmName.SHA256);
+            State = TlsEngineState.Start;
+        }
+        else
+        {
+            State = TlsEngineState.WaitClientHello;
+        }
     }
+
+    internal long UnixTimeSeconds { get; set; }
 
     internal TlsEngineState State { get; private set; }
 
@@ -133,8 +160,8 @@ internal sealed class TlsEngine
 
         if (_role == TlsRole.Client && State == TlsEngineState.Start)
         {
-            WriteMessages(output, [1]);
-            State = TlsEngineState.WaitServerHello;
+            WriteClientHello(output, helloRetry: false);
+            State = TlsEngineState.WaitServerHelloOrHrr;
         }
 
         bool needMore = false;
@@ -196,6 +223,13 @@ internal sealed class TlsEngine
 
             if (contentType == 22)
             {
+                if (_read != null)
+                {
+                    Consume(recordLength);
+                    Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    break;
+                }
+
                 bool ok = AppendHandshake(_stash.AsSpan(TlsRecordProtector.HeaderLength, recordLength), output) && DrainHandshake(output);
                 Consume(recordLength);
                 if (!ok || _paused || State == TlsEngineState.Closed)
@@ -208,8 +242,39 @@ internal sealed class TlsEngine
 
             if (contentType == 23)
             {
+                if (_read == null)
+                {
+                    Consume(recordLength);
+                    if (State != TlsEngineState.Connected)
+                    {
+                        Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    }
+
+                    continue;
+                }
+
+                RecordResult result = _read.TryUnprotect(_stash.AsSpan(0, TlsRecordProtector.HeaderLength + recordLength));
+                if (!result.Success)
+                {
+                    Consume(recordLength);
+                    Fail(output, (byte)result.Alert);
+                    break;
+                }
+
+                if (result.ContentType == 22)
+                {
+                    bool ok = AppendHandshake(_stash.AsSpan(TlsRecordProtector.HeaderLength, result.ContentLength), output) && DrainHandshake(output);
+                    Consume(recordLength);
+                    if (!ok || _paused || State == TlsEngineState.Closed)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
                 Consume(recordLength);
-                if (State != TlsEngineState.Connected)
+                if (result.ContentType != 23 || State != TlsEngineState.Connected)
                 {
                     Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
                 }
@@ -360,7 +425,7 @@ internal sealed class TlsEngine
                 return false;
             }
 
-            Enter(type, output);
+            Enter(type, bodyLength, output);
         }
 
         return State != TlsEngineState.Closed;
@@ -372,8 +437,9 @@ internal sealed class TlsEngine
         {
             return State switch
             {
-                TlsEngineState.WaitServerHello => type == HandshakeType.ServerHello,
+                TlsEngineState.WaitServerHelloOrHrr => type == HandshakeType.ServerHello,
                 TlsEngineState.WaitEncryptedExtensions => type == HandshakeType.EncryptedExtensions,
+                TlsEngineState.WaitCertificateRequestOrCertificate => type is HandshakeType.CertificateRequest or HandshakeType.Certificate,
                 TlsEngineState.WaitCertificate => type == HandshakeType.Certificate,
                 TlsEngineState.WaitCertificateVerify => type == HandshakeType.CertificateVerify,
                 TlsEngineState.WaitFinished => type == HandshakeType.Finished,
@@ -391,8 +457,14 @@ internal sealed class TlsEngine
         };
     }
 
-    private void Enter(HandshakeType type, TlsOutput output)
+    private void Enter(HandshakeType type, int bodyLength, TlsOutput output)
     {
+        if (_role == TlsRole.Client)
+        {
+            HandleClient(type, bodyLength, output);
+            return;
+        }
+
         if (_role == TlsRole.Server && type == HandshakeType.ClientHello)
         {
             State = TlsEngineState.WaitClientHelloDecision;
