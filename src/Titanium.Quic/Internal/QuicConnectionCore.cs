@@ -363,6 +363,9 @@ internal sealed partial class QuicConnectionCore
             return 0;
         }
 
+        // Stream bytes refused by the congestion window stay queued until a later poll.
+        StageReady();
+
         bool deferData = false;
         for (int i = 0; i < _staged.Count; i++)
         {

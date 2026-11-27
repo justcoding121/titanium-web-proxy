@@ -479,6 +479,62 @@ public sealed class QuicHandshakeEdgeTests
         CollectionAssert.AreEqual(body, server.ReceivedStream);
     }
 
+    [TestMethod]
+    public void QueuedStreamDataIsSentAfterTheCongestionWindowOpens()
+    {
+        using X509Certificate2 certificate = Certificate();
+        var local = new IPEndPoint(IPAddress.Loopback, 9);
+        var remote = new IPEndPoint(IPAddress.Loopback, 10);
+        PathInfo path = QuicConnectionSession.PathOf(local, remote);
+        byte[] clientId = QuicConnectionSession.NewConnectionId();
+        byte[] serverId = QuicConnectionSession.NewConnectionId();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.StartClient(path, clientId, serverId, Limits(clientId, idleMs: 0, server: false));
+        server.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        Pump(client, server);
+        Assert.IsTrue(client.HandshakeComplete, "client handshake");
+        Assert.IsTrue(server.HandshakeComplete, "server handshake");
+        byte[] body = new byte[20000];
+        body[0] = 9;
+        Assert.AreEqual(body.Length, client.SendStream(0, body));
+        byte[] buffer = new byte[8192];
+        var flight = new List<byte[]>();
+        PathInfo sentPath = path;
+        for (int i = 0; i < 40; i++)
+        {
+            int count = client.PollTransmit(Now, buffer, out sentPath);
+            if (count == 0)
+            {
+                break;
+            }
+
+            var copy = new byte[count];
+            buffer.AsSpan(0, count).CopyTo(copy);
+            flight.Add(copy);
+        }
+
+        Assert.IsTrue(flight.Count > 0);
+        Assert.AreEqual(0, client.PollTransmit(Now, buffer, out _));
+        foreach (byte[] packet in flight)
+        {
+            server.HandleDatagram(Now, packet, sentPath);
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            int count = server.PollTransmit(Now, buffer, out PathInfo ackPath);
+            if (count == 0)
+            {
+                break;
+            }
+
+            client.HandleDatagram(Now, buffer.AsSpan(0, count), ackPath);
+        }
+
+        Assert.IsTrue(client.PollTransmit(Now, buffer, out _) > 0);
+    }
+
     private static bool IsHandshakePacket(byte first) => (first & 0x80) != 0 && ((first >> 4) & 0x03) == 2;
 
     private static void Pump(QuicConnectionCore left, QuicConnectionCore right)
