@@ -30,6 +30,12 @@ public sealed class QuicConnectionSessionTests
         byte[] server = QuicConnectionSession.Parameters(client: false, id);
         Assert.IsTrue(client.Length > 0);
         Assert.IsTrue(server.Length > client.Length);
+        byte[] limited = QuicConnectionSession.Parameters(client: true, id, maxStreamsBidi: 0, maxStreamsUni: 3, idleTimeoutMs: 30_000);
+        Assert.IsTrue(QuicTransportParametersCodec.TryRead(limited, fromServer: false, retryReceived: false, out QuicTransportParameters read, out ulong error));
+        Assert.AreEqual(0UL, error);
+        Assert.AreEqual(0UL, read.InitialMaxStreamsBidi);
+        Assert.AreEqual(3UL, read.InitialMaxStreamsUni);
+        Assert.AreEqual(30_000UL, read.MaxIdleTimeout);
 
         Assert.IsNull(QuicConnectionSession.ProtocolNames(null));
         Assert.IsNull(QuicConnectionSession.ProtocolNames(new List<SslApplicationProtocol>()));

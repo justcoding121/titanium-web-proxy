@@ -16,7 +16,7 @@ These are the only places a later flag branch belongs. The flag-off arm stays th
 | `Handlers/WebTransportClientHandler.cs` | Client-facing `SslStream` around line 43. |
 | `WebTransport/WebTransportOrigin.cs` | Upstream `SslStream` around line 31. |
 | `Routing/MirrorDispatcher.cs` | Upstream `SslStream` around line 343. |
-| `Network/Quic/QuicConnectionFactory.cs` | `QuicConnection.ConnectAsync` around line 112. The remote endpoint is a `DnsEndPoint`. The options also set a keepalive, three inbound unidirectional streams, and a stream error code. `QuicClientOptionsAdapter` refuses that shape. |
+| `Network/Quic/QuicConnectionFactory.cs` | `QuicConnection.ConnectAsync` around line 112. The remote endpoint is a `DnsEndPoint`, which `QuicClientOptionsAdapter` still refuses. The keepalive, the three inbound unidirectional streams, and the stream error code are copied onto the managed client. |
 | `Handlers/QuicClientHandler.cs` | `QuicListener.ListenAsync` around line 144, and `QuicServerConnectionOptions` around line 265. The listener sets application protocols. `QuicListenerOptionsAdapter` refuses that field and tells the callback to carry them on the server authentication options. |
 
 ## Capability sites

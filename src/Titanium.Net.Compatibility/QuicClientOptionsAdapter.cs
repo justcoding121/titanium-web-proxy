@@ -41,6 +41,11 @@ public static class QuicClientOptionsAdapter
             LocalEndPoint = options.LocalEndPoint,
             ClientAuthenticationOptions = options.ClientAuthenticationOptions,
             HandshakeTimeout = options.HandshakeTimeout,
+            KeepAliveInterval = options.KeepAliveInterval,
+            IdleTimeout = options.IdleTimeout,
+            MaxInboundBidirectionalStreams = options.MaxInboundBidirectionalStreams,
+            MaxInboundUnidirectionalStreams = options.MaxInboundUnidirectionalStreams,
+            DefaultStreamErrorCode = options.DefaultStreamErrorCode,
         };
     }
 
@@ -61,12 +66,7 @@ public static class QuicClientOptionsAdapter
             names.Add(nameof(QuicClientConnectionOptions.RemoteEndPoint));
         }
 
-        AddIfDifferent(names, nameof(QuicClientConnectionOptions.KeepAliveInterval), options.KeepAliveInterval, defaults.KeepAliveInterval);
-        AddIfDifferent(names, nameof(QuicClientConnectionOptions.IdleTimeout), options.IdleTimeout, defaults.IdleTimeout);
-        AddIfDifferent(names, nameof(QuicClientConnectionOptions.MaxInboundBidirectionalStreams), options.MaxInboundBidirectionalStreams, defaults.MaxInboundBidirectionalStreams);
-        AddIfDifferent(names, nameof(QuicClientConnectionOptions.MaxInboundUnidirectionalStreams), options.MaxInboundUnidirectionalStreams, defaults.MaxInboundUnidirectionalStreams);
         AddIfDifferent(names, nameof(QuicClientConnectionOptions.DefaultCloseErrorCode), options.DefaultCloseErrorCode, defaults.DefaultCloseErrorCode);
-        AddIfDifferent(names, nameof(QuicClientConnectionOptions.DefaultStreamErrorCode), options.DefaultStreamErrorCode, defaults.DefaultStreamErrorCode);
         if (options.StreamCapacityCallback is not null)
         {
             names.Add(nameof(QuicClientConnectionOptions.StreamCapacityCallback));

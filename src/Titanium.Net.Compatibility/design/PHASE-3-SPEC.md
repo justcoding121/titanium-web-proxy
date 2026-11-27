@@ -23,9 +23,9 @@ Exit: the map exists, and `git diff` of `src/Titanium.Web.Proxy` is empty.
 
 ### P3.1b Option adapters
 
-`QuicClientOptionsAdapter` and `QuicListenerOptionsAdapter` copy platform option objects onto the managed types. They copy an IP endpoint, the TLS options, the client handshake timeout, and the listen endpoint. They refuse a host name, a keepalive, an idle timeout, a non-default stream limit, a stream error code, a receive window, a stream-capacity callback, listener application protocols, and a listener backlog other than the platform default. The platform listener has no handshake timeout, so the managed listener keeps its 10 second default. No proxy file calls these adapters yet.
+`QuicClientOptionsAdapter` and `QuicListenerOptionsAdapter` copy platform option objects onto the managed types. The client adapter copies an IP endpoint, the TLS options, the handshake timeout, the keep-alive interval, the idle timeout, both inbound stream limits, and the stream error used when a stream is released early. The managed client advertises those limits, sends a PING at the keep-alive interval after the handshake, and sends that stream error on an early release. The adapter still refuses a host name, a connection close code, a receive window, and a stream-capacity callback. The listener adapter copies the listen endpoint and refuses application protocols and a backlog other than the platform default. The platform listener has no handshake timeout, so the managed listener keeps its 10 second default. No proxy file calls these adapters yet.
 
-Exit: the compatibility tests pass, and a proxy-shaped client options object is refused until the managed client can apply the refused settings.
+Exit: the compatibility tests pass. A proxy-shaped client options object that already has an IP endpoint is accepted. A host name is still refused, and the caller resolves it.
 
 ### P3.2 Flag-off seam at the creation sites
 

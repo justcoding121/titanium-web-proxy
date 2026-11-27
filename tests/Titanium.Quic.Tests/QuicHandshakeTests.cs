@@ -36,6 +36,44 @@ public sealed class QuicHandshakeTests
     }
 
     [TestMethod]
+    public void AKeepAliveSendsOnePingWhenItsDeadlineArrives()
+    {
+        using X509Certificate2 certificate = Certificate();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.SetKeepAlive(TimeSpan.FromSeconds(1));
+        client.StartClient(Path, ClientId, ServerId, Parameters(client: true, match: true));
+        server.StartServer(ServerId, certificate, Parameters(client: false, match: true));
+        Pump(client, server);
+        Assert.IsTrue(client.HandshakeComplete);
+        Assert.AreEqual(0, client.KeepAlivesSent);
+
+        client.HandleTimeout(Now);
+        Assert.AreEqual(0, client.KeepAlivesSent);
+        Assert.IsTrue(client.HandleTimeout(Now.AddSeconds(1)));
+        Assert.AreEqual(1, client.KeepAlivesSent);
+        client.HandleTimeout(Now.AddSeconds(1));
+        Assert.AreEqual(1, client.KeepAlivesSent);
+    }
+
+    [TestMethod]
+    public void AResetCarriesTheStreamErrorAndTheFinalSize()
+    {
+        using X509Certificate2 certificate = Certificate();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.StartClient(Path, ClientId, ServerId, Parameters(client: true, match: true));
+        server.StartServer(ServerId, certificate, Parameters(client: false, match: true));
+        Pump(client, server);
+        client.SendStreamByte(0x11);
+        Pump(client, server);
+        client.ResetStream(0, 0x10c, 1);
+        Pump(client, server);
+        Assert.IsFalse(server.IsClosed);
+        Assert.AreEqual(1, server.ResetsDelivered);
+    }
+
+    [TestMethod]
     public void ABadFinishedClosesTheConnection()
     {
         using X509Certificate2 certificate = Certificate();

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
+using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Net.Compatibility;
 
@@ -36,6 +37,9 @@ public sealed class QuicOptionsAdapterTests
         Assert.AreSame(local, managed.LocalEndPoint);
         Assert.AreSame(authentication, managed.ClientAuthenticationOptions);
         Assert.AreEqual(TimeSpan.FromSeconds(3), managed.HandshakeTimeout);
+        Assert.AreEqual(0, managed.MaxInboundBidirectionalStreams);
+        Assert.AreEqual(0, managed.MaxInboundUnidirectionalStreams);
+        Assert.AreEqual(Timeout.InfiniteTimeSpan, managed.KeepAliveInterval);
         Assert.AreEqual(0, QuicClientOptionsAdapter.UnsupportedSettings(source).Count);
     }
 
@@ -56,28 +60,46 @@ public sealed class QuicOptionsAdapterTests
     }
 
     [TestMethod]
-    public void KeepaliveIdleLimitsAndStreamErrorsAreRefused()
+    public void KeepaliveIdleLimitsAndTheStreamErrorAreCopied()
     {
         var source = new QuicClientConnectionOptions
         {
             RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, 443),
             KeepAliveInterval = TimeSpan.FromSeconds(5),
             IdleTimeout = TimeSpan.FromSeconds(30),
-            MaxInboundBidirectionalStreams = 4,
+            MaxInboundBidirectionalStreams = 0,
             MaxInboundUnidirectionalStreams = 3,
             DefaultStreamErrorCode = 0x10c,
         };
 
-        IReadOnlyList<string> unsupported = QuicClientOptionsAdapter.UnsupportedSettings(source);
+        var managed = QuicClientOptionsAdapter.ToManaged(source);
 
+        Assert.AreEqual(TimeSpan.FromSeconds(5), managed.KeepAliveInterval);
+        Assert.AreEqual(TimeSpan.FromSeconds(30), managed.IdleTimeout);
+        Assert.AreEqual(0, managed.MaxInboundBidirectionalStreams);
+        Assert.AreEqual(3, managed.MaxInboundUnidirectionalStreams);
+        Assert.AreEqual(0x10c, managed.DefaultStreamErrorCode);
+        Assert.AreEqual(0, QuicClientOptionsAdapter.UnsupportedSettings(source).Count);
+    }
+
+    [TestMethod]
+    public void ACloseCodeACallbackAndAWindowStayRefused()
+    {
+        var source = new QuicClientConnectionOptions
+        {
+            RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, 443),
+            DefaultCloseErrorCode = 1,
+            StreamCapacityCallback = (_, _) => { },
+            InitialReceiveWindowSizes = new QuicReceiveWindowSizes { Connection = 64 * 1024 },
+        };
+
+        IReadOnlyList<string> unsupported = QuicClientOptionsAdapter.UnsupportedSettings(source);
         CollectionAssert.AreEquivalent(
             new[]
             {
-                nameof(QuicClientConnectionOptions.KeepAliveInterval),
-                nameof(QuicClientConnectionOptions.IdleTimeout),
-                nameof(QuicClientConnectionOptions.MaxInboundBidirectionalStreams),
-                nameof(QuicClientConnectionOptions.MaxInboundUnidirectionalStreams),
-                nameof(QuicClientConnectionOptions.DefaultStreamErrorCode),
+                nameof(QuicClientConnectionOptions.DefaultCloseErrorCode),
+                nameof(QuicClientConnectionOptions.StreamCapacityCallback),
+                nameof(QuicClientConnectionOptions.InitialReceiveWindowSizes),
             },
             (System.Collections.ICollection)unsupported);
         Assert.ThrowsExactly<ArgumentException>(() => QuicClientOptionsAdapter.ToManaged(source));

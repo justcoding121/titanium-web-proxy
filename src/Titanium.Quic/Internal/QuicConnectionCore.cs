@@ -223,6 +223,7 @@ internal sealed partial class QuicConnectionCore
         DateTimeOffset? soonest = _loss.Timeout;
         Consider(PaceDeadline(), ref soonest);
         Consider(_idleDeadline, ref soonest);
+        Consider(_keepAliveDeadline, ref soonest);
         return soonest;
     }
 
@@ -254,6 +255,8 @@ internal sealed partial class QuicConnectionCore
         {
             AcceptDatagram(datagram);
         }
+
+        ArmKeepAlive();
     }
 
     internal bool HandleTimeout(DateTimeOffset now)
@@ -271,6 +274,19 @@ internal sealed partial class QuicConnectionCore
             return true;
         }
 
+        bool sentKeepAlive = false;
+        if (KeepAliveDue(now))
+        {
+            SendKeepAlive();
+            KeepAlivesSent++;
+            _keepAliveDeadline = now + _keepAliveInterval;
+            sentKeepAlive = true;
+        }
+        else
+        {
+            ArmKeepAlive();
+        }
+
         if (_loss.Timeout is DateTimeOffset due && now >= due)
         {
             _loss.OnTimeout(now);
@@ -283,7 +299,7 @@ internal sealed partial class QuicConnectionCore
             return true;
         }
 
-        return NextTimeout() is DateTimeOffset pace && now >= pace;
+        return sentKeepAlive || NextTimeout() is DateTimeOffset pace && now >= pace;
     }
 
     internal void MarkAddressValidated(in PathInfo path)

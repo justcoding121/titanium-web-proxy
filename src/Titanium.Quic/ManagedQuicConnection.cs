@@ -46,7 +46,30 @@ public sealed class ManagedQuicConnection : IAsyncDisposable
             serverName = "localhost";
         }
 
+        if (options.MaxInboundBidirectionalStreams < 0 || options.MaxInboundUnidirectionalStreams < 0
+            || (ulong)options.MaxInboundBidirectionalStreams > QuicTransportParametersCodec.MaxStreamsLimit
+            || (ulong)options.MaxInboundUnidirectionalStreams > QuicTransportParametersCodec.MaxStreamsLimit)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "A stream limit is outside the range this connection can advertise.");
+        }
+
+        if (options.IdleTimeout < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "The idle timeout is negative.");
+        }
+
+        if (options.KeepAliveInterval < TimeSpan.Zero && options.KeepAliveInterval != Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "The keep-alive interval is negative.");
+        }
+
+        if (options.DefaultStreamErrorCode < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "The stream error code is negative.");
+        }
+
         TimeSpan budget = options.HandshakeTimeout <= TimeSpan.Zero ? TimeSpan.FromSeconds(10) : options.HandshakeTimeout;
+        ulong idleMs = options.IdleTimeout <= TimeSpan.Zero ? 0UL : (ulong)options.IdleTimeout.TotalMilliseconds;
         var transport = new UdpSocketTransport(local);
         var core = new QuicConnectionCore();
         var session = new QuicConnectionSession(core, transport, transport.LocalEndpoint, remote, ownsTransport: true);
@@ -55,7 +78,25 @@ public sealed class ManagedQuicConnection : IAsyncDisposable
             byte[] localId = QuicConnectionSession.NewConnectionId();
             byte[] remoteId = QuicConnectionSession.NewConnectionId();
             PathInfo path = QuicConnectionSession.PathOf(transport.LocalEndpoint, remote);
-            core.StartClient(path, localId, remoteId, QuicConnectionSession.Parameters(client: true, localId), default, serverName, QuicConnectionSession.ProtocolNames(options.ClientAuthenticationOptions?.ApplicationProtocols));
+            if (options.KeepAliveInterval > TimeSpan.Zero && options.KeepAliveInterval != Timeout.InfiniteTimeSpan)
+            {
+                core.SetKeepAlive(options.KeepAliveInterval);
+            }
+
+            session.DefaultStreamErrorCode = options.DefaultStreamErrorCode;
+            core.StartClient(
+                path,
+                localId,
+                remoteId,
+                QuicConnectionSession.Parameters(
+                    client: true,
+                    localId,
+                    (ulong)options.MaxInboundBidirectionalStreams,
+                    (ulong)options.MaxInboundUnidirectionalStreams,
+                    idleMs),
+                default,
+                serverName,
+                QuicConnectionSession.ProtocolNames(options.ClientAuthenticationOptions?.ApplicationProtocols));
             session.StartClientLoop();
             var connection = new ManagedQuicConnection(session);
             using var timeout = new CancellationTokenSource(budget);

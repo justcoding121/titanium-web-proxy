@@ -387,17 +387,28 @@ internal sealed class QuicConnectionSession : IDisposable
         return new PathInfo(local.Address.GetAddressBytes(), local.Port, remote.Address.GetAddressBytes(), remote.Port);
     }
 
-    internal static byte[] Parameters(bool client, byte[] localId)
+    internal long DefaultStreamErrorCode { get; set; }
+
+    internal void Reset(ulong streamId, long errorCode, ulong finalSize)
+    {
+        lock (_gate)
+        {
+            _core.ResetStream(streamId, errorCode, finalSize);
+        }
+    }
+
+    internal static byte[] Parameters(bool client, byte[] localId, ulong maxStreamsBidi = 16, ulong maxStreamsUni = 16, ulong idleTimeoutMs = 0)
     {
         var parameters = new QuicTransportParameters
         {
             InitialSourceConnectionId = localId,
+            MaxIdleTimeout = idleTimeoutMs,
             InitialMaxData = 1 << 20,
             InitialMaxStreamDataBidiLocal = 1 << 20,
             InitialMaxStreamDataBidiRemote = 1 << 20,
             InitialMaxStreamDataUni = 1 << 20,
-            InitialMaxStreamsBidi = 16,
-            InitialMaxStreamsUni = 16,
+            InitialMaxStreamsBidi = maxStreamsBidi,
+            InitialMaxStreamsUni = maxStreamsUni,
         };
         if (!client)
         {

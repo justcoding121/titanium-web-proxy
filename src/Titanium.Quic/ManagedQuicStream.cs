@@ -17,6 +17,12 @@ public sealed class ManagedQuicStream : Stream
 
     private int _offset;
 
+    private ulong _written;
+
+    private bool _writesCompleted;
+
+    private bool _disposed;
+
     internal ManagedQuicStream(QuicConnectionSession session, long id, QuicStreamType type)
     {
         _session = session;
@@ -110,6 +116,7 @@ public sealed class ManagedQuicStream : Stream
         }
 
         _session.Send((ulong)Id, buffer.Span);
+        _written += (ulong)buffer.Length;
         await _session.FlushAsync().ConfigureAwait(false);
     }
 
@@ -119,8 +126,24 @@ public sealed class ManagedQuicStream : Stream
     public async ValueTask CompleteWritesAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        _writesCompleted = true;
         _session.Finish((ulong)Id);
         await _session.FlushAsync().ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && !_disposed)
+        {
+            _disposed = true;
+            if (!_writesCompleted)
+            {
+                _session.Reset((ulong)Id, _session.DefaultStreamErrorCode, _written);
+            }
+        }
+
+        base.Dispose(disposing);
     }
 
     internal void Notify()

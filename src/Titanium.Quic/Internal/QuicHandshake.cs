@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Threading;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Security.Cryptography;
@@ -1445,6 +1446,59 @@ internal sealed partial class QuicConnectionCore : IDisposable
         {
             SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame, 0, probe: true);
         }
+    }
+
+    private TimeSpan _keepAliveInterval = Timeout.InfiniteTimeSpan;
+
+    private DateTimeOffset? _keepAliveDeadline;
+
+    internal int KeepAlivesSent { get; private set; }
+
+    internal void SetKeepAlive(TimeSpan interval) => _keepAliveInterval = interval;
+
+    internal void ResetStream(ulong streamId, long errorCode, ulong finalSize)
+    {
+        if (IsClosed || _applicationSend is null || errorCode < 0)
+        {
+            return;
+        }
+
+        var reset = new QuicFrame
+        {
+            Kind = QuicFrameKind.ResetStream,
+            StreamId = streamId,
+            ErrorCode = (ulong)errorCode,
+            Limit = finalSize,
+        };
+        Span<byte> frame = stackalloc byte[32];
+        int count = QuicFrameWriter.Write(in reset, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0, probe: true);
+        }
+    }
+
+    private bool KeepAliveDue(DateTimeOffset now) =>
+        _keepAliveInterval > TimeSpan.Zero
+        && _keepAliveInterval != Timeout.InfiniteTimeSpan
+        && HandshakeComplete
+        && !IsClosed
+        && _keepAliveDeadline is DateTimeOffset due
+        && now >= due;
+
+    private void ArmKeepAlive()
+    {
+        if (_keepAliveDeadline is not null
+            || _keepAliveInterval <= TimeSpan.Zero
+            || _keepAliveInterval == Timeout.InfiniteTimeSpan
+            || !HandshakeComplete
+            || IsClosed
+            || _now == default)
+        {
+            return;
+        }
+
+        _keepAliveDeadline = _now + _keepAliveInterval;
     }
 
     private ulong _localIdleMs;

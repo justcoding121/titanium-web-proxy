@@ -50,6 +50,21 @@ public sealed class ManagedQuicClientConnectionOptions
     /// <summary>Gets or sets the limit on how long the handshake may run. The default is 10 seconds.</summary>
     public TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>Gets or sets how often a PING is sent after the handshake. <see cref="Timeout.InfiniteTimeSpan"/> sends none. The default sends none.</summary>
+    public TimeSpan KeepAliveInterval { get; set; } = Timeout.InfiniteTimeSpan;
+
+    /// <summary>Gets or sets the idle timeout advertised to the peer. Zero leaves the timeout disabled. The default is zero.</summary>
+    public TimeSpan IdleTimeout { get; set; }
+
+    /// <summary>Gets or sets how many remotely opened bidirectional streams this connection accepts. The default is 16.</summary>
+    public int MaxInboundBidirectionalStreams { get; set; } = 16;
+
+    /// <summary>Gets or sets how many remotely opened unidirectional streams this connection accepts. The default is 16.</summary>
+    public int MaxInboundUnidirectionalStreams { get; set; } = 16;
+
+    /// <summary>Gets or sets the application error sent when a stream is released before its write side is finished. The default is 0.</summary>
+    public long DefaultStreamErrorCode { get; set; }
+
     /// <summary>Gets or sets whether this connection may run while FIPS mode is on.</summary>
     public bool AllowManagedStackUnderFips { get; set; }
 }
