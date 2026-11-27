@@ -15,6 +15,8 @@ internal sealed class TlsServerSelection
 
     internal bool RequestClientCertificate { get; init; }
 
+    internal X509Certificate2Collection? ClientTrustAnchors { get; init; }
+
     internal NamedGroup[]? Groups { get; init; }
 
     internal ushort[]? CipherSuites { get; init; }

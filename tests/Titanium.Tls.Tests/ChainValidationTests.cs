@@ -101,6 +101,31 @@ public sealed class ChainValidationTests
     }
 
     [TestMethod]
+    public void RejectionMessageMatchesSslStream()
+    {
+        using X509Certificate2 certificate = Authority("CN=localhost");
+        string invalid = CaptureRejection(certificate, "localhost", callback: false);
+        using TlsCertificateCheck check = TlsChainValidator.Evaluate(CertificateList(null, null, certificate), "localhost", trustAnchors: null, serverCertificate: true);
+        AuthenticationException rejectedByUs = Assert.ThrowsException<AuthenticationException>(() => TlsCertificateDecision.ThrowIfRejected(check.Errors, null, null, certificate, check.Chain));
+        Assert.AreEqual(invalid, rejectedByUs.Message);
+        string rejected = CaptureRejection(certificate, "localhost", callback: true);
+        AuthenticationException callbackRejected = Assert.ThrowsException<AuthenticationException>(() => TlsCertificateDecision.ThrowIfRejected(SslPolicyErrors.RemoteCertificateChainErrors, (_, _, _, _) => false, null, certificate, chain: null));
+        Assert.AreEqual(rejected, callbackRejected.Message);
+    }
+
+    [TestMethod]
+    public void ClientCertificateMustChainToTheSuppliedAnchor()
+    {
+        using X509Certificate2 serverCertificate = ServerHandshakeTests.Certificate();
+        using X509Certificate2 root = Authority("CN=Client Root");
+        using X509Certificate2 clientCertificate = ClientLeaf(root);
+        var trust = new X509Certificate2Collection(root);
+        Assert.AreEqual(TlsEngineState.Connected, FinishWithClientCertificate(serverCertificate, clientCertificate, trust, out _));
+        Assert.AreEqual(TlsEngineState.Closed, FinishWithClientCertificate(serverCertificate, clientCertificate, new X509Certificate2Collection(), out byte alert));
+        Assert.AreEqual(42, alert);
+    }
+
+    [TestMethod]
     public void RejectedSchemesDoNotVerify()
     {
         byte[] content = "handshake"u8.ToArray();
@@ -161,6 +186,89 @@ public sealed class ChainValidationTests
 
         server.GetAwaiter().GetResult();
         return seen;
+    }
+
+    private static string CaptureRejection(X509Certificate2 certificate, string host, bool callback)
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        Task server = Task.Run(() =>
+        {
+            using TcpClient client = listener.AcceptTcpClient();
+            using var stream = new SslStream(client.GetStream());
+            stream.AuthenticateAsServer(new SslServerAuthenticationOptions
+            {
+                ServerCertificate = certificate,
+                EnabledSslProtocols = SslProtocols.Tls13,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+            });
+        });
+        string? message = null;
+        try
+        {
+            using var tcp = new TcpClient(IPAddress.Loopback.ToString(), port);
+            using var stream = new SslStream(tcp.GetStream());
+            var options = new SslClientAuthenticationOptions
+            {
+                TargetHost = host,
+                EnabledSslProtocols = SslProtocols.Tls13,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+            };
+            if (callback)
+            {
+                options.RemoteCertificateValidationCallback = (_, _, _, _) => false;
+            }
+
+            stream.AuthenticateAsClient(options);
+        }
+        catch (AuthenticationException exception)
+        {
+            message = exception.Message;
+        }
+
+        try
+        {
+            server.GetAwaiter().GetResult();
+        }
+        catch (Exception)
+        {
+        }
+
+        Assert.IsNotNull(message);
+        return message;
+    }
+
+    private static TlsEngineState FinishWithClientCertificate(X509Certificate2 serverCertificate, X509Certificate2 clientCertificate, X509Certificate2Collection trust, out byte alert)
+    {
+        alert = 0;
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost") { LocalCertificate = clientCertificate };
+        using var server = new TlsEngine(TlsRole.Server);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        server.Advance(output.Bytes.ToArray(), out _, output);
+        server.Resume(_ => new TlsServerSelection { Certificate = serverCertificate, RequestClientCertificate = true, ClientTrustAnchors = trust }, output);
+        client.Advance(output.Bytes.ToArray(), out _, output);
+        client.Resume(true, output);
+        server.Advance(output.Bytes.ToArray(), out _, output);
+        if (output.Bytes.Length > 6)
+        {
+            alert = output.Bytes[6];
+        }
+
+        return server.State;
+    }
+
+    private static X509Certificate2 ClientLeaf(X509Certificate2 issuer)
+    {
+        using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest("CN=client", key, HashAlgorithmName.SHA256);
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.2") }, false));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        using RSA? issuerKey = issuer.GetRSAPrivateKey();
+        using X509Certificate2 issued = request.Create(issuer.SubjectName, X509SignatureGenerator.CreateForRSA(issuerKey!, RSASignaturePadding.Pkcs1), NotBefore, NotAfter, [1, 2, 3, 4]);
+        using X509Certificate2 withKey = issued.CopyWithPrivateKey(key);
+        return Persist(withKey);
     }
 
     private static X509Certificate2 Authority(string subject)

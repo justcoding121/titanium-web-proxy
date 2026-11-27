@@ -1,4 +1,5 @@
 using System;
+using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -34,6 +35,7 @@ internal sealed partial class TlsEngine
     private byte[]? _sessionId;
     private ushort _requestedGroup;
     private bool _resumed;
+    private byte[]? _clientLeaf;
     private string? _selectedAlpn;
     private SecretBuffer? _clientApplication;
     private SecretBuffer? _serverApplication;
@@ -78,6 +80,12 @@ internal sealed partial class TlsEngine
         if (type == HandshakeType.Certificate)
         {
             OnClientCertificate(bodyLength, output);
+            return;
+        }
+
+        if (type == HandshakeType.CertificateVerify)
+        {
+            OnClientCertificateVerify(bodyLength, output);
             return;
         }
 
@@ -319,14 +327,71 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (!certificate.CertificateList.IsEmpty)
+        if (certificate.CertificateList.IsEmpty)
         {
-            Fail(output, AlertInternalError);
+            _transcript!.Append(message);
+            State = TlsEngineState.WaitFinished;
             return;
         }
 
+        using (TlsCertificateCheck check = TlsChainValidator.Evaluate(certificate.CertificateList, targetHost: null, _selection?.ClientTrustAnchors, serverCertificate: false))
+        {
+            if (check.Errors != SslPolicyErrors.None || !TryCopyClientLeaf(certificate.CertificateList))
+            {
+                Fail(output, 42);
+                return;
+            }
+        }
+
         _transcript!.Append(message);
+        State = TlsEngineState.WaitClientCertificateVerify;
+    }
+
+    private void OnClientCertificateVerify(int bodyLength, TlsOutput output)
+    {
+        byte[] message = Message(HandshakeType.CertificateVerify, bodyLength);
+        if (!HandshakeMessages.TryReadCertificateVerify(message, out ushort scheme, out ReadOnlySpan<byte> signature, out HandshakeAlert alert))
+        {
+            Fail(output, (byte)alert);
+            return;
+        }
+
+        if (scheme != 0x0403 || _clientLeaf is null)
+        {
+            Fail(output, 47);
+            return;
+        }
+
+        HashAlgorithmName hash = HashOf(_selectedCipher);
+        int hashLength = TlsHkdf.HashLength(hash);
+        Span<byte> transcriptHash = stackalloc byte[48];
+        _transcript!.CurrentHash(transcriptHash);
+        Span<byte> content = stackalloc byte[64 + 34 + 48];
+        content[..64].Fill(0x20);
+        "TLS 1.3, client CertificateVerify"u8.CopyTo(content[64..]);
+        content[64 + 33] = 0;
+        transcriptHash[..hashLength].CopyTo(content[(64 + 34)..]);
+        using X509Certificate2 certificate = X509CertificateLoader.LoadCertificate(_clientLeaf);
+        if (!TlsCertificateVerifier.Verify(certificate, scheme, content[..(64 + 34 + hashLength)], signature))
+        {
+            Fail(output, AlertDecryptError);
+            return;
+        }
+
+        _transcript.Append(message);
         State = TlsEngineState.WaitFinished;
+    }
+
+    private bool TryCopyClientLeaf(ReadOnlySpan<byte> list)
+    {
+        TlsReader reader = new(list);
+        if (!reader.TryReadVector24(out ReadOnlySpan<byte> encoded) || encoded.IsEmpty)
+        {
+            return false;
+        }
+
+        _clientLeaf = encoded.ToArray();
+        return true;
     }
 
     private void OnClientFinished(int bodyLength, TlsOutput output)

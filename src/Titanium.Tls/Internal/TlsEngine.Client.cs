@@ -32,6 +32,8 @@ internal sealed partial class TlsEngine
 
     internal X509Certificate2Collection? TrustAnchors { get; set; }
 
+    internal X509Certificate2? LocalCertificate { get; set; }
+
     internal SslPolicyErrors ServerCertificateErrors { get; private set; }
 
     internal byte[]? StapledOcspResponse { get; private set; }
@@ -385,16 +387,40 @@ internal sealed partial class TlsEngine
         _schedule.ApplicationTrafficSecret(true, hash, clientApp);
         _schedule.ApplicationTrafficSecret(false, hash, serverApp);
         _schedule.ExporterMaster(hash, exporter);
+        ReadOnlySpan<byte> clientCertificate = default;
+        ReadOnlySpan<byte> clientVerify = default;
+        byte[]? certificateMessage = null;
+        byte[]? verifyMessage = null;
         if (_certificateRequested)
         {
-            _transcript.Append(EmptyCertificate);
+            if (LocalCertificate is null)
+            {
+                _transcript.Append(EmptyCertificate);
+                clientCertificate = EmptyCertificate;
+            }
+            else
+            {
+                certificateMessage = CertificateMessage(LocalCertificate.RawData);
+                _transcript.Append(certificateMessage);
+                _transcript.CurrentHash(hash);
+                if (!TrySignClientCertificate(hash, out verifyMessage))
+                {
+                    Fail(output, AlertHandshakeFailure);
+                    return;
+                }
+
+                _transcript.Append(verifyMessage);
+                clientCertificate = certificateMessage;
+                clientVerify = verifyMessage;
+            }
+
             _transcript.CurrentHash(hash);
         }
 
         TlsKeySchedule.FinishedKey(HashAlgorithmName.SHA256, _clientHandshakeSecret!.Span, finishedKey);
         HMACSHA256.HashData(finishedKey, hash, expected);
         CryptographicOperations.ZeroMemory(finishedKey);
-        SendClientFinished(output, expected, clientApp, serverApp);
+        SendClientFinished(output, expected, clientApp, serverApp, clientCertificate, clientVerify);
         CryptographicOperations.ZeroMemory(clientApp);
         CryptographicOperations.ZeroMemory(serverApp);
         CryptographicOperations.ZeroMemory(exporter);
@@ -445,7 +471,26 @@ internal sealed partial class TlsEngine
         State = next;
     }
 
-    private void SendClientFinished(TlsOutput output, ReadOnlySpan<byte> verifyData, ReadOnlySpan<byte> clientApp, ReadOnlySpan<byte> serverApp)
+    private bool TrySignClientCertificate(ReadOnlySpan<byte> hash, out byte[] verify)
+    {
+        verify = [];
+        ECDsa? key = CertificateKeys.Ecdsa(LocalCertificate!);
+        if (key is null || key.ExportParameters(false).Curve.Oid.Value != "1.2.840.10045.3.1.7")
+        {
+            return false;
+        }
+
+        Span<byte> content = stackalloc byte[64 + 33 + 1 + 32];
+        content[..64].Fill(0x20);
+        "TLS 1.3, client CertificateVerify"u8.CopyTo(content[64..]);
+        content[64 + 33] = 0;
+        hash.CopyTo(content[(64 + 33 + 1)..]);
+        byte[] signature = key.SignData(content, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
+        verify = CertificateVerifyMessage(0x0403, signature);
+        return true;
+    }
+
+    private void SendClientFinished(TlsOutput output, ReadOnlySpan<byte> verifyData, ReadOnlySpan<byte> clientApp, ReadOnlySpan<byte> serverApp, ReadOnlySpan<byte> clientCertificate, ReadOnlySpan<byte> clientVerify)
     {
         Span<byte> finished = stackalloc byte[4 + 32];
         finished[0] = (byte)HandshakeType.Finished;
@@ -457,16 +502,18 @@ internal sealed partial class TlsEngine
         TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, _clientHandshakeSecret!.Span, key, iv);
         _write?.Dispose();
         _write = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
-        var encrypted = new byte[128];
         output.AddBytes([20, 3, 3, 0, 1, 1]);
-        if (_certificateRequested)
+        if (!clientCertificate.IsEmpty)
         {
-            int certificateWritten = _write.Protect(22, EmptyCertificate, encrypted);
-            output.AddBytes(encrypted.AsSpan(0, certificateWritten));
+            ProtectHandshakeRecord(output, clientCertificate);
         }
 
-        int written = _write.Protect(22, finished, encrypted);
-        output.AddBytes(encrypted.AsSpan(0, written));
+        if (!clientVerify.IsEmpty)
+        {
+            ProtectHandshakeRecord(output, clientVerify);
+        }
+
+        ProtectHandshakeRecord(output, finished);
         _write.Dispose();
         _read?.Dispose();
         TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, serverApp, key, iv);
@@ -475,6 +522,13 @@ internal sealed partial class TlsEngine
         _write = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
         CryptographicOperations.ZeroMemory(key);
         CryptographicOperations.ZeroMemory(iv);
+    }
+
+    private void ProtectHandshakeRecord(TlsOutput output, ReadOnlySpan<byte> plaintext)
+    {
+        var encrypted = new byte[plaintext.Length + 64];
+        int written = _write!.Protect(22, plaintext, encrypted);
+        output.AddBytes(encrypted.AsSpan(0, written));
     }
 
     private byte[] BuildClientHello()

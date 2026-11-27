@@ -20,6 +20,7 @@ internal enum TlsEngineState
     WaitClientHello = 6,
     WaitClientHelloDecision = 7,
     WaitClientCertificate = 12,
+    WaitClientCertificateVerify = 13,
     WaitFinished = 8,
     Connected = 9,
     Closed = 10,
@@ -458,6 +459,7 @@ internal sealed partial class TlsEngine : IDisposable
         {
             TlsEngineState.WaitClientHello => type == HandshakeType.ClientHello,
             TlsEngineState.WaitClientCertificate => type == HandshakeType.Certificate,
+            TlsEngineState.WaitClientCertificateVerify => type == HandshakeType.CertificateVerify,
             TlsEngineState.WaitFinished => type == HandshakeType.Finished,
             TlsEngineState.Connected => type == HandshakeType.KeyUpdate,
             _ => false,
