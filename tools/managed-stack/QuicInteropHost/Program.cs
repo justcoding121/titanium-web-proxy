@@ -126,7 +126,12 @@ static async Task ServeAsync(ManagedQuicConnection connection, string root)
             }
 
             await stream.CompleteWritesAsync().ConfigureAwait(false);
-            await connection.CloseAsync(0).ConfigureAwait(false);
+            // A dropped file is sent again only while this connection stays open.
+            using var done = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            byte[] tail = new byte[8];
+            while (await stream.ReadAsync(tail, done.Token).ConfigureAwait(false) > 0)
+            {
+            }
         }
     }
     catch (Exception ex)
