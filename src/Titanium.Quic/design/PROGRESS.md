@@ -11,3 +11,7 @@ Long and short headers follow RFC 9000 section 17. A datagram is a sequence of p
 ## T2.3
 
 Packet numbers follow RFC 9000 Appendix A. The encoder uses the appendix width: 0xac5c02 after an acknowledgment of 0xabe8b3 is two bytes, and 0xace8fe in that same state is three. A 16-bit field of 0x9b32 after 0xa82f30ea decodes to 0xa82f9b32. A two-byte field also reconstructs across 0x10000 in both directions. A candidate left outside the recovery window is rejected, as is a gap that does not fit in four bytes.
+
+## T2.4
+
+Initial secrets use the RFC 9001 salt and `TlsHkdf`. Client and server keys, IVs, and header-protection keys match Appendix A for connection ID `8394c8f03e515708`. AES header protection is one cached ECB encryption of the 16-byte sample. The ChaCha20 block matches the RFC 8439 block vector, and the Appendix A.5 short-header mask uses that block with the counter taken from the sample. Protect and remove are the same exclusive-or, with the packet-number length read after the first byte is uncovered.
