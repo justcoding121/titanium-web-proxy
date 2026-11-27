@@ -1,0 +1,3 @@
+linuxmini, 2026-11-27, after `sendmmsg` was accepted by the loopback probe. Same host, SDK, runtime, and BenchmarkDotNet job as `linuxmini.md`. The full exporter file was removed by the runner's artifact cleanup, so this note records the summary table.
+
+64 KiB loopback, 8 KiB writes. Platform median 124.767 µs, Error 22.79 µs. Managed median 12.613 ms, Error 5.563 ms. Ratio 0.010, which is the platform median divided by the managed median. The 0.80 gate is missed and is not lowered. Allocated on the managed row: 142598.59 KB. The CPU governor was performance for the timed job and powersave afterwards.

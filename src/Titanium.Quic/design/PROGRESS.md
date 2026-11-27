@@ -70,8 +70,12 @@ The in-process network drops, reorders, duplicates, and delays datagrams, and it
 
 ## T2.18
 
-BenchmarkDotNet on linuxmini compared this stack with System.Net.Quic. The handshake median ratio is 0.355 and the small-exchange median ratio is 0.306. Both gates are 0.90 and both are missed. The repeated bulk cell is 64 KiB because the stream window is 1 MiB and is not raised; the median ratio is 0.012, and the portable gate is only that the number is recorded. `Titanium.Quic.UdpOffload` does not exist, so the 0.80 Linux offload gate was not measured. The rows are on the local-lab performance page. The proxy still does not call this library.
+BenchmarkDotNet on linuxmini compared this stack with System.Net.Quic. The handshake median ratio is 0.355 and the small-exchange median ratio is 0.306. Both gates are 0.90 and both are missed. The repeated bulk cell is 64 KiB because the stream window is 1 MiB and is not raised; the median ratio is 0.012, and the portable gate is only that the number is recorded. At that run `Titanium.Quic.UdpOffload` did not exist, so the 0.80 Linux offload gate was not measured. The rows are on the local-lab performance page. The proxy still does not call this library.
 
 ## CUBIC
 
 `QuicCubic` follows RFC 9438 with the window in bytes. A loss keeps 70 percent of the bytes in flight, and the cubic increase is capped at one and a half times the current window. Fast convergence stays off because a connection is one flow. The parameterless connection still constructs `QuicNewReno`. On the in-process network a 64 KiB transfer took the same simulated time for both controllers: 5 ms with no delay, and 720 ms with an 80 ms delay. One dropped datagram at that delay closes the receiver with flow-control error 0x03 for both, because the following flight passes the 16384-byte reassembly cap. CUBIC was not faster, so it is not the default.
+
+## UDP offload
+
+`Titanium.Quic.UdpOffload` is the only project that calls `sendmmsg` and `recvmmsg`. A loopback probe has to accept the batch before a connection uses it, and `TITANIUM_UDP_OFFLOAD=0` forces the one-datagram send. Equal-sized datagrams can go out as one segmented send when that probe also accepts the split. A flush of more than one datagram uses the batch. Windows stays on the one-datagram send. The same linuxmini 64 KiB cell, with the batch path on, has platform median 124.8 µs (Error 22.79 µs) and managed median 12.613 ms (Error 5.563 ms). The median ratio is 0.010. The 0.80 gate is missed and is not lowered. The managed row still allocates about 139 MiB. The proxy still does not call this library.

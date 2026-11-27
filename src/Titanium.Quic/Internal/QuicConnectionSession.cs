@@ -158,10 +158,24 @@ internal sealed class QuicConnectionSession : IDisposable
     internal async ValueTask FlushAsync()
     {
         byte[][] packets = Drain();
+        if (packets.Length == 0)
+        {
+            return;
+        }
+
+        if (packets.Length == 1)
+        {
+            await _transport.SendAsync(packets[0], RemoteEndPoint, _stop.Token).ConfigureAwait(false);
+            return;
+        }
+
+        var batch = new ReadOnlyMemory<byte>[packets.Length];
         for (int i = 0; i < packets.Length; i++)
         {
-            await _transport.SendAsync(packets[i], RemoteEndPoint, _stop.Token).ConfigureAwait(false);
+            batch[i] = packets[i];
         }
+
+        await _transport.SendBatchAsync(batch, RemoteEndPoint, _stop.Token).ConfigureAwait(false);
     }
 
     internal void AddStream(ManagedQuicStream stream)

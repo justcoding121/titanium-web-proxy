@@ -1,0 +1,5 @@
+T:System.Diagnostics.Process;The offload project is sockets only.
+T:System.Security.Cryptography.Aes;The offload project does not do cryptography.
+T:System.Security.Cryptography.RandomNumberGenerator;The offload project does not do cryptography.
+T:System.IO.Pipelines.Pipe;The offload project does not use a pipe.
+T:System.Threading.Channels.Channel;The offload project does not use a channel.

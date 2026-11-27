@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Quic.UdpOffload;
 
 namespace Titanium.Quic;
 
@@ -22,8 +23,8 @@ internal readonly struct UdpReceived
 }
 
 /// <summary>
-/// Packet socket used by the driver. Batch send walks the list one datagram at a time.
-/// Generic segmentation, generic receive offload, sendmmsg, recvmmsg, received ECN, and a portable path-MTU socket API are later gaps.
+/// Packet socket used by the driver. A batch of datagrams uses <see cref="UdpOffloadBatch"/> when its probe accepts the call, and otherwise one send at a time.
+/// Received ECN and a portable path-MTU socket API are still gaps.
 /// </summary>
 internal interface IUdpPacketTransport : IDisposable
 {
@@ -39,7 +40,7 @@ internal interface IUdpPacketTransport : IDisposable
     /// <summary>Sends one datagram.</summary>
     ValueTask<int> SendAsync(ReadOnlyMemory<byte> datagram, IPEndPoint destination, CancellationToken cancellationToken);
 
-    /// <summary>Sends each datagram on its own. This is not a segmentation offload.</summary>
+    /// <summary>Sends the datagrams. A batch syscall is used when the offload probe has accepted it.</summary>
     ValueTask<int> SendBatchAsync(ReadOnlyMemory<ReadOnlyMemory<byte>> datagrams, IPEndPoint destination, CancellationToken cancellationToken);
 
     /// <summary>Posts one receive. Callers overlap several of these.</summary>
@@ -95,6 +96,16 @@ internal sealed class UdpSocketTransport : IUdpPacketTransport
 
     public async ValueTask<int> SendBatchAsync(ReadOnlyMemory<ReadOnlyMemory<byte>> datagrams, IPEndPoint destination, CancellationToken cancellationToken)
     {
+        if (datagrams.Length > 1 && UdpOffloadBatch.TrySend(_socket, datagrams, destination, out int datagramsSent, out int bytes))
+        {
+            for (int i = datagramsSent; i < datagrams.Length; i++)
+            {
+                bytes += await SendAsync(datagrams.Span[i], destination, cancellationToken).ConfigureAwait(false);
+            }
+
+            return bytes;
+        }
+
         int sent = 0;
         for (int i = 0; i < datagrams.Length; i++)
         {
