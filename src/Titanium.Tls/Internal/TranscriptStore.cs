@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 namespace Titanium.Tls;
 
 /// <summary>
-/// Handshake transcript (RFC 8446 section 4.4.1). Messages are stored and hashed on demand.
+/// Handshake transcript (RFC 8446 section 4.4.1). The running hash is incremental.
 /// After HelloRetryRequest, <see cref="ReplaceWithMessageHash"/> substitutes the first ClientHello.
 /// </summary>
 internal sealed class TranscriptStore : IDisposable
@@ -16,6 +16,7 @@ internal sealed class TranscriptStore : IDisposable
     private readonly int _hashLength;
     private byte[] _buffer;
     private int _length;
+    private IncrementalHash _running;
     private bool _disposed;
 
     internal TranscriptStore(HashAlgorithmName hash)
@@ -23,6 +24,7 @@ internal sealed class TranscriptStore : IDisposable
         _hashLength = TlsHkdf.HashLength(hash);
         _hash = hash;
         _buffer = ArrayPool<byte>.Shared.Rent(256);
+        _running = IncrementalHash.CreateHash(hash);
     }
 
     internal int Length => _length;
@@ -43,12 +45,18 @@ internal sealed class TranscriptStore : IDisposable
         Ensure(_length + message.Length);
         message.CopyTo(_buffer.AsSpan(_length));
         _length += message.Length;
+        _running.AppendData(message);
     }
 
     internal void CurrentHash(Span<byte> destination)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        Hash(_buffer.AsSpan(0, _length), destination);
+        if (destination.Length < _hashLength)
+        {
+            throw new ArgumentException("Destination is shorter than the hash.", nameof(destination));
+        }
+
+        _running.GetCurrentHash(destination[.._hashLength]);
     }
 
     internal void HashWith(ReadOnlySpan<byte> extra, Span<byte> destination)
@@ -86,6 +94,9 @@ internal sealed class TranscriptStore : IDisposable
         hash[.._hashLength].CopyTo(_buffer.AsSpan(4));
         CryptographicOperations.ZeroMemory(_buffer.AsSpan(4 + _hashLength, _buffer.Length - (4 + _hashLength)));
         _length = 4 + _hashLength;
+        _running.Dispose();
+        _running = IncrementalHash.CreateHash(_hash);
+        _running.AppendData(_buffer.AsSpan(0, _length));
     }
 
     internal ReadOnlySpan<byte> Bytes => _buffer.AsSpan(0, _length);
@@ -100,6 +111,7 @@ internal sealed class TranscriptStore : IDisposable
         _disposed = true;
         CryptographicOperations.ZeroMemory(_buffer.AsSpan(0, _length));
         ArrayPool<byte>.Shared.Return(_buffer, clearArray: true);
+        _running.Dispose();
         _buffer = [];
         _length = 0;
     }

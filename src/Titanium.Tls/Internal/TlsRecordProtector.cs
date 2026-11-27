@@ -17,6 +17,17 @@ internal enum TlsRecordAlert
     RecordOverflow = 22,
 }
 
+internal readonly struct RecordResult
+{
+    internal bool Success { get; init; }
+
+    internal byte ContentType { get; init; }
+
+    internal int ContentLength { get; init; }
+
+    internal TlsRecordAlert Alert { get; init; }
+}
+
 internal sealed class TlsRecordException : Exception
 {
     internal TlsRecordException(TlsRecordAlert alert)
@@ -134,29 +145,35 @@ internal sealed class TlsRecordProtector : IDisposable
 
     internal byte Unprotect(Span<byte> record, out int contentLength)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (record.Length < HeaderLength)
+        RecordResult result = TryUnprotect(record);
+        if (!result.Success)
         {
-            throw new TlsRecordException(TlsRecordAlert.UnexpectedMessage);
+            throw new TlsRecordException(result.Alert);
         }
 
-        if (record[0] != 23 || record[1] != 3 || record[2] != 3)
+        contentLength = result.ContentLength;
+        return result.ContentType;
+    }
+
+    internal RecordResult TryUnprotect(Span<byte> record)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (record.Length < HeaderLength || record[0] != 23 || record[1] != 3 || record[2] != 3)
         {
-            throw new TlsRecordException(TlsRecordAlert.UnexpectedMessage);
+            return Fail(TlsRecordAlert.UnexpectedMessage);
         }
 
         int cipherLength = (record[3] << 8) | record[4];
         if (cipherLength > MaxCiphertext)
         {
-            throw new TlsRecordException(TlsRecordAlert.RecordOverflow);
+            return Fail(TlsRecordAlert.RecordOverflow);
         }
 
-        if (cipherLength < TagLength + 1 || record.Length < HeaderLength + cipherLength)
+        if (cipherLength < TagLength + 1 || record.Length < HeaderLength + cipherLength || _sequence == ulong.MaxValue)
         {
-            throw new TlsRecordException(TlsRecordAlert.UnexpectedMessage);
+            return Fail(_sequence == ulong.MaxValue ? TlsRecordAlert.RecordOverflow : TlsRecordAlert.UnexpectedMessage);
         }
 
-        EnsureSequence();
         int innerLength = cipherLength - TagLength;
         Span<byte> nonce = stackalloc byte[12];
         Span<byte> aad = stackalloc byte[HeaderLength];
@@ -170,16 +187,21 @@ internal sealed class TlsRecordProtector : IDisposable
         }
         catch (AuthenticationTagMismatchException)
         {
-            throw new TlsRecordException(TlsRecordAlert.BadRecordMac);
+            return Fail(TlsRecordAlert.BadRecordMac);
         }
 
-        if (!TryReadInner(inner, out byte contentType, out contentLength))
+        if (!TryReadInner(inner, out byte contentType, out int contentLength))
         {
-            throw new TlsRecordException(TlsRecordAlert.UnexpectedMessage);
+            return Fail(TlsRecordAlert.UnexpectedMessage);
         }
 
         _sequence++;
-        return contentType;
+        return new RecordResult { Success = true, ContentType = contentType, ContentLength = contentLength };
+    }
+
+    private static RecordResult Fail(TlsRecordAlert alert)
+    {
+        return new RecordResult { Success = false, Alert = alert };
     }
 
     internal static bool TryReadInner(ReadOnlySpan<byte> inner, out byte contentType, out int contentLength)
