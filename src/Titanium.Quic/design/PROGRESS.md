@@ -19,3 +19,7 @@ Initial secrets use the RFC 9001 salt and `TlsHkdf`. Client and server keys, IVs
 ## T2.5
 
 The Retry integrity tag is AES-128-GCM over the pseudo-packet: the original destination connection ID length, that connection ID, then the Retry packet without its tag. The published key and nonce match the Expand-Label of the RFC secret. The Appendix A.4 sample verifies. A flipped tag is discarded, and so is a Retry whose original destination connection ID does not match.
+
+## T2.6
+
+Frames follow RFC 9000 section 12.4 and section 19, plus the RFC 9221 DATAGRAM types 0x30 and 0x31. Each accepted frame writes and reads back. An ACK carries ECN counts. A STREAM works with a length and without one, and so does a DATAGRAM. CRYPTO in a 1-RTT packet is legal. RFC 9000 section 17.2.2 allows an ACK in an Initial packet; an ACK in a 0-RTT packet is a protocol violation, and so is a STREAM in an Initial packet. An unknown type is a frame encoding error. ACK ranges are capped at 32. A STREAM whose offset plus length exceeds 2^62−1 is rejected.
