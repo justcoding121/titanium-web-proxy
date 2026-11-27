@@ -129,6 +129,62 @@ public sealed class QuicSimulatorTests
         Assert.AreEqual(0, silent.Events.Count);
     }
 
+    [TestMethod]
+    public void ExactSizeDirectionDelayAndLossAreEdges()
+    {
+        var sized = new QuicSimulator { Mtu = 1200, Qlog = new QuicQlog { Enabled = true } };
+        sized.Submit(toServer: true, ReadOnlySpan<byte>.Empty, Now);
+        sized.Submit(toServer: true, new byte[1200], Now);
+        sized.Submit(toServer: true, new byte[1201], Now);
+        Assert.AreEqual(Now, sized.NextDelivery());
+        using var server = new QuicConnectionCore();
+        sized.Deliver(server, toServer: false, Now, Path);
+        Assert.AreEqual(0, Count(sized.Qlog, "packet_received"));
+        sized.Deliver(server, toServer: true, Now, Path);
+        Assert.AreEqual(1, Count(sized.Qlog, "packet_received"));
+        Assert.AreEqual(2, Count(sized.Qlog, "packet_dropped"));
+
+        var later = new QuicSimulator { Delay = TimeSpan.FromMilliseconds(5), Qlog = new QuicQlog { Enabled = true } };
+        later.Submit(toServer: true, new byte[100], Now + TimeSpan.FromMilliseconds(50));
+        later.Submit(toServer: true, new byte[100], Now);
+        Assert.AreEqual(Now + later.Delay, later.NextDelivery());
+        later.Deliver(server, toServer: true, Now, Path);
+        Assert.AreEqual(0, Count(later.Qlog, "packet_received"));
+        later.Deliver(server, toServer: true, Now + later.Delay, Path);
+        Assert.AreEqual(1, Count(later.Qlog, "packet_received"));
+
+        var duplicated = new QuicSimulator { Duplicate = true, Qlog = new QuicQlog { Enabled = true } };
+        duplicated.Submit(toServer: true, new byte[50], Now);
+        duplicated.Deliver(server, toServer: true, Now, Path);
+        Assert.AreEqual(2, Count(duplicated.Qlog, "packet_received"));
+
+        var hole = new QuicSimulator { Blackhole = true, Qlog = new QuicQlog { Enabled = true } };
+        hole.Submit(toServer: true, new byte[50], Now);
+        Assert.AreEqual(1, Count(hole.Qlog, "packet_dropped"));
+        Assert.IsNull(hole.NextDelivery());
+
+        var every = new QuicSimulator { LossEvery = 1, Qlog = new QuicQlog { Enabled = true } };
+        every.Submit(toServer: true, new byte[50], Now);
+        Assert.AreEqual(1, Count(every.Qlog, "packet_dropped"));
+        Assert.IsNull(every.NextDelivery());
+
+        var corrupt = new QuicSimulator { CorruptCount = 1, Qlog = new QuicQlog { Enabled = true } };
+        corrupt.Submit(toServer: true, new byte[50], Now);
+        Assert.AreEqual(0, corrupt.Qlog!.Events.Count);
+        Assert.AreEqual(Now, corrupt.NextDelivery());
+
+        var reorder = new QuicSimulator { Reorder = true };
+        reorder.Submit(toServer: true, new byte[40], Now);
+        reorder.Submit(toServer: false, new byte[40], Now);
+        reorder.Submit(toServer: true, new byte[40], Now);
+        Assert.AreEqual(Now, reorder.NextDelivery());
+    }
+
+    private static int Count(QuicQlog? qlog, string name)
+    {
+        return qlog is null ? 0 : qlog.Events.FindAll(item => item == name).Count;
+    }
+
     private static bool Pump(QuicConnectionCore client, QuicConnectionCore server, QuicSimulator sim, DateTimeOffset time, int steps)
     {
         byte[] buffer = new byte[16384];
