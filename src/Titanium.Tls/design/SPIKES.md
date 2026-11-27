@@ -69,6 +69,31 @@ What is stable across all 50:
 - Present: `server_name`, ALPN, ECH (`0xfe0d`), `compress_certificate`, `supported_versions`, `key_share`, `signature_algorithms`, `signed_certificate_timestamp`, `extended_master_secret`, `session_ticket`, `psk_key_exchange_modes`, `status_request`, `ec_point_formats`, `renegotiation_info` (`0xff01`), and codepoint `0x44cd` (17613, one per hello; `0x4469` / 17513 is absent). Codepoint `0xca34` is also one per hello and is not named here.
 - A QUIC Initial was not captured. `--enable-quic --origin-to-force-quic-on=localhost:<port>` produced no UDP datagram.
 
-## S2 and S3
+## S2. Crypto per-call cost
 
-S2 (BCL crypto cost) has not been run yet. S3 is the managed X25519 implementation, landed as T1.4. Its JIT disassembly, timing statistic, and speed budget are still open inside T1.4.
+BenchmarkDotNet 0.14.0, Release, this PC (Windows x64, .NET 10.0.15, AVX-512 and AES). Five iterations, so treat the numbers as a floor, not a publication result. The throwaway project is not in the repo.
+
+| Operation | Mean | Allocated |
+| --- | --- | --- |
+| AES-GCM 16 B | 120 ns | 0 |
+| AES-GCM 1,200 B | 226 ns | 0 |
+| AES-GCM 16 KiB | 1.42 µs | 0 |
+| AES-ECB 16 B | 244 ns | 88 B |
+| ChaCha20-Poly1305 16 B | 249 ns | 0 |
+| ChaCha20-Poly1305 1,200 B | 2.38 µs | 0 |
+| ChaCha20-Poly1305 16 KiB | 30.2 µs | 0 |
+| HMAC-SHA256 32 B | 221 ns | 0 |
+| `HKDF.Expand` 32 B | 448 ns | 288 B |
+| ECDH P-256 derive (existing key) | 543 µs | 833 B |
+| ML-KEM-768 encapsulate | 14.8 µs | 1,168 B |
+| ML-KEM-768 decapsulate | 22.1 µs | 0 |
+| RSA-2048 PSS sign | 420 µs | 56 B |
+| RSA-2048 PSS verify | 13.6 µs | 56 B |
+| ECDSA P-256 sign | 133 µs | 264 B |
+| ECDSA P-256 verify | 115 µs | 120 B |
+
+A QUIC packet on this CPU is two native calls (AES-GCM plus one AES block) at a few hundred nanoseconds. ChaCha is much slower than AES-GCM here. `HKDF.Expand` allocates about 288 bytes, which is why one-block labels now use `HMACSHA256.HashData` directly. ECDH derive and RSA sign dominate a full handshake; ML-KEM encapsulate is about 15 µs plus the allocation of the ciphertext array.
+
+## S3
+
+S3 is the managed X25519 implementation, landed as T1.4. Its JIT disassembly, timing statistic, and speed budget are still open inside T1.4.
