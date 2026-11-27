@@ -13,6 +13,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Tls;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -29,7 +30,7 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 /// <summary>
 ///     A class that manages Tcp Connection to server used by this proxy server.
 /// </summary>
-internal class TcpConnectionFactory : IDisposable
+internal partial class TcpConnectionFactory : IDisposable
 {
 
     /// <summary>
@@ -1389,6 +1390,17 @@ internal class TcpConnectionFactory : IDisposable
                     // CONNECT tunnel: wrap TLS on the existing HttpServerStream (may hold buffered
                     // bytes from the CONNECT response). leaveInnerOpen:false — disposing the outer
                     // HttpServerStream tears down the chain.
+                    if (proxyServer.UseManagedTlsStack)
+                    {
+                        var managed = new TlsStream(stream, leaveInnerStreamOpen: false);
+                        stream = new HttpServerStream(proxyServer, managed, proxyServer.BufferPool, cancellationToken);
+                        (negotiatedApplicationProtocol, bool usedManagedCertificate) = await AuthenticateManagedClientAsync(
+                            proxyServer, managed, sessionArgs, remoteHostName, remotePort, applicationProtocols,
+                            enabledSslProtocols, timing, cancellationToken);
+                        usedClientCertificate |= usedManagedCertificate;
+                    }
+                    else
+                    {
                     var sslStream = new SslStream(stream, leaveInnerStreamOpen: false,
                         (sender, certificate, chain, sslPolicyErrors) =>
                             proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
@@ -1418,10 +1430,22 @@ internal class TcpConnectionFactory : IDisposable
                     ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort,
                         negotiatedApplicationProtocol);
                     timing?.MarkTlsHandshakeCompleted();
+                    }
                 }
             }
             else if (isHttps)
             {
+                if (proxyServer.UseManagedTlsStack)
+                {
+                    var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+                    stream = new HttpServerStream(proxyServer, managed, proxyServer.BufferPool, cancellationToken);
+                    (negotiatedApplicationProtocol, bool usedManagedCertificate) = await AuthenticateManagedClientAsync(
+                        proxyServer, managed, sessionArgs, remoteHostName, remotePort, applicationProtocols,
+                        enabledSslProtocols, timing, cancellationToken);
+                    usedClientCertificate |= usedManagedCertificate;
+                }
+                else
+                {
                 var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false,
                     (sender, certificate, chain, sslPolicyErrors) =>
                         proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
@@ -1450,6 +1474,7 @@ internal class TcpConnectionFactory : IDisposable
                 ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort,
                     negotiatedApplicationProtocol);
                 timing?.MarkTlsHandshakeCompleted();
+                }
             }
             else
             {

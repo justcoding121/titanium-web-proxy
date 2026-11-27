@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Tls;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
@@ -103,10 +104,10 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     {
         this.server = server;
 
-        if (baseStream is NetworkStream or SslStream)
+        if (baseStream is NetworkStream or SslStream or TlsStream)
             IsNetworkStream = true;
 
-        SupportsBodyWriteHook = baseStream is NetworkStream || baseStream is SslStream;
+        SupportsBodyWriteHook = baseStream is NetworkStream or SslStream or TlsStream;
 
         BaseStream = baseStream;
         this.leaveOpen = leaveOpen;

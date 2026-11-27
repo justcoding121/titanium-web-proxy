@@ -1,4 +1,4 @@
-This map is the survey for the Phase 3 seam. `ProxyServer.UseManagedTlsStack` and `ProxyServer.UseManagedQuicStack` default to false. No creation site reads them yet.
+This map is the survey for the Phase 3 seam. `ProxyServer.UseManagedTlsStack` and `ProxyServer.UseManagedQuicStack` default to false. `TcpConnectionFactory` is the one creation site that reads `UseManagedTlsStack`.
 
 A file is a creation site when it constructs `SslStream`, calls `QuicConnection.ConnectAsync`, or calls `QuicListener.ListenAsync`. A use site calls a member those types own on an object it did not construct. A capability site branches on the runtime type. Comment-only mentions are not a seam.
 
@@ -8,7 +8,7 @@ These are the only places a later flag branch belongs. The flag-off arm stays th
 
 | File | What it creates |
 | --- | --- |
-| `Network/TcpConnection/TcpConnectionFactory.cs` | Upstream `SslStream`, then `AuthenticateAsClientAsync`. Two sites, around lines 1392 and 1425. |
+| `Network/TcpConnection/TcpConnectionFactory.cs` | Upstream handshake. When `UseManagedTlsStack` is set, both sites authenticate a `TlsStream`. The other branch still constructs `SslStream`. |
 | `Handlers/ExplicitClientHandler.cs` | Client-facing `SslStream`, then `AuthenticateAsServerAsync`, around line 350. |
 | `Handlers/TransparentClientHandler.cs` | Client-facing `SslStream`, then `AuthenticateAsServerAsync`. Two sites, around lines 109 and 337. |
 | `Handlers/TcpTlsTerminateHandler.cs` | Client-facing `SslStream` around line 47, and an upstream `SslStream` around line 305. |
