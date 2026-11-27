@@ -318,10 +318,21 @@ internal sealed partial class QuicConnectionCore
         return true;
     }
 
+    internal bool IsPathValidated(in PathInfo path)
+    {
+        int index = IndexOf(path);
+        return index >= 0 && _paths[index].Validated;
+    }
+
     internal int PollTransmit(DateTimeOffset now, Span<byte> destination, out PathInfo path)
     {
         _now = now;
         path = default;
+        if (ClosedByStatelessReset)
+        {
+            return 0;
+        }
+
         for (int i = 0; i < _staged.Count; i++)
         {
             Staged staged = _staged[i];
@@ -342,6 +353,7 @@ internal sealed partial class QuicConnectionCore
             state.Sent += staged.Length;
             _paths[pathIndex] = state;
             path = staged.Path;
+            _ids.MarkUsed(DestinationId());
             if (staged.Track && staged.Payload is not null)
             {
                 _loss.OnPacketSent(staged.Kind, staged.Number, staged.Length, now, staged.Payload);

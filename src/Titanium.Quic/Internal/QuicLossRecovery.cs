@@ -160,6 +160,28 @@ internal sealed class QuicLossRecovery
 
     internal List<QuicRetransmit> Pending { get; } = [];
 
+    internal void DiscardInitial()
+    {
+        int bytes = 0;
+        foreach (Flight packet in _flight[0])
+        {
+            bytes += packet.Bytes;
+        }
+
+        _flight[0].Clear();
+        _lossTime[0] = null;
+        _lastAckEliciting[0] = null;
+        if (bytes > 0)
+        {
+            _controller.OnDiscarded(bytes);
+        }
+
+        if (InFlight == 0)
+        {
+            Timeout = null;
+        }
+    }
+
     private void DeclareLost(int space, DateTimeOffset now)
     {
         Pending.Clear();

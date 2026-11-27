@@ -16,6 +16,8 @@ internal interface ICongestionController
     void OnAcked(int bytes, DateTimeOffset sent, DateTimeOffset now);
 
     void OnLost(int bytes, DateTimeOffset sent, DateTimeOffset now, bool persistentCongestion);
+
+    void OnDiscarded(int bytes);
 }
 
 /// <summary>NewReno from RFC 9002 section 7 and Appendix B.</summary>
@@ -94,5 +96,14 @@ internal sealed class QuicNewReno : ICongestionController
         _recoveryStart = now;
         SlowStartThreshold = CongestionWindow / 2;
         CongestionWindow = Math.Max(SlowStartThreshold, MinimumWindowBytes);
+    }
+
+    public void OnDiscarded(int bytes)
+    {
+        BytesInFlight -= bytes;
+        if (BytesInFlight < 0)
+        {
+            BytesInFlight = 0;
+        }
     }
 }

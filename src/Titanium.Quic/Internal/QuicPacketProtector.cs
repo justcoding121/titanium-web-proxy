@@ -161,11 +161,17 @@ internal static class QuicPackets
         ulong packetNumber,
         ReadOnlySpan<byte> payload,
         QuicPacketProtector protector,
-        int minimumDatagram)
+        int minimumDatagram,
+        ReadOnlySpan<byte> token = default)
     {
         const int packetNumberLength = 2;
         bool initial = kind == QuicPacketKind.Initial;
-        int tokenField = initial ? 1 : 0;
+        Span<byte> tokenScratch = stackalloc byte[8];
+        int tokenField = 0;
+        if (initial)
+        {
+            tokenField = QuicVarInt.Encode((ulong)token.Length, tokenScratch) + token.Length;
+        }
         int lengthField = 1;
         int plainLength = payload.Length;
         Span<byte> lengthScratch = stackalloc byte[8];
@@ -206,7 +212,9 @@ internal static class QuicPackets
         at += sourceId.Length;
         if (initial)
         {
-            destination[at++] = 0;
+            at += QuicVarInt.Encode((ulong)token.Length, destination[at..]);
+            token.CopyTo(destination[at..]);
+            at += token.Length;
         }
 
         at += QuicVarInt.Encode((ulong)(packetNumberLength + plainLength + 16), destination[at..]);

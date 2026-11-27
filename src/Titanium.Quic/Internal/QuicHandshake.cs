@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Tls;
@@ -31,11 +32,29 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     private QuicPacketProtector? _applicationRecv;
 
+    private readonly QuicIdentity _ids = new();
+
+    private readonly List<(PathInfo Path, byte[] Data)> _challenges = [];
+
     private byte[] _localId = [];
 
     private byte[] _remoteId = [];
 
+    private byte[] _originalDestinationId = [];
+
+    private byte[] _initialToken = [];
+
+    private byte[]? _initialFlight;
+
+    private byte[]? _expectedRetryToken;
+
     private byte[]? _peerSourceId;
+
+    private bool _retryArmed;
+
+    private bool _retryAccepted;
+
+    private byte[] _retryToken = [];
 
     private PathInfo _path;
 
@@ -71,7 +90,15 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     internal bool IsClosed { get; private set; }
 
+    internal bool ClosedByStatelessReset { get; private set; }
+
     internal ulong CloseError { get; private set; }
+
+    internal byte[]? ReceivedInitialToken { get; private set; }
+
+    internal byte[]? IssuedNewToken { get; private set; }
+
+    internal int PeerConnectionIds => _ids.PeerActive;
 
     internal bool HandshakeComplete => _engine?.State == TlsEngineState.Connected;
 
@@ -79,17 +106,20 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     internal bool CorruptNextHandshakePayload { get; set; }
 
-    internal void StartClient(in PathInfo path, ReadOnlySpan<byte> localId, ReadOnlySpan<byte> remoteId, ReadOnlySpan<byte> transportParameters)
+    internal void StartClient(in PathInfo path, ReadOnlySpan<byte> localId, ReadOnlySpan<byte> remoteId, ReadOnlySpan<byte> transportParameters, ReadOnlySpan<byte> token = default)
     {
         _client = true;
         _limitAmplification = false;
         _localId = localId.ToArray();
         _remoteId = remoteId.ToArray();
+        _originalDestinationId = remoteId.ToArray();
+        _initialToken = token.ToArray();
+        _ids.AddIssued(localId);
+        _ids.AddPeer(remoteId);
         _path = path;
         _hasPath = true;
         AddReceived(path, 0);
-        _initialSend = QuicPacketProtector.FromInitial(remoteId, client: true);
-        _initialRecv = QuicPacketProtector.FromInitial(remoteId, client: false);
+        InstallInitial(remoteId, clientSend: true);
         _engine = new TlsEngine(TlsRole.Client, serverName: "localhost")
         {
             DatagramTransport = true,
@@ -109,9 +139,10 @@ internal sealed partial class QuicConnectionCore : IDisposable
     internal void StartServer(ReadOnlySpan<byte> localId, X509Certificate2 certificate, ReadOnlySpan<byte> transportParameters)
     {
         _localId = localId.ToArray();
+        _originalDestinationId = localId.ToArray();
+        _ids.AddIssued(localId);
         _certificate = certificate;
-        _initialSend = QuicPacketProtector.FromInitial(localId, client: false);
-        _initialRecv = QuicPacketProtector.FromInitial(localId, client: true);
+        InstallInitial(localId, clientSend: false);
         _engine = new TlsEngine(TlsRole.Server)
         {
             DatagramTransport = true,
@@ -173,8 +204,19 @@ internal sealed partial class QuicConnectionCore : IDisposable
             return;
         }
 
-        if (!TryLocate(datagram, out QuicPacketKind kind, out int packetLength, out int packetNumberOffset, out int sourceOffset, out int sourceLength))
+        if (_client && datagram[0] == 0xF0)
         {
+            AcceptRetry(datagram);
+            return;
+        }
+
+        if (!TryLocate(datagram, out QuicPacketKind kind, out int packetLength, out int packetNumberOffset, out int sourceOffset, out int sourceLength, out int tokenOffset, out int tokenLength))
+        {
+            if (_ids.MatchesReset(datagram))
+            {
+                DrainReset();
+            }
+
             return;
         }
 
@@ -185,12 +227,36 @@ internal sealed partial class QuicConnectionCore : IDisposable
             datagram[..packetLength].CopyTo(rented);
             if (!TryOpen(kind, rented.AsSpan(0, packetLength), packetNumberOffset, plain, out ulong packetNumber, out int plainLength))
             {
+                if (_ids.MatchesReset(datagram))
+                {
+                    DrainReset();
+                }
+
                 return;
             }
 
             if (kind == QuicPacketKind.Initial && _peerSourceId is null)
             {
                 _peerSourceId = datagram.Slice(sourceOffset, sourceLength).ToArray();
+                _ids.AddPeer(_peerSourceId);
+            }
+
+            if (kind == QuicPacketKind.Initial && _retryArmed && tokenLength == 0)
+            {
+                SendRetry();
+                return;
+            }
+
+            if (kind == QuicPacketKind.Initial && _expectedRetryToken is not null)
+            {
+                ReadOnlySpan<byte> token = datagram.Slice(tokenOffset, tokenLength);
+                if (token.Length != _expectedRetryToken.Length || !CryptographicOperations.FixedTimeEquals(token, _expectedRetryToken))
+                {
+                    return;
+                }
+
+                ReceivedInitialToken = token.ToArray();
+                _expectedRetryToken = null;
             }
 
             Remember(kind, packetNumber);
@@ -214,13 +280,17 @@ internal sealed partial class QuicConnectionCore : IDisposable
         out int packetLength,
         out int packetNumberOffset,
         out int sourceOffset,
-        out int sourceLength)
+        out int sourceLength,
+        out int tokenOffset,
+        out int tokenLength)
     {
         kind = default;
         packetLength = 0;
         packetNumberOffset = 0;
         sourceOffset = 0;
         sourceLength = 0;
+        tokenOffset = 0;
+        tokenLength = 0;
         if ((datagram[0] & 0x40) == 0)
         {
             return false;
@@ -228,13 +298,14 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
         if ((datagram[0] & 0x80) == 0)
         {
-            if (datagram.Length < 1 + _localId.Length || !_localId.AsSpan().SequenceEqual(datagram.Slice(1, _localId.Length)))
+            byte[]? owned = _ids.LongestOwnedPrefix(datagram[1..]);
+            if (owned is null)
             {
                 return false;
             }
 
             kind = QuicPacketKind.OneRtt;
-            packetNumberOffset = 1 + _localId.Length;
+            packetNumberOffset = 1 + owned.Length;
             packetLength = datagram.Length;
             return packetLength > packetNumberOffset;
         }
@@ -255,7 +326,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
             return false;
         }
 
-        if (!_localId.AsSpan().SequenceEqual(datagram.Slice(6, destinationLength)))
+        if (!_ids.Owns(datagram.Slice(6, destinationLength)))
         {
             return false;
         }
@@ -277,13 +348,15 @@ internal sealed partial class QuicConnectionCore : IDisposable
         kind = (QuicPacketKind)((datagram[0] >> 4) & 0x03);
         if (kind == QuicPacketKind.Initial)
         {
-            if (!QuicVarInt.TryDecode(datagram[at..], out ulong tokenLength, out int tokenUsed)
-                || tokenLength > (ulong)(datagram.Length - at - tokenUsed))
+            if (!QuicVarInt.TryDecode(datagram[at..], out ulong encodedToken, out int tokenUsed)
+                || encodedToken > (ulong)(datagram.Length - at - tokenUsed))
             {
                 return false;
             }
 
-            at += tokenUsed + (int)tokenLength;
+            tokenOffset = at + tokenUsed;
+            tokenLength = (int)encodedToken;
+            at += tokenUsed + tokenLength;
         }
         else if (kind != QuicPacketKind.Handshake)
         {
@@ -354,6 +427,52 @@ internal sealed partial class QuicConnectionCore : IDisposable
             if (frame.Kind == QuicFrameKind.Stream && frame.Data.Length > 0 && ReceivedStreamByte is null)
             {
                 ReceivedStreamByte = frame.Data[0];
+            }
+
+            if (frame.Kind == QuicFrameKind.NewConnectionId)
+            {
+                var retire = new List<ulong>();
+                if (!_ids.TryAddPeer(frame.Sequence, frame.RetirePriorTo, frame.Data, frame.Token, retire, out ulong error))
+                {
+                    MarkClosed(error, send: true);
+                    return;
+                }
+
+                foreach (ulong sequence in retire)
+                {
+                    StageRetire(sequence);
+                }
+
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.RetireConnectionId)
+            {
+                if (!_ids.TryRetire(frame.Sequence, out ulong error))
+                {
+                    MarkClosed(error, send: true);
+                    return;
+                }
+
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.NewToken && _client)
+            {
+                IssuedNewToken = frame.Data.ToArray();
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.PathChallenge)
+            {
+                StagePathResponse(frame.Data);
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.PathResponse && MatchesChallenge(frame.Data))
+            {
+                MarkAddressValidated(_path);
+                continue;
             }
 
             if (frame.Kind == QuicFrameKind.Crypto && !TakeCrypto(kind, frame.Offset, frame.Data))
@@ -458,11 +577,16 @@ internal sealed partial class QuicConnectionCore : IDisposable
         }
 
         bool match = _client
-            ? Same(parsed.OriginalDestinationConnectionId, _remoteId) && Same(parsed.InitialSourceConnectionId, _peerSourceId)
+            ? Same(parsed.OriginalDestinationConnectionId, _originalDestinationId) && Same(parsed.InitialSourceConnectionId, _peerSourceId)
             : Same(parsed.InitialSourceConnectionId, _peerSourceId);
         _parametersChecked = true;
         if (match)
         {
+            if (_client && parsed.StatelessResetToken is byte[] token)
+            {
+                _ids.RememberResetToken(_originalDestinationId, token);
+            }
+
             return true;
         }
 
@@ -539,9 +663,9 @@ internal sealed partial class QuicConnectionCore : IDisposable
         SealAndStage(kind, protector, payload, 0, probe: true);
     }
 
-    private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram, bool probe = false)
+    private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram, bool probe = false, PathInfo? path = null)
     {
-        byte[] packet = ArrayPool<byte>.Shared.Rent(Math.Max(minimumDatagram, payload.Length) + 128);
+        byte[] packet = ArrayPool<byte>.Shared.Rent(Math.Max(minimumDatagram, payload.Length) + 128 + _initialToken.Length);
         try
         {
             ulong number = kind switch
@@ -552,11 +676,16 @@ internal sealed partial class QuicConnectionCore : IDisposable
             };
             int written = kind == QuicPacketKind.OneRtt
                 ? QuicPackets.SealShort(packet, DestinationId(), number, payload, protector)
-                : QuicPackets.SealLong(packet, kind, DestinationId(), _localId, number, payload, protector, minimumDatagram);
+                : QuicPackets.SealLong(packet, kind, DestinationId(), _localId, number, payload, protector, minimumDatagram, _initialToken);
             byte[] copy = payload.ToArray();
-            if (written == 0 || !TryStageTransmit(_path, packet.AsSpan(0, written), track: true, kind, number, copy, probe))
+            if (written == 0 || !TryStageTransmit(path ?? _path, packet.AsSpan(0, written), track: true, kind, number, copy, probe))
             {
                 return 0;
+            }
+
+            if (_client && kind == QuicPacketKind.Initial && _initialFlight is null)
+            {
+                _initialFlight = copy;
             }
 
             if (kind == QuicPacketKind.Handshake)
@@ -702,6 +831,261 @@ internal sealed partial class QuicConnectionCore : IDisposable
         }
 
         return send ? _initialSend : _initialRecv;
+    }
+
+    internal void ArmRetry(ReadOnlySpan<byte> token)
+    {
+        _retryToken = token.ToArray();
+        _retryArmed = true;
+    }
+
+    internal void SendNewToken(ReadOnlySpan<byte> token)
+    {
+        if (token.IsEmpty || _applicationSend is null)
+        {
+            return;
+        }
+
+        Span<byte> frame = stackalloc byte[token.Length + 8];
+        var written = new QuicFrame { Kind = QuicFrameKind.NewToken, Data = token };
+        int count = QuicFrameWriter.Write(in written, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+        }
+    }
+
+    internal void IssueConnectionId()
+    {
+        if (_applicationSend is null)
+        {
+            return;
+        }
+
+        (ulong sequence, byte[] id, byte[] token) = _ids.Issue();
+        Span<byte> frame = stackalloc byte[64];
+        var written = new QuicFrame
+        {
+            Kind = QuicFrameKind.NewConnectionId,
+            Sequence = sequence,
+            Data = id,
+            Token = token,
+        };
+        int count = QuicFrameWriter.Write(in written, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+        }
+    }
+
+    internal void RetireConnectionId(ulong sequence)
+    {
+        if (_applicationSend is null)
+        {
+            return;
+        }
+
+        Span<byte> frame = stackalloc byte[16];
+        var written = new QuicFrame { Kind = QuicFrameKind.RetireConnectionId, Sequence = sequence };
+        int count = QuicFrameWriter.Write(in written, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+        }
+    }
+
+    internal void SendPathChallenge(in PathInfo path)
+    {
+        if (_applicationSend is null)
+        {
+            return;
+        }
+
+        byte[] data = new byte[8];
+        RandomNumberGenerator.Fill(data);
+        _challenges.Add((path, data));
+        AddReceived(path, 0);
+        Span<byte> frame = stackalloc byte[16];
+        var challenge = new QuicFrame { Kind = QuicFrameKind.PathChallenge, Data = data };
+        int count = QuicFrameWriter.Write(in challenge, default, frame);
+        if (count == 0)
+        {
+            return;
+        }
+
+        int overhead = 1 + DestinationId().Length + 2 + 16;
+        byte[] body = new byte[Math.Max(count, 1200 - overhead)];
+        frame[..count].CopyTo(body);
+        SealAndStage(QuicPacketKind.OneRtt, _applicationSend, body, 1200, probe: true, path);
+    }
+
+    private void InstallInitial(ReadOnlySpan<byte> destinationId, bool clientSend)
+    {
+        _initialSend?.Dispose();
+        _initialRecv?.Dispose();
+        _initialSend = QuicPacketProtector.FromInitial(destinationId, clientSend);
+        _initialRecv = QuicPacketProtector.FromInitial(destinationId, !clientSend);
+    }
+
+    private void AcceptRetry(ReadOnlySpan<byte> datagram)
+    {
+        if (_retryAccepted || _peerSourceId is not null || datagram.Length < 23 || BinaryPrimitives.ReadUInt32BigEndian(datagram[1..]) != 1)
+        {
+            return;
+        }
+
+        int destinationLength = datagram[5];
+        if (destinationLength != _localId.Length || !datagram.Slice(6, destinationLength).SequenceEqual(_localId))
+        {
+            return;
+        }
+
+        int sourceIndex = 6 + destinationLength;
+        if (datagram.Length <= sourceIndex)
+        {
+            return;
+        }
+
+        int sourceLength = datagram[sourceIndex];
+        int sourceOffset = sourceIndex + 1;
+        if (sourceLength is < 1 or > QuicDatagramReader.MaxConnectionIdLength || datagram.Length < sourceOffset + sourceLength + 16)
+        {
+            return;
+        }
+
+        if (!QuicRetry.TryVerify(_originalDestinationId, datagram))
+        {
+            return;
+        }
+
+        _retryAccepted = true;
+        int tokenStart = sourceOffset + sourceLength;
+        _initialToken = datagram[tokenStart..^16].ToArray();
+        _remoteId = datagram.Slice(sourceOffset, sourceLength).ToArray();
+        _ids.AddPeer(_remoteId);
+        InstallInitial(_remoteId, clientSend: true);
+        _largestInitial = null;
+        _pnInitial = 0;
+        _loss.DiscardInitial();
+        if (_initialFlight is not null && _initialSend is not null)
+        {
+            SealAndStage(QuicPacketKind.Initial, _initialSend, _initialFlight, 4096, probe: true);
+        }
+    }
+
+    private void SendRetry()
+    {
+        if (_peerSourceId is null)
+        {
+            return;
+        }
+
+        byte[] source = new byte[8];
+        RandomNumberGenerator.Fill(source);
+        int body = 6 + _peerSourceId.Length + 1 + source.Length + _retryToken.Length;
+        byte[] packet = new byte[body + 16];
+        packet[0] = 0xF0;
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(1), 1);
+        int at = 5;
+        packet[at++] = (byte)_peerSourceId.Length;
+        _peerSourceId.CopyTo(packet.AsSpan(at));
+        at += _peerSourceId.Length;
+        packet[at++] = (byte)source.Length;
+        source.CopyTo(packet.AsSpan(at));
+        at += source.Length;
+        _retryToken.CopyTo(packet.AsSpan(at));
+        if (!QuicRetry.TryWriteTag(_originalDestinationId, packet.AsSpan(0, body), packet.AsSpan(body)))
+        {
+            return;
+        }
+
+        TryStageTransmit(_path, packet);
+        _expectedRetryToken = _retryToken;
+        _retryArmed = false;
+        _ids.AddIssued(source);
+        InstallInitial(source, clientSend: false);
+        _largestInitial = null;
+        _pnInitial = 0;
+        _loss.DiscardInitial();
+    }
+
+    private void DrainReset()
+    {
+        if (ClosedByStatelessReset)
+        {
+            return;
+        }
+
+        IsClosed = true;
+        ClosedByStatelessReset = true;
+        for (int i = 0; i < _staged.Count; i++)
+        {
+            ArrayPool<byte>.Shared.Return(_staged[i].Buffer, clearArray: true);
+        }
+
+        _staged.Clear();
+    }
+
+    private void StageRetire(ulong sequence)
+    {
+        if (_applicationSend is null)
+        {
+            return;
+        }
+
+        Span<byte> frame = stackalloc byte[16];
+        var written = new QuicFrame { Kind = QuicFrameKind.RetireConnectionId, Sequence = sequence };
+        int count = QuicFrameWriter.Write(in written, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+        }
+    }
+
+    private void StagePathResponse(ReadOnlySpan<byte> data)
+    {
+        if (data.Length != 8 || _applicationSend is null)
+        {
+            return;
+        }
+
+        byte[] copy = data.ToArray();
+        Span<byte> frame = stackalloc byte[16];
+        var written = new QuicFrame { Kind = QuicFrameKind.PathResponse, Data = copy };
+        int count = QuicFrameWriter.Write(in written, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+        }
+    }
+
+    private bool MatchesChallenge(ReadOnlySpan<byte> data)
+    {
+        bool match = false;
+        for (int i = 0; i < _challenges.Count; i++)
+        {
+            if (!_challenges[i].Path.Equals(_path))
+            {
+                continue;
+            }
+
+            match |= CryptographicOperations.FixedTimeEquals(_challenges[i].Data, data);
+        }
+
+        if (!match)
+        {
+            return false;
+        }
+
+        for (int i = _challenges.Count - 1; i >= 0; i--)
+        {
+            if (_challenges[i].Path.Equals(_path) && CryptographicOperations.FixedTimeEquals(_challenges[i].Data, data))
+            {
+                _challenges.RemoveAt(i);
+            }
+        }
+
+        return true;
     }
 
     private byte[] DestinationId() => _client ? _remoteId : _peerSourceId ?? [];
