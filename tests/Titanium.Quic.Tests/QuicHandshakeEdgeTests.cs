@@ -233,6 +233,16 @@ public sealed class QuicHandshakeEdgeTests
         Pump(again, other);
         Assert.IsTrue(other.IsClosed);
         Assert.AreEqual(QuicFrameReader.ProtocolViolation, other.CloseError);
+
+        using var third = new QuicConnectionCore();
+        using var peer = new QuicConnectionCore();
+        third.StartClient(path, clientId, serverId, Limits(clientId, idleMs: 0, server: false));
+        peer.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        Pump(third, peer);
+        third.SendApplicationCrypto([24, 0, 0, 1, 0]);
+        Pump(third, peer);
+        Assert.IsTrue(peer.IsClosed);
+        Assert.AreEqual(0x0100UL + 10, peer.CloseError);
     }
 
     private static byte[] InitialWithReservedBits(byte[] serverId, byte[] clientId)

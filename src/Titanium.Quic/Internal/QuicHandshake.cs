@@ -669,6 +669,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     private bool TakeCrypto(QuicPacketKind kind, ulong offset, ReadOnlySpan<byte> data)
     {
+        if (kind == QuicPacketKind.OneRtt)
+        {
+            MarkClosed(CryptoError(10), send: true);
+            return false;
+        }
+
         if (kind is not (QuicPacketKind.Initial or QuicPacketKind.Handshake) || _engine is null)
         {
             return true;
@@ -1069,6 +1075,22 @@ internal sealed partial class QuicConnectionCore : IDisposable
     {
         _retryToken = token.ToArray();
         _retryArmed = true;
+    }
+
+    internal void SendApplicationCrypto(ReadOnlySpan<byte> data)
+    {
+        if (_applicationSend is null || data.IsEmpty)
+        {
+            return;
+        }
+
+        Span<byte> frame = stackalloc byte[data.Length + 16];
+        var written = new QuicFrame { Kind = QuicFrameKind.Crypto, Offset = 0, Data = data };
+        int count = QuicFrameWriter.Write(in written, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+        }
     }
 
     internal void SendHandshakeDone()
