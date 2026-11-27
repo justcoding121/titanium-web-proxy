@@ -38,7 +38,61 @@ public sealed class QuicUdpTransportTests
         Assert.AreEqual(4, buffer[3]);
         Assert.AreEqual(left.LocalEndpoint.Port, received.Remote.Port);
         Assert.AreEqual(IPAddress.Loopback, received.Remote.Address);
-        left.TrySetEcn(0);
+        Assert.IsTrue(left.TrySetEcn(0));
+        Assert.IsFalse(left.TrySetEcn(3));
+        Assert.IsFalse(left.TrySetEcn(4));
+    }
+
+    [TestMethod]
+    public async Task BatchSizeFamilyAndAnOversizedDatagramAreEdges()
+    {
+        using var left = new UdpSocketTransport();
+        using var right = new UdpSocketTransport();
+        Assert.AreEqual(65507, left.MaximumDatagramSize);
+        Assert.IsFalse(left.DatagramPending);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
+            () => left.SendAsync(new byte[left.MaximumDatagramSize + 1], right.LocalEndpoint, cancel.Token).AsTask());
+
+        byte[] first = [9];
+        byte[] second = [8, 7];
+        ReadOnlyMemory<byte>[] batch = [first, second];
+        byte[] firstBuffer = new byte[16];
+        byte[] secondBuffer = new byte[16];
+        ValueTask<UdpReceived> pendingFirst = right.ReceiveAsync(firstBuffer, cancel.Token);
+        ValueTask<UdpReceived> pendingSecond = right.ReceiveAsync(secondBuffer, cancel.Token);
+        int sent = await left.SendBatchAsync(batch, right.LocalEndpoint, cancel.Token);
+        Assert.AreEqual(first.Length + second.Length, sent);
+        UdpReceived gotFirst = await pendingFirst;
+        UdpReceived gotSecond = await pendingSecond;
+        Assert.AreEqual(first.Length, gotFirst.Count);
+        Assert.AreEqual(second.Length, gotSecond.Count);
+        Assert.AreEqual(0, await left.SendBatchAsync(ReadOnlyMemory<ReadOnlyMemory<byte>>.Empty, right.LocalEndpoint, cancel.Token));
+
+        await left.SendAsync(first, right.LocalEndpoint, cancel.Token);
+        Assert.IsTrue(right.DatagramPending);
+
+        using var left6 = new UdpSocketTransport(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        using var right6 = new UdpSocketTransport(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        Assert.AreEqual(65527, left6.MaximumDatagramSize);
+        byte[] payload = [5, 6];
+        byte[] buffer = new byte[32];
+        ValueTask<UdpReceived> pending = right6.ReceiveAsync(buffer, cancel.Token);
+        int sent6 = await left6.SendAsync(payload, right6.LocalEndpoint, cancel.Token);
+        UdpReceived got = await pending;
+        Assert.AreEqual(payload.Length, sent6);
+        Assert.AreEqual(payload.Length, got.Count);
+        Assert.AreEqual(left6.LocalEndpoint.Port, got.Remote.Port);
+        Assert.AreEqual(IPAddress.IPv6Loopback, got.Remote.Address);
+
+        byte[] exact = new byte[left.MaximumDatagramSize];
+        exact[0] = 1;
+        exact[^1] = 2;
+        Assert.AreEqual(exact.Length, await left.SendAsync(exact, right.LocalEndpoint, cancel.Token));
+        Assert.IsTrue(left6.TrySetEcn(0));
+        left.Dispose();
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
+            () => left.SendAsync(first, right.LocalEndpoint, cancel.Token).AsTask());
     }
 
     [TestMethod]
