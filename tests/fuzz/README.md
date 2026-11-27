@@ -122,6 +122,8 @@ dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj -c Release --fi
 
 SharpFuzz is optional and not a dependency. A console project that references the test assembly can call `Fuzzer.OutOfProcess.Run(TlsFuzzTarget.Handshake)` under `afl-fuzz`, with this folder as the corpus after the `.hex` seeds are expanded to raw bytes.
 
+`SeededSampleAgreesWithOpenSsl` is the differential handshake sample. `TITANIUM_FUZZ_HANDSHAKES` defaults to 500 and `TITANIUM_FUZZ_SEED` defaults to 8446. A failure message includes the seed and the draw index. `ChunkingChaosTests` fragments the same handshake and record path down to one-byte reads.
+
 ```powershell
 dotnet test tests/Titanium.Tls.Tests -c Release --filter FullyQualifiedName~CorpusRunnerTests
 ```

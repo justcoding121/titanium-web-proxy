@@ -169,6 +169,29 @@ public sealed class TlsInteropTests
     }
 
     [TestMethod]
+    [Timeout(1800000)]
+    public async Task SeededSampleAgreesWithOpenSsl()
+    {
+        int count = Positive(Environment.GetEnvironmentVariable("TITANIUM_FUZZ_HANDSHAKES"), 500);
+        int seed = Environment.GetEnvironmentVariable("TITANIUM_FUZZ_SEED") is string text && int.TryParse(text, out int parsed)
+            ? parsed
+            : 8446;
+        var random = new Random(seed);
+        for (int index = 0; index < count; index++)
+        {
+            InteropCase row = DrawSupported(random);
+            try
+            {
+                await Exchange(row, 32);
+            }
+            catch (Exception error)
+            {
+                throw new AssertFailedException("seed=" + seed + " index=" + index + " " + row, error);
+            }
+        }
+    }
+
+    [TestMethod]
     [Timeout(60000)]
     public async Task FipsPolicySpeaksTls13WithOpenSsl()
     {
@@ -177,6 +200,33 @@ public sealed class TlsInteropTests
         await Exchange(client, 32, TlsAlgorithmPolicy.FipsApprovedOnly);
         await Exchange(server, 32, TlsAlgorithmPolicy.FipsApprovedOnly);
     }
+
+    private static InteropCase DrawSupported(Random random)
+    {
+        if (random.Next(2) == 0)
+        {
+            var group = random.Next(2) == 0 ? InteropGroup.X25519 : InteropGroup.P256;
+            return new InteropCase(
+                InteropRole.ManagedClient,
+                InteropCipher.Aes128,
+                group,
+                InteropCert.EcdsaP256,
+                (InteropAlpn)random.Next(3),
+                random.Next(2) == 1,
+                group == InteropGroup.P256);
+        }
+
+        return new InteropCase(
+            InteropRole.ManagedServer,
+            (InteropCipher)random.Next(3),
+            (InteropGroup)random.Next(4),
+            (InteropCert)random.Next(3),
+            (InteropAlpn)random.Next(3),
+            random.Next(2) == 1,
+            random.Next(2) == 1);
+    }
+
+    private static int Positive(string? text, int fallback) => int.TryParse(text, out int value) && value > 0 ? value : fallback;
 
     private static async Task Exchange(InteropCase row, int payloadLength) => await Exchange(row, payloadLength, TlsAlgorithmPolicy.Default);
 

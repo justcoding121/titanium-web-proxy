@@ -1253,9 +1253,9 @@ public sealed class TlsStream : Stream
             }
         }
 
-        if (output.Bytes.Length > 0)
+        if (_engine!.LastLocalAlert != 0)
         {
-            return new IOException("The handshake failed.", new TlsAlertException(output.Bytes[^1], sent: true));
+            return new IOException("The handshake failed.", new TlsAlertException(_engine.LastLocalAlert, sent: true));
         }
 
         return new IOException("The handshake failed.");
