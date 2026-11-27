@@ -185,6 +185,7 @@ internal sealed class QuicLossRecovery
         if (EarliestLoss() is int space)
         {
             DeclareLost(space, now);
+            AddFinalFrame(space);
             Arm(now);
             return;
         }
@@ -203,6 +204,7 @@ internal sealed class QuicLossRecovery
             }
 
             Pending.Add(new QuicRetransmit { Kind = packet.Kind, Payload = packet.Payload });
+            AddFinalFrame(probe);
             _lastAckEliciting[probe] = now;
         }
 
@@ -492,6 +494,43 @@ internal sealed class QuicLossRecovery
         kind = packet.Kind;
         payload = packet.Payload;
         return true;
+    }
+
+    private void AddFinalFrame(int space)
+    {
+        if (Newest(space) is not Flight newest || !IsFinalStream(newest.Payload))
+        {
+            return;
+        }
+
+        if (Oldest(space) is Flight oldest && oldest.Number == newest.Number)
+        {
+            return;
+        }
+
+        Pending.Add(new QuicRetransmit { Kind = newest.Kind, Payload = newest.Payload });
+    }
+
+    private static bool IsFinalStream(byte[] payload) =>
+        payload.Length > 0 && (payload[0] & 0xF8) == 0x08 && (payload[0] & 0x01) != 0;
+
+    private Flight? Newest(int space)
+    {
+        Flight? newest = null;
+        foreach (Flight packet in _flight[space])
+        {
+            if (packet.Pmtu)
+            {
+                continue;
+            }
+
+            if (newest is null || packet.Number > newest.Value.Number)
+            {
+                newest = packet;
+            }
+        }
+
+        return newest;
     }
 
     private Flight? Oldest(int space)
