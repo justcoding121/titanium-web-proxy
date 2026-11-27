@@ -17,12 +17,11 @@ internal sealed class HybridKeyExchange : IKeyExchangeGroup
     internal const int ServerShareLength = CiphertextLength + 32;
     internal const int SharedLength = KemSecretLength + 32;
 
-    public HybridKeyExchange()
+    private readonly IMlKem768 _kem;
+
+    public HybridKeyExchange(bool forceManaged = false)
     {
-        if (!MLKem.IsSupported)
-        {
-            throw new PlatformNotSupportedException("ML-KEM-768 is not available on this runtime.");
-        }
+        _kem = MlKem768.Create(forceManaged);
     }
 
     public NamedGroup Group => NamedGroup.X25519MlKem768;
@@ -34,7 +33,7 @@ internal sealed class HybridKeyExchange : IKeyExchangeGroup
     public IPrivateKeyShare GenerateKeyShare(IEntropySource entropy)
     {
         ArgumentNullException.ThrowIfNull(entropy);
-        return new HybridPrivateShare(entropy);
+        return new HybridPrivateShare(_kem, entropy);
     }
 
     public bool TryEncapsulate(ReadOnlySpan<byte> clientShare, IEntropySource entropy, Span<byte> serverShare, Span<byte> secret, out int serverWritten, out int secretWritten)
@@ -47,35 +46,26 @@ internal sealed class HybridKeyExchange : IKeyExchangeGroup
             return false;
         }
 
-        MLKem kem;
+        Span<byte> scalar = stackalloc byte[32];
+        entropy.Fill(scalar);
         try
         {
-            kem = MLKem.ImportEncapsulationKey(MLKemAlgorithm.MLKem768, clientShare[..EncapsulationKeyLength]);
-        }
-        catch (CryptographicException)
-        {
-            return false;
-        }
+            if (!_kem.TryEncapsulate(clientShare[..EncapsulationKeyLength], serverShare[..CiphertextLength], secret[..KemSecretLength]))
+            {
+                return false;
+            }
 
-        using (kem)
+            X25519.PublicKey(scalar, serverShare.Slice(CiphertextLength, 32));
+            if (!X25519.TryAgree(scalar, clientShare.Slice(EncapsulationKeyLength, 32), secret.Slice(KemSecretLength, 32)))
+            {
+                CryptographicOperations.ZeroMemory(secret[..SharedLength]);
+                CryptographicOperations.ZeroMemory(serverShare[..ServerShareLength]);
+                return false;
+            }
+        }
+        finally
         {
-            Span<byte> scalar = stackalloc byte[32];
-            entropy.Fill(scalar);
-            try
-            {
-                kem.Encapsulate(serverShare[..CiphertextLength], secret[..KemSecretLength]);
-                X25519.PublicKey(scalar, serverShare.Slice(CiphertextLength, 32));
-                if (!X25519.TryAgree(scalar, clientShare.Slice(EncapsulationKeyLength, 32), secret.Slice(KemSecretLength, 32)))
-                {
-                    CryptographicOperations.ZeroMemory(secret[..SharedLength]);
-                    CryptographicOperations.ZeroMemory(serverShare[..ServerShareLength]);
-                    return false;
-                }
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(scalar);
-            }
+            CryptographicOperations.ZeroMemory(scalar);
         }
 
         serverWritten = ServerShareLength;
@@ -85,27 +75,29 @@ internal sealed class HybridKeyExchange : IKeyExchangeGroup
 
     private sealed class HybridPrivateShare : IPrivateKeyShare
     {
+        private readonly IMlKem768 _kem;
         private readonly SecretBuffer _scalar = new(32);
         private readonly byte[] _public = new byte[ClientShareLength];
-        private MLKem? _kem;
+        private readonly byte[] _decapsulation = new byte[ManagedMlKem768.DecapsulationKeyLength];
+        private bool _disposed;
 
-        internal HybridPrivateShare(IEntropySource entropy)
+        internal HybridPrivateShare(IMlKem768 kem, IEntropySource entropy)
         {
-            _kem = MLKem.GenerateKey(MLKemAlgorithm.MLKem768);
-            _kem.ExportEncapsulationKey(_public.AsSpan(0, EncapsulationKeyLength));
+            _kem = kem;
+            _kem.GenerateKeyPair(_public.AsSpan(0, EncapsulationKeyLength), _decapsulation);
             entropy.Fill(_scalar.Span);
             X25519.PublicKey(_scalar.Span, _public.AsSpan(EncapsulationKeyLength, 32));
         }
 
         public void WritePublicKey(Span<byte> destination)
         {
-            ObjectDisposedException.ThrowIf(_kem is null, this);
+            ObjectDisposedException.ThrowIf(_disposed, this);
             _public.CopyTo(destination);
         }
 
         public bool TryComputeSharedSecret(ReadOnlySpan<byte> peerShare, Span<byte> secret, out int written)
         {
-            ObjectDisposedException.ThrowIf(_kem is null, this);
+            ObjectDisposedException.ThrowIf(_disposed, this);
             written = 0;
             if (peerShare.Length != ServerShareLength || secret.Length < SharedLength)
             {
@@ -116,7 +108,10 @@ internal sealed class HybridKeyExchange : IKeyExchangeGroup
             _scalar.Span.CopyTo(scalar);
             try
             {
-                _kem.Decapsulate(peerShare[..CiphertextLength], secret[..KemSecretLength]);
+                if (!_kem.TryDecapsulate(_decapsulation, peerShare[..CiphertextLength], secret[..KemSecretLength]))
+                {
+                    return false;
+                }
                 if (!X25519.TryAgree(scalar, peerShare.Slice(CiphertextLength, 32), secret.Slice(KemSecretLength, 32)))
                 {
                     CryptographicOperations.ZeroMemory(secret[..SharedLength]);
@@ -139,10 +134,14 @@ internal sealed class HybridKeyExchange : IKeyExchangeGroup
 
         public void Dispose()
         {
-            MLKem? kem = _kem;
-            _kem = null;
-            kem?.Dispose();
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
             _scalar.Dispose();
+            CryptographicOperations.ZeroMemory(_decapsulation);
             CryptographicOperations.ZeroMemory(_public);
         }
     }

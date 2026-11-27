@@ -34,7 +34,7 @@ Chrome 158 captures (see `SPIKES.md`) fix the cipher list, the group list, a 32-
 
 ## Key exchange
 
-X25519 is a managed 51-bit-limb ladder. Windows can do `curve25519` through `ECDiffieHellman`; macOS and Linux cannot (`PlatformNotSupportedException` in S1). The managed ladder stays the portable implementation. `IKeyExchangeGroup` can call the platform later where it exists. X25519MLKEM768 is the ML-KEM-768 encapsulation key or ciphertext followed by a fresh X25519 public key, and the shared secret is the ML-KEM secret followed by the X25519 secret. ML-KEM and SHA-3 are present on Windows and Linux and absent on macOS, so the managed ML-KEM and Keccak fallbacks are required, not optional.
+X25519 is a managed 51-bit-limb ladder. Windows can do `curve25519` through `ECDiffieHellman`; macOS and Linux cannot (`PlatformNotSupportedException` in S1). The managed ladder stays the portable implementation. `IKeyExchangeGroup` can call the platform later where it exists. X25519MLKEM768 is the ML-KEM-768 encapsulation key or ciphertext followed by a fresh X25519 public key, and the shared secret is the ML-KEM secret followed by the X25519 secret. ML-KEM and SHA-3 are present on Windows and Linux and absent on macOS. `MlKem768.Create` uses the platform when `MLKem.IsSupported` is true and `ManagedMlKem768` otherwise. The managed path always hashes with `ManagedKeccak`, so it does not depend on platform SHA-3.
 
 ## What is not decided here
 
