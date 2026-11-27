@@ -27,3 +27,7 @@ Frames follow RFC 9000 section 12.4 and section 19, plus the RFC 9221 DATAGRAM t
 ## T2.7
 
 Transport parameters follow RFC 9000 section 18, plus `max_datagram_frame_size` (0x20) and `grease_quic_bit` (0x2ab2). A client list and a server list, including a preferred address, round-trip. `initial_source_connection_id` is required from both sides. A server must send `original_destination_connection_id`, and `retry_source_connection_id` only after a Retry. A duplicate is a transport-parameter error. An identifier of the form 31 * N + 27 is ignored.
+
+## T2.8
+
+The core is sans-IO. `HandleDatagram`, `PollTransmit`, `NextTimeout`, and `HandleTimeout` take a time and a datagram. There is no socket and no timer in the core. A datagram whose destination connection ID is not already owned does not allocate a connection. Before the path is validated, bytes sent on that path stay at or below three times the bytes received, including a datagram that is attributed and then discarded. A different path has its own budget. `HandleTimeout` fires the armed deadline with no socket. The one-second deadline is a stand-in until loss recovery supplies the real one.
