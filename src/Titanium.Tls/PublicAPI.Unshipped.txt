@@ -26,7 +26,17 @@ Titanium.Tls.ClientHelloContext.SessionTicket.get -> byte[]?
 Titanium.Tls.ClientHelloContext.SessionTicket.set -> void
 Titanium.Tls.TlsFingerprintFidelity
 Titanium.Tls.TlsFingerprintFidelity.Full = 0 -> Titanium.Tls.TlsFingerprintFidelity
+Titanium.Tls.TlsFingerprintFidelity.ReducedFipsPolicy = 2 -> Titanium.Tls.TlsFingerprintFidelity
 Titanium.Tls.TlsFingerprintFidelity.ReducedNoPostQuantum = 1 -> Titanium.Tls.TlsFingerprintFidelity
+Titanium.Tls.TlsAlgorithmPolicy
+Titanium.Tls.TlsAlgorithmPolicy.Default = 0 -> Titanium.Tls.TlsAlgorithmPolicy
+Titanium.Tls.TlsAlgorithmPolicy.FipsApprovedOnly = 1 -> Titanium.Tls.TlsAlgorithmPolicy
+static Titanium.Tls.FipsEnvironment.IsEnabled() -> bool
+Titanium.Tls.FipsEnvironment
+Titanium.Tls.TlsStreamOptions.AlgorithmPolicy.get -> Titanium.Tls.TlsAlgorithmPolicy
+Titanium.Tls.TlsStreamOptions.AlgorithmPolicy.set -> void
+Titanium.Tls.TlsStreamOptions.AllowManagedStackUnderFips.get -> bool
+Titanium.Tls.TlsStreamOptions.AllowManagedStackUnderFips.set -> void
 Titanium.Tls.TlsFingerprintProfile
 Titanium.Tls.TlsFingerprintProfile.TlsFingerprintProfile() -> void
 Titanium.Tls.TlsFingerprintProfiles

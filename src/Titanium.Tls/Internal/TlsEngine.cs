@@ -129,6 +129,21 @@ internal sealed partial class TlsEngine : IDisposable
     internal bool SendKeyUpdate;
 
     internal byte LastLocalAlert { get; private set; }
+
+    private TlsAlgorithmPolicy _algorithmPolicy;
+
+    internal TlsAlgorithmPolicy AlgorithmPolicy
+    {
+        get => _algorithmPolicy;
+        set
+        {
+            _algorithmPolicy = value;
+            if (value == TlsAlgorithmPolicy.FipsApprovedOnly && _shareGroup == (ushort)NamedGroup.X25519)
+            {
+                _shareGroup = (ushort)NamedGroup.Secp256r1;
+            }
+        }
+    }
     private readonly IEntropySource _entropy;
     private readonly string? _serverName;
     private readonly ITlsSessionCache? _cache;

@@ -9,7 +9,10 @@ public enum TlsFingerprintFidelity
     Full,
 
     /// <summary>The profile omits the post-quantum hybrid group.</summary>
-    ReducedNoPostQuantum,
+    ReducedNoPostQuantum = 1,
+
+    /// <summary>The profile keeps AES-GCM, P-256, P-384, and the approved signature schemes.</summary>
+    ReducedFipsPolicy = 2,
 }
 
 internal static class TlsFingerprint

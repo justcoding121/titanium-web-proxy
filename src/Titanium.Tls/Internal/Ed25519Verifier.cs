@@ -40,7 +40,7 @@ internal static class Ed25519Verifier
         ReadOnlySpan<byte> publicKey,
         ReadOnlySpan<byte> message,
         ReadOnlySpan<byte> signature,
-        TlsAlgorithmPolicy policy = TlsAlgorithmPolicy.Unrestricted)
+        TlsAlgorithmPolicy policy = TlsAlgorithmPolicy.Default)
     {
         if (policy == TlsAlgorithmPolicy.FipsApprovedOnly)
         {
@@ -96,7 +96,7 @@ internal static class Ed25519Verifier
         ReadOnlySpan<byte> publicKey,
         ReadOnlySpan<byte> message,
         ReadOnlySpan<byte> signature,
-        TlsAlgorithmPolicy policy = TlsAlgorithmPolicy.Unrestricted)
+        TlsAlgorithmPolicy policy = TlsAlgorithmPolicy.Default)
     {
         return scheme == SignatureScheme.Ed25519 && Verify(publicKey, message, signature, policy);
     }

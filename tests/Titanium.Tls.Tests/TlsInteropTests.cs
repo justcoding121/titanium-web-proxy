@@ -168,7 +168,19 @@ public sealed class TlsInteropTests
         }
     }
 
-    private static async Task Exchange(InteropCase row, int payloadLength)
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task FipsPolicySpeaksTls13WithOpenSsl()
+    {
+        var client = new InteropCase(InteropRole.ManagedClient, InteropCipher.Aes128, InteropGroup.P256, InteropCert.EcdsaP256, InteropAlpn.None, false, false);
+        var server = new InteropCase(InteropRole.ManagedServer, InteropCipher.Aes128, InteropGroup.P256, InteropCert.EcdsaP256, InteropAlpn.None, false, false);
+        await Exchange(client, 32, TlsAlgorithmPolicy.FipsApprovedOnly);
+        await Exchange(server, 32, TlsAlgorithmPolicy.FipsApprovedOnly);
+    }
+
+    private static async Task Exchange(InteropCase row, int payloadLength) => await Exchange(row, payloadLength, TlsAlgorithmPolicy.Default);
+
+    private static async Task Exchange(InteropCase row, int payloadLength, TlsAlgorithmPolicy policy)
     {
         if (!OpenSslOracle.Require(new Version(3, 5)))
         {
@@ -200,11 +212,11 @@ public sealed class TlsInteropTests
             payload.AsSpan().Fill(0x5A);
             if (row.Role == InteropRole.ManagedClient)
             {
-                await ClientAgainstOpenSsl(openssl, row, server.Certificate, serverCert, serverKey, client?.Certificate, clientCert, payload);
+                await ClientAgainstOpenSsl(openssl, row, server.Certificate, serverCert, serverKey, client?.Certificate, clientCert, payload, policy);
             }
             else
             {
-                await ServerAgainstOpenSsl(openssl, row, server.Certificate, client?.Certificate, clientCert, clientKey, payload);
+                await ServerAgainstOpenSsl(openssl, row, server.Certificate, client?.Certificate, clientCert, clientKey, payload, policy);
             }
         }
         finally
@@ -221,7 +233,7 @@ public sealed class TlsInteropTests
         }
     }
 
-    private static async Task ClientAgainstOpenSsl(string openssl, InteropCase row, X509Certificate2 serverCertificate, string serverCert, string serverKey, X509Certificate2? clientCertificate, string? clientCert, byte[] payload)
+    private static async Task ClientAgainstOpenSsl(string openssl, InteropCase row, X509Certificate2 serverCertificate, string serverCert, string serverKey, X509Certificate2? clientCertificate, string? clientCert, byte[] payload, TlsAlgorithmPolicy policy = TlsAlgorithmPolicy.Default)
     {
         _ = serverCertificate;
         int port = FreePort();
@@ -240,7 +252,7 @@ public sealed class TlsInteropTests
         using Peer peer = Peer.Start(openssl, args.ToString(), drainOutput: false);
         using var tcp = new TcpClient();
         await Connect(tcp, port, peer);
-        await using var stream = new TlsStream(tcp.GetStream());
+        await using var stream = new TlsStream(tcp.GetStream(), new TlsStreamOptions { AlgorithmPolicy = policy });
         await stream.AuthenticateAsClientAsync(ClientOptions(AlpnName(row.Alpn), clientCertificate));
         if (AlpnName(row.Alpn) is string selected)
         {
@@ -261,7 +273,7 @@ public sealed class TlsInteropTests
         CollectionAssert.AreEqual(payload, returned, peer.ErrorText());
     }
 
-    private static async Task ServerAgainstOpenSsl(string openssl, InteropCase row, X509Certificate2 serverCertificate, X509Certificate2? clientCertificate, string? clientCert, string? clientKey, byte[] payload)
+    private static async Task ServerAgainstOpenSsl(string openssl, InteropCase row, X509Certificate2 serverCertificate, X509Certificate2? clientCertificate, string? clientCert, string? clientKey, byte[] payload, TlsAlgorithmPolicy policy = TlsAlgorithmPolicy.Default)
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -283,6 +295,7 @@ public sealed class TlsInteropTests
             Groups = ServerGroups(row),
             CipherSuites = [CipherId(row.Cipher)],
             RequestClientCertificate = row.ClientAuthentication,
+            AlgorithmPolicy = policy,
         };
         if (clientCertificate is not null)
         {

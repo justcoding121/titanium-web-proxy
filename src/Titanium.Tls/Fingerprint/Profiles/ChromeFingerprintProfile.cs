@@ -39,7 +39,23 @@ public sealed class ChromeFingerprintProfile : TlsFingerprintProfile
     public override string Version => "158.0.8127.89";
 
     /// <inheritdoc />
-    public override TlsFingerprintFidelity Fidelity => _forced ?? TlsFingerprint.Current;
+    public override TlsFingerprintFidelity Fidelity
+    {
+        get
+        {
+            if (_forced is TlsFingerprintFidelity forced)
+            {
+                return forced;
+            }
+
+            if (FipsEnvironment.SystemIsEnabled())
+            {
+                return TlsFingerprintFidelity.ReducedFipsPolicy;
+            }
+
+            return TlsFingerprint.Current;
+        }
+    }
 
     /// <inheritdoc />
     public override void BuildClientHello(ClientHelloContext context, IBufferWriter<byte> destination)

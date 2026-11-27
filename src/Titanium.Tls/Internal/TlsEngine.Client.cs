@@ -297,7 +297,7 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (hasGroup && group != (ushort)NamedGroup.X25519 && group != (ushort)NamedGroup.Secp256r1)
+        if (hasGroup && !ClientOfferedGroup(group))
         {
             Fail(output, AlertIllegalParameter);
             return;
@@ -377,13 +377,13 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (scheme != 0x0403 || _leaf is null)
+        if (_leaf is null || !ClientAcceptsScheme(scheme))
         {
             Fail(output, AlertIllegalParameter);
             return;
         }
 
-        if (!VerifyServerSignature(signature))
+        if (!VerifyServerSignature(scheme, signature))
         {
             Fail(output, AlertDecryptError);
             return;
@@ -584,8 +584,14 @@ internal sealed partial class TlsEngine
         writer.TryWriteVector8([0]);
         int extensionsAt = writer.Written;
         writer.TryReserveLength(2, out int extensionsLengthAt);
-        WriteOffered(ref writer, ExtensionType.SupportedGroups, [0x00, 0x04, 0x00, 0x1D, 0x00, 0x17]);
-        WriteOffered(ref writer, ExtensionType.SignatureAlgorithms, [0x00, 0x02, 0x04, 0x03]);
+        ReadOnlySpan<byte> groups = _algorithmPolicy == TlsAlgorithmPolicy.FipsApprovedOnly
+            ? [0x00, 0x04, 0x00, 0x17, 0x00, 0x18]
+            : [0x00, 0x04, 0x00, 0x1D, 0x00, 0x17];
+        ReadOnlySpan<byte> signatures = _algorithmPolicy == TlsAlgorithmPolicy.FipsApprovedOnly
+            ? [0x00, 0x0A, 0x04, 0x03, 0x05, 0x03, 0x08, 0x04, 0x08, 0x05, 0x08, 0x06]
+            : [0x00, 0x02, 0x04, 0x03];
+        WriteOffered(ref writer, ExtensionType.SupportedGroups, groups);
+        WriteOffered(ref writer, ExtensionType.SignatureAlgorithms, signatures);
         WriteOffered(ref writer, ExtensionType.SupportedVersions, [0x02, 0x03, 0x04]);
         byte[] shareBytes = share[.._publicLength].ToArray();
         WriteKeyShare(ref writer, shareBytes);
@@ -749,7 +755,7 @@ internal sealed partial class TlsEngine
             return false;
         }
 
-        secret = new byte[32];
+        secret = new byte[KeyExchangeGroups.Create((NamedGroup)_shareGroup).SharedSecretLength];
         if (!_share!.TryComputeSharedSecret(key, secret, out int written) || written != secret.Length)
         {
             CryptographicOperations.ZeroMemory(secret);
@@ -760,7 +766,7 @@ internal sealed partial class TlsEngine
         return true;
     }
 
-    private bool VerifyServerSignature(ReadOnlySpan<byte> signature)
+    private bool VerifyServerSignature(ushort scheme, ReadOnlySpan<byte> signature)
     {
         using X509Certificate2 certificate = X509CertificateLoader.LoadCertificate(_leaf!);
         Span<byte> hash = stackalloc byte[32];
@@ -769,7 +775,27 @@ internal sealed partial class TlsEngine
         content[..64].Fill(0x20);
         "TLS 1.3, server CertificateVerify"u8.CopyTo(content[64..]);
         hash.CopyTo(content[(64 + 33 + 1)..]);
-        return TlsCertificateVerifier.Verify(certificate, 0x0403, content, signature);
+        return TlsCertificateVerifier.Verify(certificate, scheme, content, signature);
+    }
+
+    private bool ClientOfferedGroup(ushort group)
+    {
+        if (_algorithmPolicy == TlsAlgorithmPolicy.FipsApprovedOnly)
+        {
+            return group is (ushort)NamedGroup.Secp256r1 or (ushort)NamedGroup.Secp384r1;
+        }
+
+        return group is (ushort)NamedGroup.X25519 or (ushort)NamedGroup.Secp256r1;
+    }
+
+    private bool ClientAcceptsScheme(ushort scheme)
+    {
+        if (_algorithmPolicy == TlsAlgorithmPolicy.FipsApprovedOnly)
+        {
+            return TlsAlgorithmSet.AllowsSignature(_algorithmPolicy, scheme);
+        }
+
+        return scheme == 0x0403;
     }
 
     private bool TryCopyLeaf(ReadOnlySpan<byte> list)

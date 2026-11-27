@@ -14,6 +14,15 @@ public sealed class TlsStreamOptions
     /// <summary>Optional NSS key log. Leave null except while debugging.</summary>
     public ITlsKeyLogSink? KeyLog { get; set; }
 
+    /// <summary>Algorithms the handshake may offer or select. <see cref="TlsAlgorithmPolicy.Default"/> keeps the ordinary set.</summary>
+    public TlsAlgorithmPolicy AlgorithmPolicy { get; set; }
+
+    /// <summary>
+    /// Allows authentication while FIPS mode is on. Without it, and without <c>TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1</c>,
+    /// authentication throws <see cref="System.NotSupportedException"/>.
+    /// </summary>
+    public bool AllowManagedStackUnderFips { get; set; }
+
     internal ITlsSessionCache? SessionCache { get; set; }
 
     internal IEntropySource? Entropy { get; set; }

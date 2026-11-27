@@ -564,7 +564,7 @@ internal sealed partial class TlsEngine
                 scheme = 0x0503;
             }
 
-            if (scheme == 0 || !Contains(offered, scheme))
+            if (scheme == 0 || !Contains(offered, scheme) || !TlsAlgorithmSet.AllowsSignature(_algorithmPolicy, scheme))
             {
                 alert = AlertHandshakeFailure;
                 return false;
@@ -576,7 +576,7 @@ internal sealed partial class TlsEngine
         }
 
         RSA? rsa = CertificateKeys.Rsa(leaf);
-        if (rsa is null || rsa.KeySize < 2048 || !Contains(offered, 0x0804))
+        if (rsa is null || rsa.KeySize < 2048 || !TlsAlgorithmSet.AllowsRsa(_algorithmPolicy, rsa.KeySize) || !Contains(offered, 0x0804))
         {
             alert = AlertHandshakeFailure;
             return false;
@@ -699,7 +699,7 @@ internal sealed partial class TlsEngine
         {
             foreach (ushort candidate in supported)
             {
-                if (ContainsCipher(offered, candidate) && Suite(candidate, out hash, out aead, out keyLength))
+                if (ContainsCipher(offered, candidate) && TlsAlgorithmSet.AllowsCipher(_algorithmPolicy, candidate) && Suite(candidate, out hash, out aead, out keyLength))
                 {
                     cipher = candidate;
                     return true;
@@ -712,7 +712,7 @@ internal sealed partial class TlsEngine
         for (int i = 0; i + 1 < offered.Length; i += 2)
         {
             ushort candidate = (ushort)((offered[i] << 8) | offered[i + 1]);
-            if (Contains(supported, candidate) && Suite(candidate, out hash, out aead, out keyLength))
+            if (Contains(supported, candidate) && TlsAlgorithmSet.AllowsCipher(_algorithmPolicy, candidate) && Suite(candidate, out hash, out aead, out keyLength))
             {
                 cipher = candidate;
                 return true;
@@ -729,6 +729,11 @@ internal sealed partial class TlsEngine
         NamedGroup[] preference = _selection!.Groups ?? DefaultGroups;
         foreach (NamedGroup candidate in preference)
         {
+            if (!TlsAlgorithmSet.AllowsGroup(_algorithmPolicy, (ushort)candidate))
+            {
+                continue;
+            }
+
             if (TryKeyShare(hello.Extensions, (ushort)candidate, out byte[]? found) && found is not null && Advertised(hello.Extensions, (ushort)candidate))
             {
                 group = (ushort)candidate;
@@ -744,6 +749,11 @@ internal sealed partial class TlsEngine
 
         foreach (NamedGroup candidate in preference)
         {
+            if (!TlsAlgorithmSet.AllowsGroup(_algorithmPolicy, (ushort)candidate))
+            {
+                continue;
+            }
+
             if (Advertised(hello.Extensions, (ushort)candidate))
             {
                 group = (ushort)candidate;

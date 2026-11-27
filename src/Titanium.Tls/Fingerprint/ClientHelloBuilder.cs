@@ -321,6 +321,13 @@ internal static class ClientHelloBuilder
                 continue;
             }
 
+            if (template.Fidelity == TlsFingerprintFidelity.ReducedFipsPolicy &&
+                !slot.Grease &&
+                !TlsAlgorithmSet.AllowsGroup(TlsAlgorithmPolicy.FipsApprovedOnly, slot.Group))
+            {
+                continue;
+            }
+
             byte[] key;
             if (slot.Grease)
             {
@@ -454,12 +461,19 @@ internal static class ClientHelloBuilder
             throw new TlsProtocolViolation("The ClientHello buffer is short.");
         }
 
-        var ciphers = new byte[template.Ciphers.Length * 2];
-        for (int i = 0; i < template.Ciphers.Length; i++)
+        int cipherCount = IncludedCount(template.Ciphers, template.Fidelity);
+        var ciphers = new byte[cipherCount * 2];
+        int cipherAt = 0;
+        foreach (AdvertisedCode code in template.Ciphers)
         {
-            ushort value = template.Ciphers[i].Grease ? grease.Cipher : template.Ciphers[i].Value;
-            ciphers[i * 2] = (byte)(value >> 8);
-            ciphers[(i * 2) + 1] = (byte)value;
+            if (!Include(code, template.Fidelity))
+            {
+                continue;
+            }
+
+            ushort value = code.Grease ? grease.Cipher : code.Value;
+            ciphers[cipherAt++] = (byte)(value >> 8);
+            ciphers[cipherAt++] = (byte)value;
         }
 
         if (!writer.TryWriteVector16(ciphers) || !writer.TryWriteVector8([0]))
@@ -496,7 +510,7 @@ internal static class ClientHelloBuilder
             extensions += 4 + extension.Body.Length;
         }
 
-        return 4 + 2 + 32 + 1 + template.SessionIdLength + 2 + (template.Ciphers.Length * 2) + 2 + 2 + extensions;
+        return 4 + 2 + 32 + 1 + template.SessionIdLength + 2 + (IncludedCount(template.Ciphers, template.Fidelity) * 2) + 2 + 2 + extensions;
     }
 
     private static void WriteRecord(ReadOnlySpan<byte> handshake, ushort version, IBufferWriter<byte> destination)
@@ -595,8 +609,27 @@ internal static class ClientHelloBuilder
         return plan;
     }
 
+    private static int IncludedCount(AdvertisedCode[] codes, TlsFingerprintFidelity fidelity)
+    {
+        int count = 0;
+        foreach (AdvertisedCode code in codes)
+        {
+            if (Include(code, fidelity))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     private static bool Include(AdvertisedCode code, TlsFingerprintFidelity fidelity)
     {
+        if (fidelity == TlsFingerprintFidelity.ReducedFipsPolicy)
+        {
+            return code.Grease || TlsAlgorithmSet.IsApprovedOffer(code.Value);
+        }
+
         return fidelity != TlsFingerprintFidelity.ReducedNoPostQuantum || code.Value != 0x11EC;
     }
 

@@ -111,8 +111,11 @@ public sealed class TlsStream : Stream
     /// <summary>The name passed to client authentication.</summary>
     public string TargetHostName => _clientOptions?.TargetHost ?? string.Empty;
 
-    /// <summary>The fingerprint profile's fidelity, or the built-in hello's fidelity when no profile is set.</summary>
-    public TlsFingerprintFidelity FingerprintFidelity => _options.FingerprintProfile?.Fidelity ?? TlsFingerprintFidelity.ReducedNoPostQuantum;
+    /// <summary>The fingerprint profile's fidelity, or the built-in hello's fidelity when no profile is set. FIPS policy reports <see cref="TlsFingerprintFidelity.ReducedFipsPolicy"/>.</summary>
+    public TlsFingerprintFidelity FingerprintFidelity =>
+        EffectivePolicy == TlsAlgorithmPolicy.FipsApprovedOnly
+            ? TlsFingerprintFidelity.ReducedFipsPolicy
+            : _options.FingerprintProfile?.Fidelity ?? TlsFingerprintFidelity.ReducedNoPostQuantum;
 
     internal bool AcceptedResumption => _engine?.AcceptedResumption == true;
 
@@ -540,6 +543,7 @@ public sealed class TlsStream : Stream
             throw new InvalidOperationException("The stream is already authenticated.");
         }
 
+        TlsAlgorithmPolicy policy = RequirePolicy();
         RequireTls13(options.EnabledSslProtocols);
         if (options.CipherSuitesPolicy is not null && !AllowsAes128(options.CipherSuitesPolicy))
         {
@@ -553,6 +557,7 @@ public sealed class TlsStream : Stream
             LocalCertificate = FirstCertificate(options.ClientCertificates),
             ApplicationProtocols = ProtocolNames(options.ApplicationProtocols),
             OfferStatusRequest = true,
+            AlgorithmPolicy = policy,
         };
     }
 
@@ -563,10 +568,30 @@ public sealed class TlsStream : Stream
             throw new InvalidOperationException("The stream is already authenticated.");
         }
 
+        TlsAlgorithmPolicy policy = RequirePolicy();
         RequireTls13(options.EnabledSslProtocols);
         _serverOptions = options;
         _server = true;
-        _engine = new TlsEngine(TlsRole.Server, entropy: _options.Entropy, cache: _options.SessionCache);
+        _engine = new TlsEngine(TlsRole.Server, entropy: _options.Entropy, cache: _options.SessionCache)
+        {
+            AlgorithmPolicy = policy,
+        };
+    }
+
+    private TlsAlgorithmPolicy EffectivePolicy =>
+        FipsEnvironment.IsEnabled() || _options.AlgorithmPolicy == TlsAlgorithmPolicy.FipsApprovedOnly
+            ? TlsAlgorithmPolicy.FipsApprovedOnly
+            : TlsAlgorithmPolicy.Default;
+
+    private TlsAlgorithmPolicy RequirePolicy()
+    {
+        if (FipsEnvironment.IsEnabled() && !_options.AllowManagedStackUnderFips && !FipsEnvironment.OverrideIsSet())
+        {
+            throw new NotSupportedException(
+                "The managed TLS stack is disabled while FIPS mode is on. Set TlsStreamOptions.AllowManagedStackUnderFips or TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1.");
+        }
+
+        return EffectivePolicy;
     }
 
     private void DriveSync()
