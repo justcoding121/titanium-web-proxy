@@ -171,6 +171,48 @@ public sealed class QuicHandshakeEdgeTests
         CollectionAssert.AreEqual(payload, server.ReceivedStream);
     }
 
+    [TestMethod]
+    public void ReservedHeaderBitsCloseTheConnection()
+    {
+        Assert.IsFalse(QuicPacket.ReservedBitsSet(0xC3));
+        Assert.IsTrue(QuicPacket.ReservedBitsSet(0xCC));
+        Assert.IsFalse(QuicPacket.ReservedBitsSet(0x40));
+        Assert.IsTrue(QuicPacket.ReservedBitsSet(0x58));
+
+        using X509Certificate2 certificate = Certificate();
+        byte[] serverId = QuicConnectionSession.NewConnectionId();
+        byte[] clientId = QuicConnectionSession.NewConnectionId();
+        using var server = new QuicConnectionCore();
+        server.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        byte[] packet = InitialWithReservedBits(serverId, clientId);
+        var path = new PathInfo([10, 0, 0, 1], 443, [10, 0, 0, 2], 9);
+        server.HandleDatagram(Now, packet, path);
+        Assert.IsTrue(server.IsClosed);
+        Assert.AreEqual(QuicFrameReader.ProtocolViolation, server.CloseError);
+    }
+
+    private static byte[] InitialWithReservedBits(byte[] serverId, byte[] clientId)
+    {
+        const int headerLength = 26;
+        byte[] plaintext = new byte[32];
+        byte[] packet = new byte[headerLength + plaintext.Length + 16];
+        packet[0] = 0xCC;
+        packet[1] = 0;
+        packet[2] = 0;
+        packet[3] = 0;
+        packet[4] = 1;
+        packet[5] = (byte)serverId.Length;
+        serverId.CopyTo(packet.AsSpan(6));
+        packet[14] = (byte)clientId.Length;
+        clientId.CopyTo(packet.AsSpan(15));
+        packet[23] = 0;
+        packet[24] = (byte)(1 + plaintext.Length + 16);
+        using QuicPacketProtector protector = QuicPacketProtector.FromInitial(serverId, client: true);
+        int written = protector.Seal(packet, headerLength, packetNumber: 0, plaintext);
+        Assert.IsTrue(written > 0);
+        return packet[..written];
+    }
+
     private static void Pump(QuicConnectionCore left, QuicConnectionCore right)
     {
         byte[] buffer = new byte[16384];

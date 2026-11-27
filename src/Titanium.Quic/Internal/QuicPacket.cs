@@ -43,6 +43,8 @@ internal ref struct QuicPacket
 
     internal bool FixedBit => (FirstByte & 0x40) != 0;
 
+    internal static bool ReservedBitsSet(byte first) => (first & 0x80) != 0 ? (first & 0x0c) != 0 : (first & 0x18) != 0;
+
     internal int PacketNumberLength => PacketNumber.Length;
 }
 

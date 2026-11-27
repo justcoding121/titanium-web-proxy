@@ -278,6 +278,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 datagram[..packetLength].CopyTo(rented);
                 if (!TryOpen(kind, rented.AsSpan(0, packetLength), packetNumberOffset, plain, out ulong packetNumber, out int plainLength))
                 {
+                    if (_openError != 0)
+                    {
+                        MarkClosed(_openError, send: true);
+                        return;
+                    }
+
                     if (packetLength < datagram.Length)
                     {
                         datagram = datagram[packetLength..];
@@ -450,12 +456,23 @@ internal sealed partial class QuicConnectionCore : IDisposable
         return packetLength <= datagram.Length;
     }
 
+    private ulong _openError;
+
     private bool TryOpen(QuicPacketKind kind, Span<byte> packet, int packetNumberOffset, Span<byte> plaintext, out ulong packetNumber, out int plaintextLength)
     {
+        _openError = 0;
         QuicPacketProtector? protector = Protector(kind, send: false);
         if (protector is null
             || !protector.Open(packet, packetNumberOffset, Largest(kind), out packetNumber, plaintext, out plaintextLength))
         {
+            packetNumber = 0;
+            plaintextLength = 0;
+            return false;
+        }
+
+        if (QuicPacket.ReservedBitsSet(packet[0]))
+        {
+            _openError = QuicFrameReader.ProtocolViolation;
             packetNumber = 0;
             plaintextLength = 0;
             return false;
