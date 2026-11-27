@@ -126,11 +126,12 @@ public class UpdateCommandTests
     {
         var script = CliUpdateApplyHelper.BuildWindowsScript(
             7,
-            @"C:\temp\cli.zip",
-            @"C:\tools\titanium",
-            @"C:\tools\titanium\titanium.exe",
-            "7.0.4",
-            "stable");
+            new CliUpdateApplyHelper.ApplyScriptTarget(
+                @"C:\temp\cli.zip",
+                @"C:\tools\titanium",
+                @"C:\tools\titanium\titanium.exe",
+                "7.0.4",
+                "stable"));
         StringAssert.Contains(script, "ExtractToDirectory");
         Assert.IsFalse(script.Contains("Expand-Archive", StringComparison.Ordinal));
         StringAssert.Contains(script, "7");
@@ -173,14 +174,15 @@ public class UpdateCommandTests
             var donePath = Path.Combine(root, "apply.done");
             var identityPath = Path.Combine(root, "identity", "installed-release.json");
             var script = CliUpdateApplyHelper.BuildWindowsScript(
-                pid: 2147483646,
-                zipPath: zipPath,
-                installDir: installDir,
-                relaunchPath: Path.Combine(installDir, "titanium.exe"),
-                version: "99.0.0-smoke",
-                channel: "beta",
-                donePath: donePath,
-                identityPath: identityPath);
+                2147483646,
+                new CliUpdateApplyHelper.ApplyScriptTarget(
+                    zipPath,
+                    installDir,
+                    Path.Combine(installDir, "titanium.exe"),
+                    "99.0.0-smoke",
+                    "beta",
+                    donePath,
+                    identityPath));
             StringAssert.Contains(script, "'fail '");
             File.WriteAllText(scriptPath, script);
             var ps = Path.Combine(
@@ -236,11 +238,12 @@ public class UpdateCommandTests
     {
         var script = CliUpdateApplyHelper.BuildUnixScript(
             3,
-            "/tmp/cli.zip",
-            "/opt/titanium",
-            "/opt/titanium/titanium",
-            "7.0.4-beta",
-            "beta");
+            new CliUpdateApplyHelper.ApplyScriptTarget(
+                "/tmp/cli.zip",
+                "/opt/titanium",
+                "/opt/titanium/titanium",
+                "7.0.4-beta",
+                "beta"));
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "beta");
         StringAssert.Contains(script, "chmod -R u+w \"$install_dir\"");
@@ -261,11 +264,12 @@ public class UpdateCommandTests
     {
         var script = CliUpdateApplyHelper.BuildUnixScript(
             3,
-            "/tmp/cli.zip",
-            "/opt/titanium",
-            "/opt/titanium/titanium",
-            "8.0.6",
-            "stable",
+            new CliUpdateApplyHelper.ApplyScriptTarget(
+                "/tmp/cli.zip",
+                "/opt/titanium",
+                "/opt/titanium/titanium",
+                "8.0.6",
+                "stable"),
             removeBundledOpenSsl: true);
         var remove = script.IndexOf("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*", StringComparison.Ordinal);
         var chmod = script.IndexOf("chmod -R u+w \"$install_dir\"", StringComparison.Ordinal);
@@ -325,15 +329,15 @@ public class UpdateCommandTests
             var identityPath = Path.Combine(root, "identity", "installed-release.json");
             // pid 1 stays alive on Unix; use a definitely-dead pid so the wait loop exits.
             var script = CliUpdateApplyHelper.BuildUnixScript(
-                pid: 2147483646,
-                zipPath: zipPath,
-                installDir: installDir,
-                relaunchPath: relaunch,
-                version: "99.0.0-smoke",
-                channel: "beta",
-                removeBundledOpenSsl: false,
-                donePath: donePath,
-                identityPath: identityPath);
+                2147483646,
+                new CliUpdateApplyHelper.ApplyScriptTarget(
+                    zipPath,
+                    installDir,
+                    relaunch,
+                    "99.0.0-smoke",
+                    "beta",
+                    donePath,
+                    identityPath));
             File.WriteAllText(scriptPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             RunBash($"chmod +x '{scriptPath.Replace("'", "'\\''", StringComparison.Ordinal)}' && bash '{scriptPath.Replace("'", "'\\''", StringComparison.Ordinal)}'");
 

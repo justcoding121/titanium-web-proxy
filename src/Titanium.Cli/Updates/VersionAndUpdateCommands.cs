@@ -893,7 +893,7 @@ internal static class CliUpdateApplyHelper
             var ps1 = Path.Combine(workDir, "apply-cli-update.ps1");
             File.WriteAllText(
                 ps1,
-                BuildWindowsScript(pid, zipPath, installDir, relaunchPath, version, channel, donePath, identityPath),
+                BuildWindowsScript(pid, new ApplyScriptTarget(zipPath, installDir, relaunchPath, version, channel, donePath, identityPath)),
                 Encoding.UTF8);
             Process.Start(new ProcessStartInfo
             {
@@ -915,14 +915,8 @@ internal static class CliUpdateApplyHelper
             sh,
             BuildUnixScript(
                 pid,
-                zipPath,
-                installDir,
-                relaunchPath,
-                version,
-                channel,
-                OperatingSystem.IsLinux(),
-                donePath,
-                identityPath),
+                new ApplyScriptTarget(zipPath, installDir, relaunchPath, version, channel, donePath, identityPath),
+                OperatingSystem.IsLinux()),
             new UTF8Encoding(false));
         Process.Start(new ProcessStartInfo
         {
@@ -942,16 +936,25 @@ internal static class CliUpdateApplyHelper
             "v1.0",
             "powershell.exe");
 
-    internal static string BuildWindowsScript(
-        int pid,
-        string zipPath,
-        string installDir,
-        string relaunchPath,
-        string version,
-        string channel,
-        string? donePath = null,
-        string? identityPath = null)
+    /// <summary>Paths and identity the detached apply script writes. One argument keeps the builders under Sonar's parameter limit.</summary>
+    internal sealed record ApplyScriptTarget(
+        string ZipPath,
+        string InstallDir,
+        string RelaunchPath,
+        string Version,
+        string Channel,
+        string? DonePath = null,
+        string? IdentityPath = null);
+
+    internal static string BuildWindowsScript(int pid, ApplyScriptTarget target)
     {
+        var zipPath = target.ZipPath;
+        var installDir = target.InstallDir;
+        var relaunchPath = target.RelaunchPath;
+        var version = target.Version;
+        var channel = target.Channel;
+        var donePath = target.DonePath;
+        var identityPath = target.IdentityPath;
         var sb = new StringBuilder();
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
         sb.AppendLine($"$pidToWait = {pid}");
@@ -1067,17 +1070,15 @@ internal static class CliUpdateApplyHelper
         return sb.ToString();
     }
 
-    internal static string BuildUnixScript(
-        int pid,
-        string zipPath,
-        string installDir,
-        string relaunchPath,
-        string version,
-        string channel,
-        bool removeBundledOpenSsl = false,
-        string? donePath = null,
-        string? identityPath = null)
+    internal static string BuildUnixScript(int pid, ApplyScriptTarget target, bool removeBundledOpenSsl = false)
     {
+        var zipPath = target.ZipPath;
+        var installDir = target.InstallDir;
+        var relaunchPath = target.RelaunchPath;
+        var version = target.Version;
+        var channel = target.Channel;
+        var donePath = target.DonePath;
+        var identityPath = target.IdentityPath;
         var sb = new StringBuilder();
         sb.AppendLine("#!/usr/bin/env bash");
         sb.AppendLine("set -euo pipefail");

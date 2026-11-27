@@ -1989,13 +1989,37 @@ internal static class SmokeApp
                     var path = ctx.Request.Url?.AbsolutePath.TrimStart('/') ?? "release-manifest.json";
                     if (string.IsNullOrEmpty(path))
                         path = "release-manifest.json";
-                    var isManifest = path.Equals("release-manifest.json", StringComparison.OrdinalIgnoreCase);
+                    // The feed directory is flat. A request path with a directory
+                    // segment (including "..") must not be combined onto _dir.
+                    var name = Path.GetFileName(path);
+                    if (string.IsNullOrEmpty(name)
+                        || !string.Equals(name, path, StringComparison.Ordinal)
+                        || name is "." or ".."
+                        || name.IndexOfAny(['/', '\\', ':']) >= 0)
+                    {
+                        ctx.Response.StatusCode = 404;
+                        ctx.Response.Close();
+                        continue;
+                    }
+
+                    var root = Path.GetFullPath(_dir);
+                    var file = Path.GetFullPath(Path.Combine(root, name));
+                    var rootPrefix = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (!file.StartsWith(rootPrefix, OperatingSystem.IsWindows()
+                            ? StringComparison.OrdinalIgnoreCase
+                            : StringComparison.Ordinal))
+                    {
+                        ctx.Response.StatusCode = 404;
+                        ctx.Response.Close();
+                        continue;
+                    }
+
+                    var isManifest = name.Equals("release-manifest.json", StringComparison.OrdinalIgnoreCase);
                     if (isManifest)
                         Interlocked.Increment(ref _hits);
                     else
                         Interlocked.Increment(ref _assetHits);
 
-                    var file = Path.Combine(_dir, path);
                     if (File.Exists(file))
                     {
                         var bytes = await File.ReadAllBytesAsync(file);
