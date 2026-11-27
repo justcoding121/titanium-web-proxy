@@ -44,8 +44,8 @@ public sealed class TlsStreamTests
     [TestMethod]
     public async Task TransferMatchesOnBothSides()
     {
-        byte[] outbound = Random(1024 * 1024);
-        byte[] inbound = Random(1024 * 1024);
+        byte[] outbound = Random(10 * 1024 * 1024);
+        byte[] inbound = Random(10 * 1024 * 1024);
         using X509Certificate2 certificate = Certificate();
         (TlsStream Client, TlsStream Server) pair = await Pair(certificate, null);
         await using TlsStream client = pair.Client;
@@ -149,6 +149,38 @@ public sealed class TlsStreamTests
             int read = await client.ReadAsync(new byte[4], cancellation.Token);
             Assert.AreEqual(-1, read);
         });
+        await Assert.ThrowsExceptionAsync<IOException>(async () =>
+        {
+            int read = await client.ReadAsync(new byte[1]);
+            Assert.AreEqual(-1, read);
+        });
+    }
+
+    [TestMethod]
+    public async Task KeyUpdateSurvivesConcurrentTraffic()
+    {
+        using X509Certificate2 certificate = Certificate();
+        (TlsStream Client, TlsStream Server) pair = await Pair(certificate, null);
+        await using TlsStream client = pair.Client;
+        await using TlsStream server = pair.Server;
+        for (int i = 0; i < 8; i++)
+        {
+            client.UpdateKeys();
+            byte[] payload = [(byte)i, 2, 3, 4];
+            byte[] got = new byte[4];
+            Task<int> reading = server.ReadAsync(got).AsTask();
+            await Task.Delay(1);
+            await client.WriteAsync(payload);
+            Assert.AreEqual(4, await reading);
+            CollectionAssert.AreEqual(payload, got);
+            server.UpdateKeys();
+            byte[] reply = [(byte)(i + 10), 6, 7, 8];
+            byte[] echoed = new byte[4];
+            Task<int> clientRead = client.ReadAsync(echoed).AsTask();
+            await server.WriteAsync(reply);
+            Assert.AreEqual(4, await clientRead);
+            CollectionAssert.AreEqual(reply, echoed);
+        }
     }
 
     [TestMethod]

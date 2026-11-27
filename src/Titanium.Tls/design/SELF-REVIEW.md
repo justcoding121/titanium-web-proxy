@@ -38,3 +38,16 @@ No consult. Two majors were fixed in this review: the inner-plaintext limit was 
 | Risks | JA4 ignores extension bodies, GREASE, and group-list contents, so the body comparison is the check that matters. `0xCA34` stays opaque. TLS 1.2 ciphers and version `0x0303` are advertised and not implemented; the abort is the client state machine, which is not built yet. `ClientHelloTemplate` stays internal until a second browser exists. |
 
 No consult. The profile constants matched the capture, including `0xCA34`. The gap this review closed is that JA4 alone does not pin extension bodies.
+
+## C6. Stream concurrency, KeyUpdate, shutdown, and cancellation
+
+| Item | Evidence |
+| --- | --- |
+| One owner per direction | `TlsStream` takes `_readLock` for reads and `_writeLock` for writes. Authentication and dispose take the read lock and then the write lock. A reader that must send KeyUpdate waits for the write lock while it already holds the read lock. The writer never takes the read lock, so that order cannot deadlock. |
+| KeyUpdate | RFC 8446 section 4.6.3. The read path rotates only the read secret (`OnKeyUpdate`). `update_requested` sets `KeyUpdateResponseNeeded`. The writer emits that response, or its own update, under the old write key and then rotates (`ProtectKeyUpdate`). `KeyUpdateKeepsTheFollowingRecordReadable` and `KeyUpdateSurvivesConcurrentTraffic` cover both directions. An empty body is `illegal_parameter` (`EmptyKeyUpdateIsIllegal`). |
+| Shutdown | `ShutdownAsync` holds the write lock, sends warning `close_notify`, and later writes throw the `SslStream` message (`WriteAfterShutdownThrows`). The reader does not send KeyUpdate after that flag is set. A received `close_notify` makes `Read` return 0. |
+| Cancellation | A cancel during an inner read or after a record is protected marks the stream unusable. `CancelledReadThrows` checks the cancel and the following `IOException`. Cancel while waiting for a lock, before I/O, does not. |
+| Dispose | Dispose closes the inner stream first so a blocked read unblocks, then takes both locks and zeroes the engine. `ReadAfterDisposeThrows`. |
+| Parity | `TlsStreamTests` covers the S1 rows, a 10 MiB hash compare both ways, ALPN, the cipher, and `SslStream` in both directions. Differences are in `PARITY-DIFFS.md`. |
+
+No consult. Two gaps were closed: a KeyUpdate response was dropped when the reader could not take the write lock immediately, and a cancel during I/O left the record layer usable. Still deferred, and not a second design: the locks are taken on every call rather than only when the direction is busy, the receive buffer is a fixed full record rather than a pooled 4 KiB buffer that grows, and a steady-state 16 KiB read or write is not yet allocation-free. Those belong to the performance gates.

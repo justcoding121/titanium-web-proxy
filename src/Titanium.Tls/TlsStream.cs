@@ -4,6 +4,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -33,6 +34,7 @@ public sealed class TlsStream : Stream
     private bool _readClosed;
     private bool _disposed;
     private bool _broken;
+    private int _disposeStarted;
 
     /// <summary>Creates a stream that closes <paramref name="inner"/> on dispose.</summary>
     /// <param name="inner">The transport.</param>
@@ -288,7 +290,33 @@ public sealed class TlsStream : Stream
     }
 
     /// <inheritdoc />
-    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return ValueTask.FromCanceled<int>(cancellationToken);
+        }
+
+        if (buffer.Length > 0 && _authenticated && !_disposed && !_broken && _readLock.Wait(0, CancellationToken.None))
+        {
+            try
+            {
+                if (_engine!.PlaintextAvailable > 0)
+                {
+                    return new ValueTask<int>(_engine.ReadPlaintext(buffer.Span));
+                }
+            }
+            finally
+            {
+                _readLock.Release();
+            }
+        }
+
+        return ReadAsyncSlow(buffer, cancellationToken);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private async ValueTask<int> ReadAsyncSlow(Memory<byte> buffer, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _readLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -342,7 +370,18 @@ public sealed class TlsStream : Stream
     }
 
     /// <inheritdoc />
-    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (buffer.Length == 0 && !_disposed && _authenticated && !_shutdown && !_broken)
+        {
+            return default;
+        }
+
+        return WriteAsyncSlow(buffer, cancellationToken);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private async ValueTask WriteAsyncSlow(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -365,7 +404,16 @@ public sealed class TlsStream : Stream
                 await SendPendingKeyUpdateAsync(cancellationToken).ConfigureAwait(false);
                 int count = rest.Length < TlsRecordProtector.MaxPlaintext ? rest.Length : TlsRecordProtector.MaxPlaintext;
                 int written = _engine!.ProtectApplication(rest.Span[..count], _encrypt);
-                await _inner.WriteAsync(_encrypt.AsMemory(0, written), cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await _inner.WriteAsync(_encrypt.AsMemory(0, written), cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    _broken = true;
+                    throw;
+                }
+
                 rest = rest[count..];
             }
         }
@@ -398,16 +446,21 @@ public sealed class TlsStream : Stream
     /// <inheritdoc />
     public override async ValueTask DisposeAsync()
     {
-        if (!_disposed)
+        if (Interlocked.Exchange(ref _disposeStarted, 1) == 0)
         {
             _disposed = true;
-            _engine?.Dispose();
-            _readLock.Dispose();
-            _writeLock.Dispose();
             if (!_leaveInnerOpen)
             {
                 await _inner.DisposeAsync().ConfigureAwait(false);
             }
+
+            await _readLock.WaitAsync().ConfigureAwait(false);
+            await _writeLock.WaitAsync().ConfigureAwait(false);
+            _engine?.Dispose();
+            _readLock.Release();
+            _writeLock.Release();
+            _readLock.Dispose();
+            _writeLock.Dispose();
         }
 
         await base.DisposeAsync().ConfigureAwait(false);
@@ -416,16 +469,21 @@ public sealed class TlsStream : Stream
     /// <inheritdoc />
     protected override void Dispose(bool disposing)
     {
-        if (disposing && !_disposed)
+        if (disposing && Interlocked.Exchange(ref _disposeStarted, 1) == 0)
         {
             _disposed = true;
-            _engine?.Dispose();
-            _readLock.Dispose();
-            _writeLock.Dispose();
             if (!_leaveInnerOpen)
             {
                 _inner.Dispose();
             }
+
+            _readLock.Wait();
+            _writeLock.Wait();
+            _engine?.Dispose();
+            _readLock.Release();
+            _writeLock.Release();
+            _readLock.Dispose();
+            _writeLock.Dispose();
         }
 
         base.Dispose(disposing);
@@ -623,7 +681,16 @@ public sealed class TlsStream : Stream
             throw new IOException("The TLS record is larger than the receive buffer.");
         }
 
-        int read = await _inner.ReadAsync(_inbound.AsMemory(_inboundCount), cancellationToken).ConfigureAwait(false);
+        int read;
+        try
+        {
+            read = await _inner.ReadAsync(_inbound.AsMemory(_inboundCount), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _broken = true;
+            throw;
+        }
         if (read == 0)
         {
             throw EndWithoutNotify();
@@ -921,24 +988,35 @@ public sealed class TlsStream : Stream
             byte request = _engine.KeyUpdateResponseNeeded ? (byte)0 : (byte)1;
             int written = _engine.ProtectKeyUpdate(request, _encrypt);
             _engine.SendKeyUpdate = false;
-            await _inner.WriteAsync(_encrypt.AsMemory(0, written), cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _inner.WriteAsync(_encrypt.AsMemory(0, written), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                _broken = true;
+                throw;
+            }
         }
     }
 
     private void TrySendKeyUpdateFromReaderSync()
     {
-        if (!_engine!.KeyUpdateResponseNeeded || !_writeLock.Wait(0))
+        if (!_engine!.KeyUpdateResponseNeeded)
         {
             return;
         }
 
+        _writeLock.Wait();
         try
         {
-            if (_engine.KeyUpdateResponseNeeded)
+            if (_shutdown || !_engine.KeyUpdateResponseNeeded)
             {
-                int written = _engine.ProtectKeyUpdate(0, _encrypt);
-                _inner.Write(_encrypt.AsSpan(0, written));
+                return;
             }
+
+            int written = _engine.ProtectKeyUpdate(0, _encrypt);
+            _inner.Write(_encrypt.AsSpan(0, written));
         }
         finally
         {
@@ -948,21 +1026,28 @@ public sealed class TlsStream : Stream
 
     private async Task TrySendKeyUpdateFromReaderAsync(CancellationToken cancellationToken)
     {
-        if (!_writeLock.Wait(0, cancellationToken))
+        if (!_engine!.KeyUpdateResponseNeeded)
         {
-            await Task.Delay(20, cancellationToken).ConfigureAwait(false);
-            if (!_writeLock.Wait(0, cancellationToken))
+            return;
+        }
+
+        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_shutdown || !_engine.KeyUpdateResponseNeeded)
             {
                 return;
             }
-        }
 
-        try
-        {
-            if (_engine!.KeyUpdateResponseNeeded)
+            int written = _engine.ProtectKeyUpdate(0, _encrypt);
+            try
             {
-                int written = _engine.ProtectKeyUpdate(0, _encrypt);
                 await _inner.WriteAsync(_encrypt.AsMemory(0, written), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                _broken = true;
+                throw;
             }
         }
         finally
