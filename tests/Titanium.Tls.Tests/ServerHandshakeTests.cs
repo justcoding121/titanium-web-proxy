@@ -375,7 +375,9 @@ internal sealed class HandshakePair : IDisposable
         client.Advance([], out _, output);
         byte[] hello = output.Bytes.ToArray();
         server.Advance(hello, out _, output);
+        int thread = Environment.CurrentManagedThreadId;
         server.Resume(_ => new TlsServerSelection { Certificate = certificate }, output);
+        Assert.AreEqual(thread, Environment.CurrentManagedThreadId);
         byte[] flight = output.Bytes.ToArray();
         client.Advance(flight, out _, output);
         client.Resume(true, output);

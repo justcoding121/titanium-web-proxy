@@ -1,4 +1,5 @@
 using System;
+using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -28,6 +29,14 @@ internal sealed partial class TlsEngine
     private SecretBuffer? _serverHandshakeSecret;
     private SecretBuffer? _resumptionMaster;
     private byte[]? _leaf;
+
+    internal X509Certificate2Collection? TrustAnchors { get; set; }
+
+    internal SslPolicyErrors ServerCertificateErrors { get; private set; }
+
+    internal byte[]? StapledOcspResponse { get; private set; }
+
+    internal byte[]? SignedCertificateTimestamps { get; private set; }
     private byte[]? _cookie;
     private byte[]? _psk;
     private byte[]? _ticketIdentity;
@@ -308,6 +317,13 @@ internal sealed partial class TlsEngine
         }
 
         _transcript!.Append(message);
+        using (TlsCertificateCheck check = TlsChainValidator.Evaluate(certificate.CertificateList, _serverName, TrustAnchors, serverCertificate: true))
+        {
+            ServerCertificateErrors = check.Errors;
+            StapledOcspResponse = check.StapledStatus;
+            SignedCertificateTimestamps = check.SignedCertificateTimestamps;
+        }
+
         State = TlsEngineState.WaitCertificateDecision;
         _paused = true;
         output.AddEvent(TlsEventKind.ServerCertificateReceived);
@@ -322,9 +338,15 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (scheme != 0x0403 || _leaf is null || !VerifyServerSignature(signature))
+        if (scheme != 0x0403 || _leaf is null)
         {
             Fail(output, AlertIllegalParameter);
+            return;
+        }
+
+        if (!VerifyServerSignature(signature))
+        {
+            Fail(output, AlertDecryptError);
             return;
         }
 
@@ -641,19 +663,13 @@ internal sealed partial class TlsEngine
     private bool VerifyServerSignature(ReadOnlySpan<byte> signature)
     {
         using X509Certificate2 certificate = X509CertificateLoader.LoadCertificate(_leaf!);
-        using ECDsa? key = certificate.GetECDsaPublicKey();
-        if (key is null)
-        {
-            return false;
-        }
-
         Span<byte> hash = stackalloc byte[32];
         _transcript!.CurrentHash(hash);
         Span<byte> content = stackalloc byte[64 + 33 + 1 + 32];
         content[..64].Fill(0x20);
         "TLS 1.3, server CertificateVerify"u8.CopyTo(content[64..]);
         hash.CopyTo(content[(64 + 33 + 1)..]);
-        return key.VerifyData(content, signature, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
+        return TlsCertificateVerifier.Verify(certificate, 0x0403, content, signature);
     }
 
     private bool TryCopyLeaf(ReadOnlySpan<byte> list)
