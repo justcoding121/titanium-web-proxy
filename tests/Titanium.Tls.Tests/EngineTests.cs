@@ -1,5 +1,7 @@
 using System;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -25,11 +27,19 @@ public sealed class EngineTests
         Assert.AreEqual(TlsEventKind.ClientHelloReceived, output.Event(0).Kind);
         Assert.AreEqual(TlsEngineState.WaitClientHelloDecision, server.State);
 
-        server.Resume(true, output);
+        using X509Certificate2 certificate = Certificate();
+        server.Resume(_ => new TlsServerSelection { Certificate = certificate }, output);
         Assert.IsTrue(output.Bytes.Length > 0);
         Assert.AreEqual(TlsEngineState.WaitFinished, server.State);
         client.Dispose();
         server.Dispose();
+    }
+
+    private static X509Certificate2 Certificate()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest("CN=localhost", key, HashAlgorithmName.SHA256);
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
     }
 
     [TestMethod]

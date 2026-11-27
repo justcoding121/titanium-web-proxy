@@ -40,6 +40,7 @@ internal sealed partial class TlsEngine
     private ushort _selectedCipher;
     private bool _hrrSeen;
     private bool _certificateRequested;
+    private bool _pskSelected;
     private bool _randomReady;
 
     public void Dispose()
@@ -55,6 +56,8 @@ internal sealed partial class TlsEngine
         _write?.Dispose();
         _clientHandshakeSecret?.Dispose();
         _serverHandshakeSecret?.Dispose();
+        _clientApplication?.Dispose();
+        _serverApplication?.Dispose();
         _resumptionMaster?.Dispose();
         _transcript?.Dispose();
         _schedule?.Dispose();
@@ -100,7 +103,8 @@ internal sealed partial class TlsEngine
 
         if (type == HandshakeType.EncryptedExtensions)
         {
-            OnSimple(type, bodyLength, output, static message => HandshakeMessages.TryReadEncryptedExtensions(message, out _, out HandshakeAlert alert) ? default : alert, TlsEngineState.WaitCertificateRequestOrCertificate);
+            TlsEngineState next = _pskSelected ? TlsEngineState.WaitFinished : TlsEngineState.WaitCertificateRequestOrCertificate;
+            OnSimple(type, bodyLength, output, static message => HandshakeMessages.TryReadEncryptedExtensions(message, out _, out HandshakeAlert alert) ? default : alert, next);
             return;
         }
 
@@ -205,6 +209,7 @@ internal sealed partial class TlsEngine
             return;
         }
 
+        _pskSelected = selectedPreSharedKey;
         if (!selectedPreSharedKey && _psk is not null)
         {
             _schedule!.AbandonPreSharedKey();
@@ -514,7 +519,7 @@ internal sealed partial class TlsEngine
     {
         uint age = ObfuscatedAge();
         int identities = 2 + _ticketIdentity!.Length + 4;
-        int binders = 2 + 1 + 32;
+        int binders = 1 + 32;
         var body = new byte[2 + identities + 2 + binders];
         int offset = 0;
         body[offset++] = (byte)(identities >> 8);

@@ -19,6 +19,7 @@ internal enum TlsEngineState
     WaitCertificateVerify = 5,
     WaitClientHello = 6,
     WaitClientHelloDecision = 7,
+    WaitClientCertificate = 12,
     WaitFinished = 8,
     Connected = 9,
     Closed = 10,
@@ -42,7 +43,7 @@ internal readonly struct TlsEvent
     internal byte Alert { get; init; }
 }
 
-/// <summary>Bytes to write and events from one <see cref="TlsEngine.Advance"/> or <see cref="TlsEngine.Resume"/>.</summary>
+/// <summary>Bytes to write and events from one <see cref="TlsEngine.Advance"/> or Resume call.</summary>
 internal sealed class TlsOutput
 {
     private readonly byte[] _bytes = new byte[16384];
@@ -85,8 +86,8 @@ internal sealed class TlsOutput
 }
 
 /// <summary>
-/// Sans-IO handshake driver. The flight bytes are a stub until the client and server machines replace them.
-/// The transition table is the one those machines plug into.
+/// Sans-IO handshake driver. The client completes a TLS 1.3 handshake. The server answers one after
+/// <see cref="TlsEventKind.ClientHelloReceived"/>.
 /// </summary>
 internal sealed partial class TlsEngine : IDisposable
 {
@@ -106,8 +107,8 @@ internal sealed partial class TlsEngine : IDisposable
     private readonly IEntropySource _entropy;
     private readonly string? _serverName;
     private readonly ITlsSessionCache? _cache;
-    private readonly TranscriptStore? _transcript;
-    private readonly TlsKeySchedule? _schedule;
+    private TranscriptStore? _transcript;
+    private TlsKeySchedule? _schedule;
     private bool _disposed;
 
     internal TlsEngine(
@@ -313,8 +314,13 @@ internal sealed partial class TlsEngine : IDisposable
 
         if (State == TlsEngineState.WaitClientHelloDecision)
         {
-            WriteMessages(output, [2, 8, 11, 15, 20]);
-            State = TlsEngineState.WaitFinished;
+            if (_selection is null)
+            {
+                Fail(output, 80);
+                return;
+            }
+
+            SendServerFlight(output);
             return;
         }
 
@@ -451,6 +457,7 @@ internal sealed partial class TlsEngine : IDisposable
         return State switch
         {
             TlsEngineState.WaitClientHello => type == HandshakeType.ClientHello,
+            TlsEngineState.WaitClientCertificate => type == HandshakeType.Certificate,
             TlsEngineState.WaitFinished => type == HandshakeType.Finished,
             TlsEngineState.Connected => type == HandshakeType.KeyUpdate,
             _ => false,
@@ -465,50 +472,7 @@ internal sealed partial class TlsEngine : IDisposable
             return;
         }
 
-        if (_role == TlsRole.Server && type == HandshakeType.ClientHello)
-        {
-            State = TlsEngineState.WaitClientHelloDecision;
-            _paused = true;
-            output.AddEvent(TlsEventKind.ClientHelloReceived);
-            return;
-        }
-
-        if (type == HandshakeType.ServerHello)
-        {
-            State = TlsEngineState.WaitEncryptedExtensions;
-        }
-        else if (type == HandshakeType.EncryptedExtensions)
-        {
-            State = TlsEngineState.WaitCertificate;
-        }
-        else if (type == HandshakeType.Certificate)
-        {
-            State = TlsEngineState.WaitCertificateDecision;
-            _paused = true;
-            output.AddEvent(TlsEventKind.ServerCertificateReceived);
-        }
-        else if (type == HandshakeType.CertificateVerify)
-        {
-            State = TlsEngineState.WaitFinished;
-        }
-        else if (type == HandshakeType.Finished)
-        {
-            if (_role == TlsRole.Client)
-            {
-                WriteMessages(output, [20]);
-            }
-
-            State = TlsEngineState.Connected;
-            output.AddEvent(TlsEventKind.HandshakeCompleted);
-        }
-        else if (type == HandshakeType.NewSessionTicket)
-        {
-            output.AddEvent(TlsEventKind.TicketReceived);
-        }
-        else if (type == HandshakeType.KeyUpdate)
-        {
-            output.AddEvent(TlsEventKind.KeyUpdateRequired);
-        }
+        HandleServer(type, bodyLength, output);
     }
 
     private void Fail(TlsOutput output, byte description)
@@ -524,24 +488,6 @@ internal sealed partial class TlsEngine : IDisposable
         alert[5] = 2;
         alert[6] = description;
         output.AddBytes(alert);
-    }
-
-    private static void WriteMessages(TlsOutput output, ReadOnlySpan<byte> types)
-    {
-        int payload = types.Length * 4;
-        Span<byte> record = stackalloc byte[64];
-        record[0] = 22;
-        record[1] = 3;
-        record[2] = 3;
-        record[3] = (byte)(payload >> 8);
-        record[4] = (byte)payload;
-        for (int i = 0; i < types.Length; i++)
-        {
-            int at = 5 + (i * 4);
-            record[at] = types[i];
-        }
-
-        output.AddBytes(record[..(5 + payload)]);
     }
 
     private void Consume(int recordLength)
