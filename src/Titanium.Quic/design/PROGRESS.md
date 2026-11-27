@@ -55,3 +55,7 @@ The idle timeout is the minimum of the two advertised values, and at least three
 ## T2.14
 
 Path MTU discovery starts at 1200 bytes. Probes are padded datagrams. A probe that is acknowledged raises the ceiling. A probe that is lost lowers the search, and a lost probe of the current ceiling returns it to 1200. A reported tunnel maximum lowers the ceiling and never takes it below 1200. Ordinary datagrams on a validated path stay at or below the ceiling. Probes are the packets that may exceed it. `DontFragment` is set on a socket where the platform allows it.
+
+## T2.15
+
+`UdpSocketTransport` binds an ephemeral port and exchanges datagrams with `ReceiveFromAsync` and pooled `SocketAddress` values. Callers overlap receives; four is the overlap the driver is expected to use. Linux sets `SO_REUSEPORT` when that option exists. `DontFragment` is set where the socket supports it. An outgoing ECN codepoint is set only when the socket accepts it, and a received ECN mark is not visible on this receive path. A batch send is one datagram at a time. Generic segmentation, generic receive offload, `sendmmsg`, `recvmmsg`, and a portable path-MTU socket API are not in this task. `QuicDatagramInject` feeds a datagram to a connection on a caller-supplied path and passes each reply to the callback. Amplification and path validation use that path.
