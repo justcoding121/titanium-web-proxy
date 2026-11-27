@@ -118,6 +118,27 @@ public sealed class QuicHandshakeEdgeTests
     }
 
     [TestMethod]
+    public void AClientOfferingOnlyAnUnknownProtocolIsRejected()
+    {
+        using X509Certificate2 certificate = Certificate();
+        var local = new IPEndPoint(IPAddress.Loopback, 9);
+        var remote = new IPEndPoint(IPAddress.Loopback, 10);
+        PathInfo path = QuicConnectionSession.PathOf(local, remote);
+        byte[] clientId = QuicConnectionSession.NewConnectionId();
+        byte[] serverId = QuicConnectionSession.NewConnectionId();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.StartClient(path, clientId, serverId, Limits(clientId, idleMs: 0, server: false), applicationProtocols: ["dummy"]);
+        server.StartServer(serverId, certificate: null, Limits(serverId, idleMs: 0, server: true));
+        byte[] buffer = new byte[8192];
+        int count = client.PollTransmit(Now, buffer, out PathInfo sent);
+        server.HandleDatagram(Now, buffer.AsSpan(0, count), sent);
+        Assert.IsFalse(server.CompleteHello(certificate, ["h3", "h3-29", "hq-interop", "hq-29"]));
+        Assert.IsTrue(server.IsClosed);
+        Assert.AreEqual(0x0100UL + 120, server.CloseError);
+    }
+
+    [TestMethod]
     public void ATinyPeerIdleIsFlooredAndAShortRetryIsIgnored()
     {
         using X509Certificate2 certificate = Certificate();

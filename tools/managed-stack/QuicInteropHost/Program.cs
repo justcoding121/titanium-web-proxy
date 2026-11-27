@@ -22,7 +22,11 @@ await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync
     HandshakeTimeout = TimeSpan.FromSeconds(10),
     ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
     {
-        ServerAuthenticationOptions = new SslServerAuthenticationOptions { ServerCertificate = certificate },
+        ServerAuthenticationOptions = new SslServerAuthenticationOptions
+        {
+            ServerCertificate = certificate,
+            ApplicationProtocols = [new SslApplicationProtocol("h3"), new SslApplicationProtocol("h3-29"), new SslApplicationProtocol("hq-interop"), new SslApplicationProtocol("hq-29")],
+        },
     }),
 }).ConfigureAwait(false);
 
