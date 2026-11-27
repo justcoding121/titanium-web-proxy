@@ -213,7 +213,7 @@ public partial class ProxyServer
 
             var opened = await WebTransportOrigin.OpenHttp11Async(
                 endPoint.Options.OriginHost, endPoint.Options.OriginPort, endPoint.Options.OriginHttps,
-                path, ctx.CancellationToken).ConfigureAwait(false);
+                path, ctx.CancellationToken, UseManagedTlsStack).ConfigureAwait(false);
             if (opened is null)
             {
                 session.GenericResponse("webtransport origin upgrade failed", HttpStatusCode.BadGateway);
@@ -331,7 +331,7 @@ public partial class ProxyServer
 
         var opened = await WebTransportOrigin.OpenHttp11Async(
             endPoint.Options.OriginHost, endPoint.Options.OriginPort, endPoint.Options.OriginHttps,
-            path, cancellationToken).ConfigureAwait(false);
+            path, cancellationToken, UseManagedTlsStack).ConfigureAwait(false);
         if (opened is null)
         {
             await WriteHttp11StatusAsync(clientStream, 502, "Bad Gateway", cancellationToken).ConfigureAwait(false);

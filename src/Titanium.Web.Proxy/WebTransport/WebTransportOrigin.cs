@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net.Security;
+using Titanium.Tls;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
@@ -14,7 +15,7 @@ namespace Titanium.Web.Proxy.WebTransport;
 internal static class WebTransportOrigin
 {
     public static async Task<WebTransportOriginSession?> OpenHttp11Async(
-        string host, int port, bool https, string path, CancellationToken cancellationToken)
+        string host, int port, bool https, string path, CancellationToken cancellationToken, bool useManagedTls = false)
     {
         if (HttpHeaderHasDelimiter(path) || HttpHeaderHasDelimiter(host))
         {
@@ -28,6 +29,19 @@ internal static class WebTransportOrigin
             Stream stream = tcp.GetStream();
             if (https)
             {
+                if (useManagedTls)
+                {
+                    var managed = new TlsStream(stream, leaveInnerStreamOpen: false);
+                    await managed.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+                    {
+                        TargetHost = host,
+                        EnabledSslProtocols = SslProtocols.None,
+                        CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
+                    }, cancellationToken).ConfigureAwait(false);
+                    stream = managed;
+                }
+                else
+                {
                 var ssl = new SslStream(stream, leaveInnerStreamOpen: false);
                 await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
                 {
@@ -36,6 +50,7 @@ internal static class WebTransportOrigin
                     CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
                 }, cancellationToken).ConfigureAwait(false);
                 stream = ssl;
+                }
             }
 
             var request = Encoding.ASCII.GetBytes(
