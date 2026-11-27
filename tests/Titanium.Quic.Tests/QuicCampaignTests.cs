@@ -79,6 +79,59 @@ public sealed class QuicCampaignTests
     }
 
     [TestMethod]
+    public void MutatedDatagramsDoNotEscapeOrGrowWithoutBound()
+    {
+        byte[] sample = FirstFlight();
+        Assert.IsTrue(sample.Length > 8);
+        var random = new Random(9000);
+        using X509Certificate2 certificate = Certificate();
+        byte[] transmit = new byte[2048];
+        for (int i = 0; i < 24; i++)
+        {
+            byte[] mutant = Mutate(sample, random, i);
+            using var server = new QuicConnectionCore();
+            server.StartServer(ServerId, certificate, Parameters(client: false));
+            server.HandleDatagram(Now, mutant, Path);
+            server.PollTransmit(Now, transmit, out _);
+            Assert.IsTrue(server.ReceivedStream.Length <= mutant.Length);
+        }
+
+        using var client = new QuicConnectionCore();
+        using var live = new QuicConnectionCore();
+        var sim = new QuicSimulator();
+        client.StartClient(Path, ClientId, ServerId, Parameters(client: true));
+        live.StartServer(ServerId, certificate, Parameters(client: false));
+        DateTimeOffset time = Now;
+        Assert.IsTrue(Run(client, live, sim, ref time, static (left, right) => left.HandshakeComplete && right.HandshakeComplete));
+        byte[] body = new byte[16];
+        Assert.AreEqual(body.Length, client.SendStream(0, body));
+        int count = client.PollTransmit(time, transmit, out _);
+        Assert.IsTrue(count > 4);
+        transmit[count / 2] ^= 0x01;
+        live.HandleDatagram(time, transmit.AsSpan(0, count), Path);
+        Assert.IsFalse(live.IsClosed);
+
+        byte[] stream = new byte[16];
+        var frame = new QuicFrame { Kind = QuicFrameKind.Stream, StreamId = 0, Data = stream };
+        byte[] encoded = new byte[32];
+        int written = QuicFrameWriter.Write(frame, [], encoded);
+        Assert.IsTrue(written > 1);
+        for (int i = 0; i < 8; i++)
+        {
+            byte[] mutant = Mutate(encoded.AsSpan(0, written).ToArray(), random, i);
+            using var receiver = new QuicConnectionCore();
+            using var sender = new QuicConnectionCore();
+            var link = new QuicSimulator();
+            sender.StartClient(Path, ClientId, ServerId, Parameters(client: true));
+            receiver.StartServer(ServerId, certificate, Parameters(client: false));
+            DateTimeOffset at = Now;
+            Assert.IsTrue(Run(sender, receiver, link, ref at, static (left, right) => left.HandshakeComplete && right.HandshakeComplete));
+            receiver.InjectApplicationPayload(mutant);
+            Assert.IsTrue(receiver.ReceivedStream.Length <= mutant.Length);
+        }
+    }
+
+    [TestMethod]
     public void AnEmptyDatagramIsDropped()
     {
         var sim = new QuicSimulator();
@@ -130,6 +183,43 @@ public sealed class QuicCampaignTests
         Assert.IsFalse(client.IsClosed);
         Assert.IsFalse(server.IsClosed);
         return server.ReceivedStream[..payload.Length];
+    }
+
+    private static byte[] FirstFlight()
+    {
+        using var client = new QuicConnectionCore();
+        client.StartClient(Path, ClientId, ServerId, Parameters(client: true));
+        byte[] buffer = new byte[16384];
+        int count = client.PollTransmit(Now, buffer, out _);
+        return buffer.AsSpan(0, count).ToArray();
+    }
+
+    private static byte[] Mutate(byte[] sample, Random random, int index)
+    {
+        if (sample.Length == 0)
+        {
+            return [0xFF];
+        }
+
+        int mode = index % 4;
+        if (mode == 0)
+        {
+            byte[] flipped = (byte[])sample.Clone();
+            flipped[random.Next(flipped.Length)] ^= (byte)(1 << random.Next(8));
+            return flipped;
+        }
+
+        if (mode == 1)
+        {
+            return sample.AsSpan(0, random.Next(sample.Length + 1)).ToArray();
+        }
+
+        int at = random.Next(sample.Length + 1);
+        byte[] grown = new byte[sample.Length + 1];
+        sample.AsSpan(0, at).CopyTo(grown);
+        grown[at] = mode == 2 ? (byte)0xFF : sample[Math.Min(at, sample.Length - 1)];
+        sample.AsSpan(at).CopyTo(grown.AsSpan(at + 1));
+        return grown;
     }
 
     private static byte[] Pattern(int length)
