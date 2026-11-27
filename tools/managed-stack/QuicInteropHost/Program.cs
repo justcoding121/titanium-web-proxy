@@ -36,7 +36,7 @@ for (int i = 0; i < args.Length; i++)
 }
 
 string? testCase = Environment.GetEnvironmentVariable("TESTCASE");
-if (testCase is not null && testCase is not ("handshake" or "handshakeloss"))
+if (testCase is not null && testCase is not ("handshake" or "multiconnect"))
 {
     Console.Error.WriteLine("unsupported test case: " + testCase);
     return 127;
