@@ -104,9 +104,10 @@ static async Task ServeAsync(ManagedQuicConnection connection, string root)
             ManagedQuicStream stream = await connection.AcceptInboundStreamAsync().ConfigureAwait(false);
             byte[] buffer = new byte[1024];
             var request = new StringBuilder();
+            using var done = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             while (request.Length < 4096 && request.ToString().IndexOf("\r\n", StringComparison.Ordinal) < 0)
             {
-                int count = await stream.ReadAsync(buffer).ConfigureAwait(false);
+                int count = await ReadWithPingsAsync(connection, stream, buffer, done.Token).ConfigureAwait(false);
                 if (count == 0)
                 {
                     break;
@@ -127,9 +128,8 @@ static async Task ServeAsync(ManagedQuicConnection connection, string root)
 
             await stream.CompleteWritesAsync().ConfigureAwait(false);
             // A dropped file is sent again only while this connection stays open.
-            using var done = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             byte[] tail = new byte[8];
-            while (await stream.ReadAsync(tail, done.Token).ConfigureAwait(false) > 0)
+            while (await ReadWithPingsAsync(connection, stream, tail, done.Token).ConfigureAwait(false) > 0)
             {
             }
         }
@@ -138,6 +138,24 @@ static async Task ServeAsync(ManagedQuicConnection connection, string root)
     {
         Console.Error.WriteLine(ex.GetType().Name + ": " + ex.Message);
     }
+}
+
+static async Task<int> ReadWithPingsAsync(ManagedQuicConnection connection, ManagedQuicStream stream, Memory<byte> buffer, CancellationToken token)
+{
+    ValueTask<int> read = stream.ReadAsync(buffer, token);
+    Task<int> pending = read.AsTask();
+    while (!pending.IsCompleted)
+    {
+        Task delay = Task.Delay(200, token);
+        if (await Task.WhenAny(pending, delay).ConfigureAwait(false) == pending)
+        {
+            break;
+        }
+
+        await connection.PingAsync(token).ConfigureAwait(false);
+    }
+
+    return await pending.ConfigureAwait(false);
 }
 
 static string? FileFor(string root, string request)

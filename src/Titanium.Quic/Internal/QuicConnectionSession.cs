@@ -139,6 +139,14 @@ internal sealed class QuicConnectionSession : IDisposable
         }
     }
 
+    internal void Ping()
+    {
+        lock (_gate)
+        {
+            _core.SendKeepAlive();
+        }
+    }
+
     internal void Finish(ulong streamId)
     {
         lock (_gate)

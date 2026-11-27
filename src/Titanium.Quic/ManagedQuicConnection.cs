@@ -127,6 +127,16 @@ public sealed class ManagedQuicConnection : IAsyncDisposable
         return ValueTask.FromResult(stream);
     }
 
+    /// <summary>Sends a ping so a quiet peer still receives a packet.</summary>
+    /// <param name="cancellationToken">A token that cancels the send.</param>
+    /// <returns>A task that completes when the ping has been sent.</returns>
+    public async ValueTask PingAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _session.Ping();
+        await _session.FlushAsync().ConfigureAwait(false);
+    }
+
     /// <summary>Sends <c>CONNECTION_CLOSE</c> with the application error code.</summary>
     /// <param name="errorCode">The application close code. Zero is no error.</param>
     /// <param name="cancellationToken">A token that cancels the send.</param>
