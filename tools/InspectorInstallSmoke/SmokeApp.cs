@@ -1445,7 +1445,10 @@ internal static class SmokeApp
         var feedUrl = feed.ManifestUrl;
         Console.WriteLine($"update-under-decrypt feed={feedUrl} bind={port}");
 
-        var app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feedUrl);
+        // A closed proxy in the environment is the proof that loopback update traffic
+        // bypasses it. The system proxy alone bypasses local addresses, so removing
+        // the bypass would still reach the feed.
+        var app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feedUrl, closedProxy: "http://127.0.0.1:1");
         try
         {
             await TrustRootAsync();
@@ -1459,7 +1462,7 @@ internal static class SmokeApp
                 await app.QuitAsync();
                 await app.DisposeAsync();
                 PatchDecrypt(true);
-                app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feedUrl);
+                app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feedUrl, closedProxy: "http://127.0.0.1:1");
                 if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(25)))
                     return Fail(1, "update-under-decrypt: proxy off after relaunch. " + ProxySnapshot());
                 if (!await WaitDecryptStableAsync(TimeSpan.FromSeconds(12), settle: TimeSpan.FromSeconds(4)))
@@ -2621,7 +2624,8 @@ internal sealed class InspectorProcess : IAsyncDisposable
         string exe,
         int port,
         string? updateFeedUrl = null,
-        bool autoApplyUpdate = false)
+        bool autoApplyUpdate = false,
+        string? closedProxy = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -2639,6 +2643,15 @@ internal sealed class InspectorProcess : IAsyncDisposable
         psi.Environment["TITANIUM_UPDATE_FEED"] = updateFeedUrl ?? "";
         if (autoApplyUpdate)
             psi.Environment["TITANIUM_UPDATE_AUTO_APPLY"] = "1";
+        if (!string.IsNullOrEmpty(closedProxy))
+        {
+            psi.Environment["HTTP_PROXY"] = closedProxy;
+            psi.Environment["HTTPS_PROXY"] = closedProxy;
+            psi.Environment["http_proxy"] = closedProxy;
+            psi.Environment["https_proxy"] = closedProxy;
+            psi.Environment["NO_PROXY"] = "";
+            psi.Environment["no_proxy"] = "";
+        }
         var proc = Process.Start(psi) ?? throw new InvalidOperationException("Inspector did not start: " + exe);
         proc.OutputDataReceived += static (_, _) => { };
         proc.ErrorDataReceived += static (_, _) => { };

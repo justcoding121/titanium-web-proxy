@@ -61,8 +61,8 @@ if [[ -n "$prev" ]]; then
   test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
   run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,firefox --out "$log"
   test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
-  # Leave proxy armed so dpkg prerm must clear it (do not pre-clear here).
-  pkill -TERM -f '^/opt/titanium-inspector/TitaniumInspector( |$)' >/dev/null 2>&1 || true
+  # SIGKILL so the process cannot clear the proxy on the way out. dpkg prerm must.
+  pkill -KILL -f '^/opt/titanium-inspector/TitaniumInspector( |$)' >/dev/null 2>&1 || true
   sleep 1
   sudo dpkg -r titanium-inspector || true
   if command -v gsettings >/dev/null; then
