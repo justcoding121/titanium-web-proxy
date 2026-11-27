@@ -14,9 +14,8 @@
 class Titanium < Formula
   desc "MITM and reverse proxy command-line"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
-  license "MIT"
-
   version "8.0.9-beta"
+  license "MIT"
   on_macos do
     on_arm do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9-beta/Titanium.Cli-osx-arm64.zip"
