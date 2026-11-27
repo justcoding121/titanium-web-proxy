@@ -82,6 +82,46 @@ public sealed class QuicInitialTests
         CollectionAssert.AreEqual(Convert.FromHexString("4200bff4"), header);
     }
 
+    [TestMethod]
+    public void HeaderProtectionRejectsAShortBufferAndAWrongKey()
+    {
+        byte[] header = Convert.FromHexString("c300000001088394c8f03e5157080000449e00000002");
+        byte[] sample = Convert.FromHexString("d1b1c98dd7689fb8ec11d242b123dc9b");
+        byte[] key = Convert.FromHexString("9f50449e04a0e810283a1e9933adedd2");
+        using var protection = new QuicHeaderProtection(QuicHeaderCipher.Aes128, key);
+
+        byte[] tooShort = header[..21];
+        byte[] before = (byte[])tooShort.Clone();
+        Assert.IsFalse(protection.Protect(tooShort, 18, sample));
+        CollectionAssert.AreEqual(before, tooShort);
+
+        Assert.IsTrue(protection.Protect(header, 18, sample));
+        byte[] truncated = header[..21];
+        byte protectedFirst = truncated[0];
+        Assert.IsFalse(protection.Remove(truncated, 18, sample));
+        Assert.AreEqual(protectedFirst, truncated[0]);
+
+        Assert.IsFalse(protection.Protect(header, 18, sample.AsSpan(0, 15)));
+        Assert.IsFalse(protection.Protect(header, 18, new byte[17]));
+        Assert.IsFalse(protection.Protect([], 0, sample));
+        Assert.IsFalse(protection.Protect(header, 0, sample));
+        Assert.IsFalse(protection.Protect(header, header.Length, sample));
+
+        byte[] packet = [0xC0, 0x11];
+        var aes256 = new QuicHeaderProtection(QuicHeaderCipher.Aes256, new byte[32]);
+        Assert.IsTrue(aes256.Protect(packet, 1, sample));
+        Assert.IsTrue(aes256.Remove(packet, 1, sample));
+        Assert.AreEqual(0xC0, packet[0]);
+        Assert.AreEqual(0x11, packet[1]);
+        aes256.Dispose();
+        aes256.Dispose();
+        Assert.ThrowsExactly<ObjectDisposedException>(() => aes256.Protect(packet, 1, sample));
+
+        Assert.ThrowsExactly<ArgumentException>(() => new QuicHeaderProtection(QuicHeaderCipher.Aes128, new byte[15]));
+        Assert.ThrowsExactly<ArgumentException>(() => new QuicHeaderProtection(QuicHeaderCipher.Aes256, new byte[16]));
+        Assert.ThrowsExactly<ArgumentException>(() => new QuicHeaderProtection(QuicHeaderCipher.ChaCha20, new byte[31]));
+    }
+
     private static void AssertSide(bool client, string secret, string key, string iv, string hp)
     {
         var gotSecret = new byte[32];
