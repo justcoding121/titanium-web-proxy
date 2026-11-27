@@ -283,7 +283,7 @@ if [[ "$which" == gateway ]]; then
     kubectl delete "$obj" --ignore-not-found --wait=true --timeout=30s >/dev/null 2>&1 || true
   done < <(kubectl get configmap,secret -A -l "app.kubernetes.io/instance=${rel}" -o name 2>/dev/null || true)
 fi
-kind_chart_assert_no_instance_leftovers
+kind_chart_assert_no_instance_leftovers strict
 if [[ "$which" == gateway ]]; then
   kind_chart_assert_gateway_crds
 fi
