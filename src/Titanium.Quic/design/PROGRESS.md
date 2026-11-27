@@ -51,3 +51,7 @@ Streams use the peer's initial credit and later MAX_DATA and MAX_STREAM_DATA val
 ## T2.13
 
 The idle timeout is the minimum of the two advertised values, and at least three times the current probe timeout. It shares `NextTimeout` with loss recovery. A silent close discards the connection and sends nothing. A keep-alive is a PING packet, padded so header protection has a sample, and tracked by loss recovery. Receiving it restarts the idle timeout. An acknowledgment on a path that is not validated does not increase the congestion window.
+
+## T2.14
+
+Path MTU discovery starts at 1200 bytes. Probes are padded datagrams. A probe that is acknowledged raises the ceiling. A probe that is lost lowers the search, and a lost probe of the current ceiling returns it to 1200. A reported tunnel maximum lowers the ceiling and never takes it below 1200. Ordinary datagrams on a validated path stay at or below the ceiling. Probes are the packets that may exceed it. `DontFragment` is set on a socket where the platform allows it.

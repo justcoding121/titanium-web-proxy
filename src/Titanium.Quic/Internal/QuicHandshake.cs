@@ -36,6 +36,10 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     private readonly QuicFlow _flow = new();
 
+    private readonly QuicPathMtu _mtu = new();
+
+    private ulong? _probeNumber;
+
     private readonly List<(PathInfo Path, byte[] Data)> _challenges = [];
 
     private byte[] _localId = [];
@@ -452,7 +456,8 @@ internal sealed partial class QuicConnectionCore : IDisposable
                     return;
                 }
 
-                foreach (QuicRetransmit item in _loss.Pending)
+                ObservePathMtu();
+            foreach (QuicRetransmit item in _loss.Pending)
                 {
                     Retransmit(item.Kind, item.Payload);
                 }
@@ -673,6 +678,10 @@ internal sealed partial class QuicConnectionCore : IDisposable
         {
             _flow.SetPeer(parsed);
             NotePeerIdle(parsed.MaxIdleTimeout);
+            if (parsed.MaxUdpPayloadSize <= int.MaxValue)
+            {
+                _mtu.SetMaximum((int)parsed.MaxUdpPayloadSize);
+            }
         }
 
         if (match)
@@ -758,7 +767,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         SealAndStage(kind, protector, payload, 0, probe: true);
     }
 
-    private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram, bool probe = false, PathInfo? path = null)
+    private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram, bool probe = false, PathInfo? path = null, bool pmtu = false)
     {
         byte[] packet = ArrayPool<byte>.Shared.Rent(Math.Max(minimumDatagram, payload.Length) + 128 + _initialToken.Length);
         try
@@ -773,7 +782,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 ? QuicPackets.SealShort(packet, DestinationId(), number, payload, protector)
                 : QuicPackets.SealLong(packet, kind, DestinationId(), _localId, number, payload, protector, minimumDatagram, _initialToken);
             byte[] copy = payload.ToArray();
-            if (written == 0 || !TryStageTransmit(path ?? _path, packet.AsSpan(0, written), track: true, kind, number, copy, probe))
+            if (written == 0 || !TryStageTransmit(path ?? _path, packet.AsSpan(0, written), track: true, kind, number, copy, probe, pmtu))
             {
                 return 0;
             }
@@ -1024,6 +1033,102 @@ internal sealed partial class QuicConnectionCore : IDisposable
         }
     }
 
+    internal void ReportTunnelMaximum(int bytes) => _mtu.SetMaximum(bytes);
+
+    internal bool SendPathMtuProbe(bool confirm = false)
+    {
+        if (IsClosed || _applicationSend is null)
+        {
+            return false;
+        }
+
+        int size = _mtu.BeginProbe(confirm);
+        if (size < QuicPathMtu.Base)
+        {
+            return false;
+        }
+
+        int overhead = 1 + DestinationId().Length + 2 + 16;
+        if (size <= overhead + 1)
+        {
+            _mtu.Cancel();
+            return false;
+        }
+
+        byte[] body = new byte[size - overhead];
+        body[0] = 0x01;
+        ulong number = _pnApplication;
+        if (SealAndStage(QuicPacketKind.OneRtt, _applicationSend, body, 0, probe: true, pmtu: true) == 0)
+        {
+            _mtu.Cancel();
+            return false;
+        }
+
+        _probeNumber = number;
+        return true;
+    }
+
+    internal void AcknowledgeApplication(ulong number, DateTimeOffset now)
+    {
+        _now = now;
+        if (HandshakeComplete)
+        {
+            _loss.HandshakeConfirmed = true;
+        }
+
+        Span<byte> frame = stackalloc byte[16];
+        var ranges = new QuicAckRange[1];
+        var ack = new QuicFrame
+        {
+            Kind = QuicFrameKind.Ack,
+            LargestAcknowledged = number,
+            AckRangeCount = 1,
+        };
+        int written = QuicFrameWriter.Write(in ack, ranges, frame);
+        if (written > 0)
+        {
+            TakePayload(QuicPacketKind.OneRtt, frame[..written]);
+        }
+    }
+
+    private void ObservePathMtu()
+    {
+        if (_probeNumber is ulong number)
+        {
+            bool acked = false;
+            bool lost = false;
+            foreach (ulong item in _loss.AckedPmtu)
+            {
+                if (item == number)
+                {
+                    acked = true;
+                }
+            }
+
+            foreach (ulong item in _loss.LostPmtu)
+            {
+                if (item == number)
+                {
+                    lost = true;
+                }
+            }
+
+            if (acked)
+            {
+                _mtu.Acknowledge();
+                _probeNumber = null;
+            }
+            else if (lost)
+            {
+                _mtu.Lose();
+                _probeNumber = null;
+            }
+        }
+
+        _loss.AckedPmtu.Clear();
+        _loss.LostPmtu.Clear();
+    }
+
     internal void SendKeepAlive()
     {
         if (IsClosed || _applicationSend is null)
@@ -1051,6 +1156,10 @@ internal sealed partial class QuicConnectionCore : IDisposable
     private DateTimeOffset? _idleDeadline;
 
     internal bool IdleTimedOut { get; private set; }
+
+    internal int PathMtu => _mtu.Ceiling;
+
+    internal ulong LastSentApplication { get; private set; }
 
     private void NotePeerIdle(ulong milliseconds)
     {

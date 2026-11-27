@@ -84,9 +84,13 @@ internal sealed class QuicLossRecovery
 
     internal TimeSpan CurrentProbeTimeout() => PtoPeriod(HandshakeConfirmed);
 
+    internal List<ulong> AckedPmtu { get; } = [];
+
+    internal List<ulong> LostPmtu { get; } = [];
+
     internal bool Allows(int bytes) => _controller.BytesInFlight + bytes <= _controller.CongestionWindow;
 
-    internal void OnPacketSent(QuicPacketKind kind, ulong number, int bytes, DateTimeOffset sent, byte[] payload)
+    internal void OnPacketSent(QuicPacketKind kind, ulong number, int bytes, DateTimeOffset sent, byte[] payload, bool pmtu = false)
     {
         int space = Space(kind);
         _sent[space].Add(number);
@@ -97,9 +101,14 @@ internal sealed class QuicLossRecovery
             Bytes = bytes,
             Kind = kind,
             Payload = payload,
+            Pmtu = pmtu,
         });
-        _lastAckEliciting[space] = sent;
-        _controller.OnSent(bytes);
+        if (!pmtu)
+        {
+            _lastAckEliciting[space] = sent;
+            _controller.OnSent(bytes);
+        }
+
         Arm(sent);
     }
 
@@ -133,6 +142,12 @@ internal sealed class QuicLossRecovery
 
         foreach (Flight packet in newly)
         {
+            if (packet.Pmtu)
+            {
+                AckedPmtu.Add(packet.Number);
+                continue;
+            }
+
             _ackedSendTimes.Add(packet.Sent);
             _controller.OnAcked(packet.Bytes, packet.Sent, now, grow);
         }
@@ -232,21 +247,31 @@ internal sealed class QuicLossRecovery
         }
 
         DeclaredLost += lost.Count;
-        bool persistent = InPersistentCongestion(lost);
-        DateTimeOffset newest = lost[0].Sent;
+        var congestion = new List<Flight>();
+        DateTimeOffset newest = default;
         int bytes = 0;
         foreach (Flight packet in lost)
         {
+            if (packet.Pmtu)
+            {
+                LostPmtu.Add(packet.Number);
+                continue;
+            }
+
             bytes += packet.Bytes;
-            if (packet.Sent > newest)
+            if (congestion.Count == 0 || packet.Sent > newest)
             {
                 newest = packet.Sent;
             }
 
+            congestion.Add(packet);
             Pending.Add(new QuicRetransmit { Kind = packet.Kind, Payload = packet.Payload });
         }
 
-        _controller.OnLost(bytes, newest, now, persistent);
+        if (bytes > 0)
+        {
+            _controller.OnLost(bytes, newest, now, InPersistentCongestion(congestion));
+        }
     }
 
     private bool InPersistentCongestion(List<Flight> lost)
@@ -438,6 +463,11 @@ internal sealed class QuicLossRecovery
         Flight? oldest = null;
         foreach (Flight packet in _flight[space])
         {
+            if (packet.Pmtu)
+            {
+                continue;
+            }
+
             if (oldest is null || packet.Number < oldest.Value.Number)
             {
                 oldest = packet;
@@ -618,5 +648,7 @@ internal sealed class QuicLossRecovery
         internal QuicPacketKind Kind;
 
         internal byte[] Payload;
+
+        internal bool Pmtu;
     }
 }

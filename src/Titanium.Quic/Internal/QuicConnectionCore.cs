@@ -279,6 +279,7 @@ internal sealed partial class QuicConnectionCore
                 Retransmit(probe.Kind, probe.Payload);
             }
 
+            ObservePathMtu();
             return true;
         }
 
@@ -306,7 +307,8 @@ internal sealed partial class QuicConnectionCore
         QuicPacketKind kind = default,
         ulong number = 0,
         byte[]? payload = null,
-        bool probe = false)
+        bool probe = false,
+        bool pmtu = false)
     {
         if (datagram.IsEmpty || datagram.Length > 65535)
         {
@@ -325,6 +327,7 @@ internal sealed partial class QuicConnectionCore
             Number = number,
             Payload = payload,
             Probe = probe,
+            Pmtu = pmtu,
         });
         return true;
     }
@@ -366,6 +369,11 @@ internal sealed partial class QuicConnectionCore
                 continue;
             }
 
+            if (!staged.Pmtu && IsPathValidated(staged.Path) && staged.Length > _mtu.Ceiling)
+            {
+                continue;
+            }
+
             if (staged.Track && !staged.Probe && !_loss.Allows(staged.Length))
             {
                 continue;
@@ -381,8 +389,16 @@ internal sealed partial class QuicConnectionCore
             _ids.MarkUsed(DestinationId());
             if (staged.Track && staged.Payload is not null)
             {
-                _loss.OnPacketSent(staged.Kind, staged.Number, staged.Length, now, staged.Payload);
-                NoteAckElicitingSend();
+                _loss.OnPacketSent(staged.Kind, staged.Number, staged.Length, now, staged.Payload, staged.Pmtu);
+                if (staged.Kind == QuicPacketKind.OneRtt)
+                {
+                    LastSentApplication = staged.Number;
+                }
+
+                if (!staged.Pmtu)
+                {
+                    NoteAckElicitingSend();
+                }
             }
 
             return staged.Length;
@@ -490,5 +506,7 @@ internal sealed partial class QuicConnectionCore
         internal ulong Number;
 
         internal byte[]? Payload;
+
+        internal bool Pmtu;
     }
 }
