@@ -288,3 +288,28 @@ One X25519 scalar multiplication on the High performance plan, 200 calls after o
 Idle connections use the in-memory pair, whose two 32 KiB pipes are in both GC figures. At 8,000 connections the managed GC heap was 961 KB each and the platform heap was 84 KB each. Most of the managed heap is the engine's handshake buffers (three 128 KiB arrays per endpoint) plus the stream's record buffers. The working-set deltas were 165 KB and 116 KB; untouched large-object pages make the working set smaller than the committed heap. At 50,000 the platform run finished and the managed run ran out of memory. That is commit charge, about a gigabyte per thousand managed connections, on a 13.8 GiB machine.
 
 A burst of 200 handshakes, not 10,000, ran 32 quiet exchanges. The slowest sample was 47 ms on the platform and 93 ms on the managed stack. That sample is the maximum of 32, not a p99, and the 10,000-client storm was not run.
+
+## Managed QUIC on linuxmini
+
+These rows are the managed QUIC stack against System.Net.Quic on linuxmini. Both peers are in one process. This PC does not start a platform listener, so these numbers are not mixed with a Windows run. Do not paste them onto [Performance](Performance).
+
+| | |
+| --- | --- |
+| OS | Ubuntu 26.04.1 |
+| CPU | AMD Ryzen 5 7640HS, 6 cores / 12 threads |
+| RAM | 12.9 GiB |
+| SDK / runtime | .NET SDK 10.0.404, runtime 10.0.15 |
+| Harness | BenchmarkDotNet 0.14.0, one warmup, 10 iterations, one invocation, one launch. The runner switched the CPU governor to performance for the timed job and restored powersave afterwards. |
+| Handshake | ECDSA P-256, X25519, AES-128-GCM, ALPN `test`. The certificate callback accepts the self-signed leaf. One bidirectional stream. A second stream is rejected. |
+
+A ratio is managed throughput divided by platform throughput, from medians. Above 1.00 the managed stack is faster. BenchmarkDotNet's Error column is half the width of the 99.9% confidence interval of the mean. JSON exports are in `src/Titanium.Quic/design/perf-baselines/`.
+
+| Cell | Platform median | Managed median | Ratio | Gate |
+| --- | ---: | ---: | ---: | --- |
+| Handshake, loopback | 1.558 ms | 4.384 ms | 0.355 | 0.90, missed |
+| 100-byte exchange, 50 on one stream | 34.94 µs | 114.1 µs | 0.306 | 0.90, missed |
+| 64 KiB, loopback, 8 KiB writes | 155.2 µs | 13.11 ms | 0.012 | recorded; no portable numeric gate |
+
+The handshake cell is connect, accept, and close, five times per invoke, and the median is one handshake. It does not open a stream. The small cell is fifty 100-byte echoes on the one bidirectional stream, and the median is one echo. The bulk cell is one 64 KiB transfer on a connection opened before the timed loop. The managed stream window is 1 MiB and is not raised, so the repeated cell stays at 64 KiB: one jitting call, one warmup, and ten iterations fit in that window. The 0.80 Linux offload gate was not measured. `Titanium.Quic.UdpOffload` does not exist.
+
+The handshake Error is 0.074 ms on the platform and 0.125 ms on the managed stack. The small-cell Error is 1.59 µs and 30.1 µs. The bulk Error is 28.2 µs and 4.60 ms. The small-cell iterations are shorter than BenchmarkDotNet's 100 ms guidance, and the managed bulk interval is wide. The gates stay where they are. The managed bulk row allocates about 136 MiB to move 64 KiB.

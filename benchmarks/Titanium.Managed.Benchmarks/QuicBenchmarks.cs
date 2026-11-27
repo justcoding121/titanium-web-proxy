@@ -114,5 +114,5 @@ public class QuicBulkBenchmarks
     }
 
     [Benchmark]
-    public Task Bulk1MiB() => QuicBenchHarness.Transfer(_opened, _chunk);
+    public Task Bulk64KiB() => QuicBenchHarness.Transfer(_opened, _chunk, QuicBenchHarness.RepeatedBulkBytes);
 }

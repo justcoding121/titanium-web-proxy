@@ -18,6 +18,9 @@ internal static class QuicBenchHarness
 
     internal const int BulkBytes = 1024 * 1024;
 
+    // The managed stream window is 1 MiB and is not raised. One jitting call, one warmup, and ten iterations of this size stay inside it.
+    internal const int RepeatedBulkBytes = 64 * 1024;
+
     internal const int ChunkBytes = 8 * 1024;
 
     private static readonly SslApplicationProtocol Protocol = new("test");
@@ -35,9 +38,67 @@ internal static class QuicBenchHarness
         }
     }
 
-    internal static async Task Handshake(StackKind stack, X509Certificate2 certificate)
+    internal static Task Handshake(StackKind stack, X509Certificate2 certificate)
     {
-        await using Opened opened = await Open(stack, certificate).ConfigureAwait(false);
+        return stack == StackKind.Platform ? ConnectPlatform(certificate) : ConnectManaged(certificate);
+    }
+
+    private static async Task ConnectManaged(X509Certificate2 certificate)
+    {
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = ServerOptions(certificate),
+            }),
+        }).ConfigureAwait(false);
+        RequireEphemeral(listener.LocalEndPoint.Port);
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync().AsTask();
+        await using ManagedQuicConnection client = await ManagedQuicConnection.ConnectAsync(new ManagedQuicClientConnectionOptions
+        {
+            RemoteEndPoint = listener.LocalEndPoint,
+            ClientAuthenticationOptions = ClientOptions(),
+        }).ConfigureAwait(false);
+        await using ManagedQuicConnection server = await accepted.ConfigureAwait(false);
+    }
+
+    private static async Task ConnectPlatform(X509Certificate2 certificate)
+    {
+        if (!PlatformListenerAllowed)
+        {
+            throw new InvalidOperationException("A platform QUIC listener is not started on Windows.");
+        }
+
+        if (!QuicListener.IsSupported)
+        {
+            throw new InvalidOperationException("The platform QUIC listener is not supported on this machine.");
+        }
+
+        await using QuicListener listener = await QuicListener.ListenAsync(new QuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ApplicationProtocols = new List<SslApplicationProtocol> { Protocol },
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new QuicServerConnectionOptions
+            {
+                DefaultCloseErrorCode = 0,
+                DefaultStreamErrorCode = 0,
+                IdleTimeout = TimeSpan.FromMinutes(1),
+                MaxInboundBidirectionalStreams = 4,
+                ServerAuthenticationOptions = ServerOptions(certificate),
+            }),
+        }).ConfigureAwait(false);
+        RequireEphemeral(listener.LocalEndPoint.Port);
+        Task<QuicConnection> accepted = listener.AcceptConnectionAsync().AsTask();
+        await using QuicConnection client = await QuicConnection.ConnectAsync(new QuicClientConnectionOptions
+        {
+            RemoteEndPoint = listener.LocalEndPoint,
+            DefaultCloseErrorCode = 0,
+            DefaultStreamErrorCode = 0,
+            IdleTimeout = TimeSpan.FromMinutes(1),
+            ClientAuthenticationOptions = ClientOptions(),
+        }).ConfigureAwait(false);
+        await using QuicConnection server = await accepted.ConfigureAwait(false);
     }
 
     internal static async Task Exchange(Opened opened, byte[] payload)
@@ -46,13 +107,13 @@ internal static class QuicBenchHarness
         await ReadExactly(opened.Outbound, payload.Length).ConfigureAwait(false);
     }
 
-    internal static async Task Transfer(Opened opened, byte[] chunk)
+    internal static async Task Transfer(Opened opened, byte[] chunk, int total)
     {
-        Task read = ReadExactly(opened.Inbound, BulkBytes);
+        Task read = ReadExactly(opened.Inbound, total);
         long written = 0;
-        while (written < BulkBytes)
+        while (written < total)
         {
-            int length = (int)Math.Min(chunk.Length, BulkBytes - written);
+            int length = (int)Math.Min(chunk.Length, total - written);
             await opened.Outbound.WriteAsync(chunk.AsMemory(0, length)).ConfigureAwait(false);
             written += length;
         }
@@ -163,8 +224,12 @@ internal static class QuicBenchHarness
                 ClientAuthenticationOptions = ClientOptions(),
             }).ConfigureAwait(false);
             QuicConnection server = await accepted.ConfigureAwait(false);
-            QuicStream outbound = await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional).ConfigureAwait(false);
-            QuicStream inbound = await server.AcceptInboundStreamAsync().ConfigureAwait(false);
+            using var openBudget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            Task<QuicStream> inboundTask = server.AcceptInboundStreamAsync(openBudget.Token).AsTask();
+            QuicStream outbound = await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, openBudget.Token).ConfigureAwait(false);
+            await outbound.WriteAsync(new byte[] { 1 }, openBudget.Token).ConfigureAwait(false);
+            QuicStream inbound = await inboundTask.ConfigureAwait(false);
+            await ReadExactly(inbound, 1).ConfigureAwait(false);
             return new Opened(outbound, inbound, async () =>
             {
                 await client.DisposeAsync().ConfigureAwait(false);

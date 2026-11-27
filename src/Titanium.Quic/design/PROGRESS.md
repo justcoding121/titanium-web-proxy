@@ -67,3 +67,7 @@ Path MTU discovery starts at 1200 bytes. Probes are padded datagrams. A probe th
 ## T2.17
 
 The in-process network drops, reorders, duplicates, and delays datagrams, and it drops a datagram above its MTU. A dropped Initial is sent again after the probe timeout and the handshake still completes. Reordering and duplication do not close the connection. A delayed datagram is delivered when the clock advances. Idle timeout still fires from that clock. qlog records nothing until it is enabled. Packet and frame seeds do not throw. Negative rows are in TRACEABILITY.md. One platform client completes a handshake to the managed listener. The datagram server selects only TLS_AES_128_GCM_SHA256, which is the packet protection this library installs. The proxy still does not call this library.
+
+## T2.18
+
+BenchmarkDotNet on linuxmini compared this stack with System.Net.Quic. The handshake median ratio is 0.355 and the small-exchange median ratio is 0.306. Both gates are 0.90 and both are missed. The repeated bulk cell is 64 KiB because the stream window is 1 MiB and is not raised; the median ratio is 0.012, and the portable gate is only that the number is recorded. `Titanium.Quic.UdpOffload` does not exist, so the 0.80 Linux offload gate was not measured. The rows are on the local-lab performance page. The proxy still does not call this library.

@@ -103,7 +103,7 @@ internal static class ProbeCommand
         Console.WriteLine($"managed small-50 ms={watch.Elapsed.TotalMilliseconds:F1}");
         watch.Restart();
         QuicBenchHarness.Opened bulk = QuicBenchHarness.Open(StackKind.Managed, certificate).GetAwaiter().GetResult();
-        QuicBenchHarness.Transfer(bulk, new byte[QuicBenchHarness.ChunkBytes]).GetAwaiter().GetResult();
+        QuicBenchHarness.Transfer(bulk, new byte[QuicBenchHarness.ChunkBytes], QuicBenchHarness.BulkBytes).GetAwaiter().GetResult();
         bulk.DisposeAsync().AsTask().GetAwaiter().GetResult();
         watch.Stop();
         Console.WriteLine($"managed bulk-1MiB ms={watch.Elapsed.TotalMilliseconds:F1}");
@@ -132,7 +132,7 @@ internal static class ProbeCommand
         Console.WriteLine($"platform small-50 ms={watch.Elapsed.TotalMilliseconds:F1}");
         watch.Restart();
         QuicBenchHarness.Opened platformBulk = QuicBenchHarness.Open(StackKind.Platform, certificate).GetAwaiter().GetResult();
-        QuicBenchHarness.Transfer(platformBulk, new byte[QuicBenchHarness.ChunkBytes]).GetAwaiter().GetResult();
+        QuicBenchHarness.Transfer(platformBulk, new byte[QuicBenchHarness.ChunkBytes], QuicBenchHarness.BulkBytes).GetAwaiter().GetResult();
         platformBulk.DisposeAsync().AsTask().GetAwaiter().GetResult();
         watch.Stop();
         Console.WriteLine($"platform bulk-1MiB ms={watch.Elapsed.TotalMilliseconds:F1}");
