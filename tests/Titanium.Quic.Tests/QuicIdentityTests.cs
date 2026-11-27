@@ -165,6 +165,22 @@ public sealed class QuicIdentityTests
     }
 
     [TestMethod]
+    public void AResetTokenForTheOriginalDestinationIsNotTheSendTarget()
+    {
+        var ids = new QuicIdentity();
+        byte[] server = [0x13, 0x92, 0xE0, 0x5D, 0x63, 0xCA, 0xAF, 0xD8, 0x27];
+        byte[] original = [0xD2, 0x45, 0x1C, 0x73, 0x83, 0x1C, 0x94, 0xB9];
+        ids.AddPeer(server);
+        ids.RememberResetToken(original, ResetToken);
+        CollectionAssert.AreEqual(server, ids.ActivePeer());
+        Assert.AreEqual(1, ids.PeerActive);
+        ids.MarkUsed(original);
+        byte[] datagram = new byte[40];
+        ResetToken.CopyTo(datagram.AsSpan(datagram.Length - 16));
+        Assert.IsTrue(ids.MatchesReset(datagram));
+    }
+
+    [TestMethod]
     public void RetiringTheLastConnectionIdClosesTheConnection()
     {
         using X509Certificate2 certificate = Certificate();

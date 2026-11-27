@@ -46,7 +46,7 @@ internal sealed class QuicIdentity
             int count = 0;
             foreach (Peer peer in _peers)
             {
-                if (!peer.Retired)
+                if (!peer.Retired && !peer.ResetOnly)
                 {
                     count++;
                 }
@@ -61,7 +61,7 @@ internal sealed class QuicIdentity
         Peer? chosen = null;
         foreach (Peer peer in _peers)
         {
-            if (peer.Retired)
+            if (peer.Retired || peer.ResetOnly)
             {
                 continue;
             }
@@ -283,11 +283,14 @@ internal sealed class QuicIdentity
             return;
         }
 
+        // The token belongs to a connection ID this endpoint chose, not one the
+        // peer asked us to send to. Keep it for reset checks only.
         _peers.Add(new Peer
         {
             Sequence = ulong.MaxValue,
             Id = connectionId.ToArray(),
             Token = token.ToArray(),
+            ResetOnly = true,
         });
     }
 
@@ -370,5 +373,7 @@ internal sealed class QuicIdentity
         internal byte[]? Token;
 
         internal bool Retired;
+
+        internal bool ResetOnly;
     }
 }
