@@ -1526,12 +1526,14 @@ internal sealed partial class QuicConnectionCore : IDisposable
             while (sent < outgoing.Data.Length)
             {
                 int chunk = Math.Min(1000, outgoing.Data.Length - sent);
+                bool lastByte = sent + chunk == outgoing.Data.Length && LastOutgoing(ready, i) && _flow.FinishPending(outgoing.StreamId);
                 var stream = new QuicFrame
                 {
                     Kind = QuicFrameKind.Stream,
                     StreamId = outgoing.StreamId,
                     Offset = outgoing.Offset + (ulong)sent,
                     HasLength = true,
+                    Fin = lastByte,
                     Data = outgoing.Data.AsSpan(sent, chunk),
                 };
                 int count = QuicFrameWriter.Write(in stream, default, frame);
@@ -1541,9 +1543,28 @@ internal sealed partial class QuicConnectionCore : IDisposable
                     return;
                 }
 
+                if (lastByte)
+                {
+                    _flow.ClearFinish(outgoing.StreamId);
+                }
+
                 sent += chunk;
             }
         }
+    }
+
+    private static bool LastOutgoing(IReadOnlyList<Outgoing> ready, int index)
+    {
+        ulong streamId = ready[index].StreamId;
+        for (int i = index + 1; i < ready.Count; i++)
+        {
+            if (ready[i].StreamId == streamId)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void ReturnUnsent(IReadOnlyList<Outgoing> ready, int index, int sent)

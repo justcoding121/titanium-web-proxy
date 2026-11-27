@@ -288,11 +288,23 @@ internal sealed class QuicFlow
 
         if (stream.Pending.Count > 0 || stream.Ready.Count > 0)
         {
+            stream.FinishRequested = true;
             return false;
         }
 
         offset = stream.Sent;
         return true;
+    }
+
+    internal bool FinishPending(ulong streamId) =>
+        _streams.TryGetValue(streamId, out StreamFlow? stream) && stream.FinishRequested && stream.Pending.Count == 0;
+
+    internal void ClearFinish(ulong streamId)
+    {
+        if (_streams.TryGetValue(streamId, out StreamFlow? stream))
+        {
+            stream.FinishRequested = false;
+        }
     }
 
     internal IReadOnlyList<Outgoing> TakeReady()
@@ -432,6 +444,8 @@ internal sealed class QuicFlow
         internal bool Reset;
 
         internal bool StopSending;
+
+        internal bool FinishRequested;
 
         internal List<byte> Pending { get; } = [];
 
