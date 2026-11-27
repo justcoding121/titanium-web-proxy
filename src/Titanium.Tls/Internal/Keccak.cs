@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 namespace Titanium.Tls;
@@ -98,6 +99,9 @@ internal sealed class ManagedKeccak : IKeccak
     private static void Sponge(ReadOnlySpan<byte> input, Span<byte> output, int rate, byte domain)
     {
         Span<ulong> state = stackalloc ulong[LaneCount];
+        Span<byte> tail = stackalloc byte[168];
+        try
+        {
         int offset = 0;
         while (input.Length - offset >= rate)
         {
@@ -106,7 +110,7 @@ internal sealed class ManagedKeccak : IKeccak
             offset += rate;
         }
 
-        Span<byte> tail = stackalloc byte[168];
+        tail.Clear();
         input[offset..].CopyTo(tail);
         tail[input.Length - offset] ^= domain;
         tail[rate - 1] ^= 0x80;
@@ -122,6 +126,12 @@ internal sealed class ManagedKeccak : IKeccak
             {
                 Permute(state);
             }
+        }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(state));
+            CryptographicOperations.ZeroMemory(tail);
         }
     }
 
@@ -171,6 +181,8 @@ internal sealed class ManagedKeccak : IKeccak
     {
         Span<ulong> b = stackalloc ulong[LaneCount];
         Span<ulong> c = stackalloc ulong[5];
+        try
+        {
         for (int round = 0; round < 24; round++)
         {
             c.Clear();
@@ -211,6 +223,12 @@ internal sealed class ManagedKeccak : IKeccak
             }
 
             a[0] ^= RoundConstants[round];
+        }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(b));
+            CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(c));
         }
     }
 

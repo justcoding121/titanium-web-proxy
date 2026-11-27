@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 namespace Titanium.Tls;
@@ -79,11 +80,13 @@ internal sealed class HybridKeyExchange : IKeyExchangeGroup
         private readonly SecretBuffer _scalar = new(32);
         private readonly byte[] _public = new byte[ClientShareLength];
         private readonly byte[] _decapsulation = new byte[ManagedMlKem768.DecapsulationKeyLength];
+        private readonly GCHandle _decapsulationPin;
         private bool _disposed;
 
         internal HybridPrivateShare(IMlKem768 kem, IEntropySource entropy)
         {
             _kem = kem;
+            _decapsulationPin = GCHandle.Alloc(_decapsulation, GCHandleType.Pinned);
             _kem.GenerateKeyPair(_public.AsSpan(0, EncapsulationKeyLength), _decapsulation);
             entropy.Fill(_scalar.Span);
             X25519.PublicKey(_scalar.Span, _public.AsSpan(EncapsulationKeyLength, 32));
@@ -143,6 +146,10 @@ internal sealed class HybridKeyExchange : IKeyExchangeGroup
             _scalar.Dispose();
             CryptographicOperations.ZeroMemory(_decapsulation);
             CryptographicOperations.ZeroMemory(_public);
+            if (_decapsulationPin.IsAllocated)
+            {
+                _decapsulationPin.Free();
+            }
         }
     }
 }

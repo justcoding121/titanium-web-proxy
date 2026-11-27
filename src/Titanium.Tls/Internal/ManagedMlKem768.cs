@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
@@ -325,18 +326,26 @@ internal sealed class ManagedMlKem768 : IMlKem768
         Span<byte> block = stackalloc byte[64 * Eta];
         sigma.CopyTo(input);
         input[32] = nonce;
-        _keccak.Shake256(input, block);
-        for (int i = 0; i < N; i++)
+        try
         {
-            int x = 0;
-            int y = 0;
-            for (int bit = 0; bit < Eta; bit++)
+            _keccak.Shake256(input, block);
+            for (int i = 0; i < N; i++)
             {
-                x += ReadBit(block, (2 * Eta * i) + bit);
-                y += ReadBit(block, (2 * Eta * i) + Eta + bit);
-            }
+                int x = 0;
+                int y = 0;
+                for (int bit = 0; bit < Eta; bit++)
+                {
+                    x += ReadBit(block, (2 * Eta * i) + bit);
+                    y += ReadBit(block, (2 * Eta * i) + Eta + bit);
+                }
 
-            polynomial[i] = (short)Mod(x - y);
+                polynomial[i] = (short)Mod(x - y);
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(input);
+            CryptographicOperations.ZeroMemory(block);
         }
     }
 
@@ -443,10 +452,8 @@ internal sealed class ManagedMlKem768 : IMlKem768
     {
         for (int i = 0; i < N; i++)
         {
-            if (ReadBit(message, i) == 1)
-            {
-                polynomial[i] = (short)Mod(polynomial[i] + ((Q + 1) / 2));
-            }
+            int mask = -ReadBit(message, i);
+            polynomial[i] = (short)Mod(polynomial[i] + (mask & ((Q + 1) / 2)));
         }
     }
 
@@ -468,6 +475,7 @@ internal sealed class ManagedMlKem768 : IMlKem768
         return true;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void CompressEncode(ReadOnlySpan<short> polynomial, int bits, Span<byte> destination)
     {
         Span<short> compressed = stackalloc short[N];
@@ -489,6 +497,7 @@ internal sealed class ManagedMlKem768 : IMlKem768
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void CompressEncodeMessage(ReadOnlySpan<short> polynomial, Span<byte> message)
     {
         message.Clear();
@@ -518,6 +527,7 @@ internal sealed class ManagedMlKem768 : IMlKem768
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void ByteDecode(ReadOnlySpan<byte> source, int bits, Span<short> polynomial)
     {
         int acc = 0;
@@ -554,10 +564,11 @@ internal sealed class ManagedMlKem768 : IMlKem768
         return Mod((long)left * right);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static int Mod(long value)
     {
         int reduced = (int)(value % Q);
-        return reduced < 0 ? reduced + Q : reduced;
+        return reduced + ((reduced >> 31) & Q);
     }
 
     private static short[] BuildZetas()

@@ -74,11 +74,11 @@ internal struct Curve25519Field
     internal readonly void ToBytes(Span<byte> destination)
     {
         Curve25519Field reduced = CarryFull(this);
-        UInt128 q = ((UInt128)reduced._z0 + 19) >> LimbBits;
-        q = ((UInt128)reduced._z1 + q) >> LimbBits;
-        q = ((UInt128)reduced._z2 + q) >> LimbBits;
-        q = ((UInt128)reduced._z3 + q) >> LimbBits;
-        q = ((UInt128)reduced._z4 + q) >> LimbBits;
+        ulong q = (reduced._z0 + 19) >> LimbBits;
+        q = (reduced._z1 + q) >> LimbBits;
+        q = (reduced._z2 + q) >> LimbBits;
+        q = (reduced._z3 + q) >> LimbBits;
+        q = (reduced._z4 + q) >> LimbBits;
         reduced._z0 += (ulong)(19 * q);
         ulong carryOut = reduced._z0 >> LimbBits;
         reduced._z0 &= LimbMask;
@@ -282,7 +282,7 @@ internal struct Curve25519Field
     {
         ulong high = Math.BigMul(left, right, out ulong low);
         ulong sum = lo + low;
-        hi += high + (sum < lo ? 1UL : 0UL);
+        hi += high + CarryBit(lo, low, sum);
         lo = sum;
     }
 
@@ -293,9 +293,9 @@ internal struct Curve25519Field
         ulong scaledHigh = Math.BigMul(low, scale, out ulong scaledLow);
         _ = Math.BigMul(high, scale, out ulong highScaleLow);
         ulong sum = lo + scaledLow;
-        ulong carry = sum < lo ? 1UL : 0UL;
+        ulong carry = CarryBit(lo, scaledLow, sum);
         ulong mid = scaledHigh + highScaleLow;
-        ulong midCarry = mid < scaledHigh ? 1UL : 0UL;
+        ulong midCarry = CarryBit(scaledHigh, highScaleLow, mid);
         ulong hiSum = hi + mid + carry;
         lo = sum;
         hi = hiSum + midCarry;
@@ -309,7 +309,7 @@ internal struct Curve25519Field
         lo &= LimbMask;
         hi = 0;
         ulong sum = next + carry;
-        nextHi += carryHi + (sum < next ? 1UL : 0UL);
+        nextHi += carryHi + CarryBit(next, carry, sum);
         next = sum;
     }
 
@@ -323,8 +323,13 @@ internal struct Curve25519Field
         ulong high = Math.BigMul(carry, 19, out ulong low);
         _ = Math.BigMul(carryHi, 19, out ulong carryHiLow);
         ulong sum = next + low;
-        nextHi += high + carryHiLow + (sum < next ? 1UL : 0UL);
+        nextHi += high + carryHiLow + CarryBit(next, low, sum);
         next = sum;
+    }
+
+    private static ulong CarryBit(ulong left, ulong right, ulong sum)
+    {
+        return ((left & right) | ((left | right) & ~sum)) >> 63;
     }
 
     private static ulong Load(ReadOnlySpan<byte> bytes, int offset)
