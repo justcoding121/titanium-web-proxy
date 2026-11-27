@@ -23,3 +23,7 @@ The Retry integrity tag is AES-128-GCM over the pseudo-packet: the original dest
 ## T2.6
 
 Frames follow RFC 9000 section 12.4 and section 19, plus the RFC 9221 DATAGRAM types 0x30 and 0x31. Each accepted frame writes and reads back. An ACK carries ECN counts. A STREAM works with a length and without one, and so does a DATAGRAM. CRYPTO in a 1-RTT packet is legal. RFC 9000 section 17.2.2 allows an ACK in an Initial packet; an ACK in a 0-RTT packet is a protocol violation, and so is a STREAM in an Initial packet. An unknown type is a frame encoding error. ACK ranges are capped at 32. A STREAM whose offset plus length exceeds 2^62−1 is rejected.
+
+## T2.7
+
+Transport parameters follow RFC 9000 section 18, plus `max_datagram_frame_size` (0x20) and `grease_quic_bit` (0x2ab2). A client list and a server list, including a preferred address, round-trip. `initial_source_connection_id` is required from both sides. A server must send `original_destination_connection_id`, and `retry_source_connection_id` only after a Retry. A duplicate is a transport-parameter error. An identifier of the form 31 * N + 27 is ignored.
