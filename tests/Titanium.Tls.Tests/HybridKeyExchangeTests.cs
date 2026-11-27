@@ -124,7 +124,17 @@ public sealed class HybridKeyExchangeTests
         Assert.IsNotNull(share);
         Assert.AreEqual(HybridKeyExchange.ClientShareLength, share.Length);
         using MLKem kem = MLKem.ImportEncapsulationKey(MLKemAlgorithm.MLKem768, share.AsSpan(0, HybridKeyExchange.EncapsulationKeyLength));
-        Assert.ThrowsException<CryptographicException>(() => MLKem.ImportEncapsulationKey(MLKemAlgorithm.MLKem768, share.AsSpan(32, HybridKeyExchange.EncapsulationKeyLength)));
+        CryptographicException? rejected = null;
+        try
+        {
+            MLKem.ImportEncapsulationKey(MLKemAlgorithm.MLKem768, share.AsSpan(32, HybridKeyExchange.EncapsulationKeyLength));
+        }
+        catch (CryptographicException exception)
+        {
+            rejected = exception;
+        }
+
+        Assert.IsNotNull(rejected);
     }
 
     private static bool Supported()
