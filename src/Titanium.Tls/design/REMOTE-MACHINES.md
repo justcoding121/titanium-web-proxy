@@ -16,6 +16,11 @@ The key is `~/.ssh/id_ed25519_twp` on this PC. `~/.ssh/config` has the aliases `
 
 Non-interactive SSH does not source the shell profile. Call `$HOME/.dotnet/dotnet` directly. `DOTNET_ROOT` is also appended to `~/.zprofile` on macmini and `~/.bashrc` on linuxmini.
 
+## Installed for the managed stack
+
+- PowerShell 7.7.0 at `~/opt/powershell/pwsh` on both machines, from the official release archive. It is not on the default `PATH`. Non-interactive SSH still calls `$HOME/.dotnet/dotnet` and `$HOME/opt/powershell/pwsh` by full path.
+- A clone of the public repository is at `~/work/twp` on both, checked out at `feat/managed-tls-quic-stack`. Sync is a git bundle copied with `scp` (`git fetch ~/twp-managed.bundle HEAD:feat/managed-tls-quic-stack`). Nothing is pushed from these machines.
+
 ## Still to install
 
-PowerShell 7 on both so the same helper scripts can run. Docker and libmsquic on linuxmini when Phase 2 and Phase 4 need them.
+Docker and libmsquic on linuxmini when Phase 2 and Phase 4 need them. `QuicConnection.IsSupported` is false on both remotes until libmsquic is present.

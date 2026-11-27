@@ -17,7 +17,7 @@ Machine: Windows x64, runtime 10.0.15, SDK 10.0.404. Method: a Release console p
 - ECDH P-256 and P-384 agree (32 and 48 bytes). Creating a public-only `ECParameters` value, and creating one whose public point was flipped, both throw `PlatformNotSupportedException` ("curve is not valid for this platform") rather than a point-validation error. Do not rely on that API to reject off-curve points. Validate points in our own code before `DeriveRawSecretAgreement`.
 - `ECCurve.CreateFromFriendlyName("curve25519")` plus `ECDiffieHellman.Create` succeeds on Windows (key size 255) and two keys agree on a 32-byte secret. B5 stays managed: this is not a portable API across the three operating systems, and the Chrome share must not depend on a platform that only sometimes has it. Keep `IKeyExchangeGroup` so a later `net11.0` build can call `X25519DiffieHellman` where it exists.
 - `HKDF.Extract` and `HKDF.Expand` span overloads work. `Aes.EncryptEcb(ReadOnlySpan<byte>, Span<byte>, PaddingMode)` writes 16 bytes. `BrotliDecoder.TryDecompress` returns true.
-- `QuicConnection.IsSupported` is true on this PC. Platform QUIC differential tests that listen on a wildcard UDP socket are not run here (they raise a firewall prompt). Run those on the remote machines and in CI.
+- `QuicConnection.IsSupported` is true on this PC. It is false on macmini and on linuxmini (no libmsquic). Platform QUIC differential tests that listen on a wildcard UDP socket are not run on this PC (they raise a firewall prompt). Run those on the remote machines once libmsquic is installed, and in CI.
 - `SslStream` TLS 1.3 baselines (loopback, self-signed RSA, validation callback returns true, cipher `TLS_AES_256_GCM_SHA384`):
   - TCP reset without `close_notify`: `ReadAsync` throws `IOException` ("forcibly closed by the remote host"), not 0.
   - Read after `Dispose`: `ObjectDisposedException`.
@@ -27,7 +27,11 @@ Machine: Windows x64, runtime 10.0.15, SDK 10.0.404. Method: a Release console p
   - Read cancelled while blocked: `OperationCanceledException`.
   - Concurrent client write and server read: the server reads the 4 bytes.
 
-Effect on the plan: reuse `SslClientHelloInfo`, `QuicException`, the certificate-selection delegates, `SslStreamCertificateContext.Create`, and `MatchesHostname`. Keep a distinct QUIC listener callback because it takes `QuicConnection`. Validate ECDH points ourselves. Record the `SslStream` baselines in `PARITY-DIFFS.md` when the stream exists.
+The same probe on linuxmini (runtime 10.0.15, linux-x64, system OpenSSL 3.5.5) agrees with Windows on the option surface, AEAD, ECDH, and the `SslStream` baselines in `PARITY-DIFFS.md`. Differences: `MLKem.IsSupported` and SHA-3/SHAKE are true; an off-curve point is rejected with `OpenSslCryptographicException` ("point is not on curve"); `curve25519` is `PlatformNotSupportedException`; `QuicConnection.IsSupported` is false.
+
+The same probe on macmini (runtime 10.0.15, osx-arm64) agrees on the option surface, AEAD, and ECDH P-256/P-384. Differences that bind later tasks: `MLKem.IsSupported` is false and `SHA3_256`, `SHA3_512`, `Shake128`, and `Shake256` are false, so T1.6b (managed ML-KEM and a managed Keccak) is required for macOS. `curve25519` is `PlatformNotSupportedException`, so the managed X25519 ladder is the portable implementation. An off-curve point fails with `AppleCFErrorCryptographicException` rather than a shared BCL exception. `QuicConnection.IsSupported` is false. Every `SslStream` TLS 1.3 scenario timed out at 30 seconds (`TimeoutException` on `AuthenticateAsClientAsync`/`AuthenticateAsServerAsync`); macOS is not a parity baseline until that handshake completes.
+
+Effect on the plan: reuse `SslClientHelloInfo`, `QuicException`, the certificate-selection delegates, `SslStreamCertificateContext.Create`, and `MatchesHostname`. Keep a distinct QUIC listener callback because it takes `QuicConnection`. Validate ECDH points ourselves. The Windows and Linux `SslStream` baselines are in `PARITY-DIFFS.md`.
 
 ## S5. OpenSSL oracle
 
@@ -43,8 +47,28 @@ openssl s_client -tls1_3 -connect 127.0.0.1:18443 -groups X25519MLKEM768 -brief
 
 Result: `CONNECTION ESTABLISHED`, `Protocol version: TLSv1.3`, `Ciphersuite: TLS_AES_256_GCM_SHA384`, `Negotiated TLS1.3 group: X25519MLKEM768`, `Signature type: rsa_pss_rsae_sha256`. The key log file was 987 bytes. Self-signed verification failed as expected and did not stop the handshake.
 
-`s_client` key-update stdin (`k`, `K`) is still to be exercised when T1.13 wires the oracle helper. The group and ciphersuite switches used above are the ones the matrix needs (`-groups`, default TLS 1.3 ciphersuite).
+Further switches that the matrix needs, on the same server:
 
-## S2, S3, S4
+```text
+openssl s_client -tls1_3 -connect 127.0.0.1:18443 -groups X25519 -ciphersuites TLS_AES_128_GCM_SHA256 -sigalgs rsa_pss_rsae_sha256 -alpn h2 -quiet
+```
 
-Not run yet. S2 is the crypto cost benchmark. S3 is the managed X25519 implementation and its timing evidence, landed as T1.4 rather than a second throwaway copy. S4 needs an installed Chrome or a user decision.
+`k` and `K` written to `s_client` stdin (a pipe on Windows, a pty on linuxmini) did not add `CLIENT_TRAFFIC_SECRET_1` or `SERVER_TRAFFIC_SECRET_1` to the key log. The handshake secrets (`*_TRAFFIC_SECRET_0`, exporter, handshake traffic) were logged. The key-update command is not yet a confirmed oracle. Do not treat it as working in T1.13 until a run shows the `_1` secrets.
+
+## S4. Chrome 158 ClientHello
+
+Chrome 158.0.8127.89 was installed on this PC. Fifty fresh-profile TCP ClientHellos are in `tests/Titanium.Tls.Tests/Fixtures/captures/chrome/158.0.8127.89/tcp/`. Captured with `tools/managed-stack/Capture-ClientHello.ps1`. The byte-shift in that script must cast each header byte to `int` before `-shl`, or PowerShell keeps the length in a byte and the saved record is truncated.
+
+What is stable across all 50:
+
+- Record legacy version `0x0301`, ClientHello legacy version `0x0303`, session id length 32.
+- Cipher list, in order: GREASE `0x5a5a`, `0x1301`, `0x1302`, `0x1303`, `0xc02b`, `0xc02f`, `0xc02c`, `0xc030`, `0xcca9`, `0xcca8`, `0xc013`, `0xc014`, `0x009c`, `0x009d`, `0x002f`, `0x0035`.
+- Supported groups: GREASE `0x0a0a`, `0x11ec` (X25519MLKEM768), `0x001d`, `0x0017`, `0x0018`.
+- Key shares: GREASE (1 byte), `0x11ec` (1216 bytes), `0x001d` (32 bytes). The X25519 share inside the hybrid did not equal the separate X25519 share in any of the 50 hellos.
+- 19 extensions. Slot 0 and slot 18 are GREASE and those two GREASE values differ. The other slots permute. No `padding` and no `pre_shared_key` on a fresh profile (the hybrid share already makes the hello large, and there is no ticket).
+- Present: `server_name`, ALPN, ECH (`0xfe0d`), `compress_certificate`, `supported_versions`, `key_share`, `signature_algorithms`, `signed_certificate_timestamp`, `extended_master_secret`, `session_ticket`, `psk_key_exchange_modes`, `status_request`, `ec_point_formats`, `renegotiation_info` (`0xff01`), and codepoint `0x44cd` (17613, one per hello; `0x4469` / 17513 is absent). Codepoint `0xca34` is also one per hello and is not named here.
+- A QUIC Initial was not captured. `--enable-quic --origin-to-force-quic-on=localhost:<port>` produced no UDP datagram.
+
+## S2 and S3
+
+S2 (BCL crypto cost) has not been run yet. S3 is the managed X25519 implementation, landed as T1.4. Its JIT disassembly, timing statistic, and speed budget are still open inside T1.4.
