@@ -113,32 +113,46 @@ public sealed class HkdfTests
     }
 
     [TestMethod]
-    public void ExpandLabelAddsNoAllocationBeyondHkdfExpand()
+    public void ExpandLabelMatchesHkdfExpandForMoreThanOneBlock()
+    {
+        byte[] secret = new byte[32];
+        byte[] expected = new byte[80];
+        byte[] actual = new byte[80];
+        HKDF.Expand(HashAlgorithmName.SHA256, secret, expected, BuildInfo(80, "exporter"u8, ReadOnlySpan<byte>.Empty));
+        TlsHkdf.ExpandLabel(HashAlgorithmName.SHA256, secret, "exporter"u8, ReadOnlySpan<byte>.Empty, actual);
+        Assert.IsTrue(actual.AsSpan().SequenceEqual(expected));
+    }
+
+    [TestMethod]
+    public void ExpandLabelAllocatesNothingForASingleBlock()
     {
         byte[] secret = new byte[32];
         byte[] context = new byte[32];
         Span<byte> output = stackalloc byte[32];
-        Span<byte> info = stackalloc byte[54];
-        info.Fill(1);
-        HKDF.Expand(HashAlgorithmName.SHA256, secret, output, info);
         TlsHkdf.ExpandLabel(HashAlgorithmName.SHA256, secret, "c hs traffic"u8, context, output);
 
         const int iterations = 64;
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < iterations; i++)
         {
-            HKDF.Expand(HashAlgorithmName.SHA256, secret, output, info);
-        }
-
-        long expandOnly = GC.GetAllocatedBytesForCurrentThread() - before;
-        before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < iterations; i++)
-        {
             TlsHkdf.ExpandLabel(HashAlgorithmName.SHA256, secret, "c hs traffic"u8, context, output);
         }
 
-        long expandLabel = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.IsTrue(expandLabel <= expandOnly);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.AreEqual(0, allocated);
+    }
+
+    private static byte[] BuildInfo(int length, ReadOnlySpan<byte> label, ReadOnlySpan<byte> context)
+    {
+        byte[] info = new byte[2 + 1 + 6 + label.Length + 1 + context.Length];
+        info[0] = (byte)(length >> 8);
+        info[1] = (byte)length;
+        info[2] = (byte)(6 + label.Length);
+        "tls13 "u8.CopyTo(info.AsSpan(3));
+        label.CopyTo(info.AsSpan(9));
+        info[9 + label.Length] = (byte)context.Length;
+        context.CopyTo(info.AsSpan(10 + label.Length));
+        return info;
     }
 
     private static void AssertRfc5869(string ikmHex, string saltHex, string infoHex, string prkHex, string okmHex)

@@ -54,6 +54,27 @@ internal static class TlsHkdf
         }
 
         int infoLength = 2 + 1 + LabelPrefix.Length + label.Length + 1 + context.Length;
+        if (output.Length <= HashLength(hash))
+        {
+            // HKDF-Expand of at most one block is HMAC(secret, info || 0x01).
+            Span<byte> message = stackalloc byte[infoLength + 1];
+            WriteInfo(message[..infoLength], output.Length, label, context);
+            message[infoLength] = 1;
+            Span<byte> block = stackalloc byte[HashLength(hash)];
+            if (hash == HashAlgorithmName.SHA256)
+            {
+                HMACSHA256.HashData(secret, message, block);
+            }
+            else
+            {
+                HMACSHA384.HashData(secret, message, block);
+            }
+
+            block[..output.Length].CopyTo(output);
+            CryptographicOperations.ZeroMemory(block);
+            return;
+        }
+
         Span<byte> info = infoLength <= 512 ? stackalloc byte[infoLength] : new byte[infoLength];
         WriteInfo(info, output.Length, label, context);
         HKDF.Expand(hash, secret, output, info);
