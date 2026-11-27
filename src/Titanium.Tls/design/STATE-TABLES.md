@@ -12,7 +12,8 @@ Client and server transitions for the synchronous handshake in `TlsEngine`. A me
 | `WaitCertificateDecision` | no message; `Resume` | `Resume(true)` goes to `WaitCertificateVerify`; `Resume(false)` is `bad_certificate` (42) |
 | `WaitCertificateVerify` | CertificateVerify | `WaitFinished` |
 | `WaitFinished` | Finished | `Connected`, after the client writes its Certificate (when requested), CertificateVerify (when it has a certificate), and Finished |
-| `Connected` | NewSessionTicket | stays `Connected`. KeyUpdate is `unexpected_message` until the read keys can change |
+| `Connected` | NewSessionTicket | stays `Connected` |
+| `Connected` | KeyUpdate | stays `Connected` and rotates the read keys. `update_requested` sets a write-side response |
 | `Closed` | nothing | input is ignored |
 
 A second HelloRetryRequest is `unexpected_message`. An HelloRetryRequest that selects the group the client already shared is `illegal_parameter` (47), whether or not it carries a cookie. The second ClientHello must keep the same fields except `key_share`, `cookie`, `padding`, a removed `early_data`, and the recomputed PSK binder. A missing share for the requested group is `illegal_parameter`.
@@ -27,7 +28,7 @@ A second HelloRetryRequest is `unexpected_message`. An HelloRetryRequest that se
 | `WaitClientCertificate` | Certificate | an empty list goes to `WaitFinished`; a chain that builds goes to `WaitClientCertificateVerify` |
 | `WaitClientCertificateVerify` | CertificateVerify | `WaitFinished` |
 | `WaitFinished` | Finished | `Connected`, then one NewSessionTicket when a ticket protector was supplied |
-| `Connected` | nothing | KeyUpdate is `unexpected_message` until the read keys can change |
+| `Connected` | KeyUpdate | stays `Connected` and rotates the read keys. `update_requested` sets a write-side response |
 
 The server does not accept a post-handshake Certificate. Early data is not negotiated.
 
@@ -60,7 +61,8 @@ A ServerHello legacy_version other than `0x0303` is `illegal_parameter`. A missi
 - An empty client Certificate is legal and is not followed by CertificateVerify (section 4.4.2). A non-empty one must chain for `clientAuth`. Hostname is not checked on a client certificate. A failure is `bad_certificate` and does not pause.
 - The server certificate is checked for `serverAuth` and the hostname, then the client pauses. Stapled OCSP (`status_request`) and SCTs are copied and not enforced. Revocation mode is `NoCheck`.
 - A NewSessionTicket lifetime above 604800 seconds is `illegal_parameter` (section 4.6.1). The ticket this server writes uses 6 hours. Resumption also requires the binder, cipher, server name, ALPN, and leaf SHA-256.
-- KeyUpdate does not derive the next traffic keys. Both roles close with `unexpected_message` instead of continuing on the old keys.
+- KeyUpdate rotates only the read traffic secret. A request is answered on the write path, under the old write key, before that direction rotates. An empty KeyUpdate body is `illegal_parameter`.
+- A plaintext record longer than 2^14 bytes is `record_overflow`. A ciphertext record may be 2^14 + 256 bytes; the AEAD check still rejects an inner plaintext above 2^14 + 1.
 - A handshake message must end the record when it installs new keys. Bytes left in that record are `unexpected_message`. That covers ServerHello and the peer Finished on the client, and ClientHello and the client Finished on the server.
 - A known extension on a message that does not use it is `illegal_parameter`. A response extension this client did not offer is `unsupported_extension` (110), except `cookie` on HelloRetryRequest.
 - The server Certificate context must be empty. An empty server certificate list is `decode_error`. The client Certificate must use the empty context this server requested.

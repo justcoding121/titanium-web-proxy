@@ -248,7 +248,7 @@ public sealed class ClientHandshakeTests
                 });
             }
 
-            if (type != 4)
+            if (type is not 4 and not 24)
             {
                 Reject("connected", type, static (client, server, output) =>
                 {
@@ -261,6 +261,25 @@ public sealed class ClientHandshakeTests
                 }, application: true);
             }
         }
+    }
+
+    [TestMethod]
+    public void EmptyKeyUpdateIsIllegal()
+    {
+        using var client = new TlsEngine(TlsRole.Client);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        using var server = ScriptedServer.Accept(output.Bytes.ToArray());
+        client.Advance(server.ServerHelloRecord(), out _, output);
+        client.Advance(server.EncryptedExtensionsMessage(), out _, output);
+        client.Advance(server.EncryptedCertificateMessage(), out _, output);
+        client.Resume(true, output);
+        client.Advance(server.EncryptedCertificateVerifyMessage(), out _, output);
+        client.Advance(server.EncryptedFinishedMessage(), out _, output);
+        Assert.AreEqual(TlsEngineState.Connected, client.State);
+        client.Advance(server.EncryptedApplication([24, 0, 0, 0]), out _, output);
+        Assert.AreEqual(47, server.ClientAlert(output.Bytes.ToArray(), application: true));
+        Assert.AreEqual(TlsEngineState.Closed, client.State);
     }
 
     [TestMethod]

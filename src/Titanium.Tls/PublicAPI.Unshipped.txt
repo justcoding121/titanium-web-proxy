@@ -32,3 +32,62 @@ Titanium.Tls.TlsFingerprintProfile.TlsFingerprintProfile() -> void
 Titanium.Tls.TlsFingerprintProfiles
 Titanium.Tls.TlsVersionNotSupportedException
 Titanium.Tls.TlsVersionNotSupportedException.TlsVersionNotSupportedException() -> void
+Titanium.Tls.ITlsKeyLogSink
+Titanium.Tls.ITlsKeyLogSink.Write(string! line) -> void
+Titanium.Tls.TlsAlertException
+Titanium.Tls.TlsAlertException.Description.get -> byte
+Titanium.Tls.TlsAlertException.TlsAlertException(byte description, bool sent) -> void
+Titanium.Tls.TlsAlertException.WasSent.get -> bool
+Titanium.Tls.TlsServerOptionsSelectionCallback
+virtual Titanium.Tls.TlsServerOptionsSelectionCallback.Invoke(Titanium.Tls.TlsStream! stream, System.Net.Security.SslClientHelloInfo hello, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Net.Security.SslServerAuthenticationOptions!>
+Titanium.Tls.TlsStream
+Titanium.Tls.TlsStream.AuthenticateAsClient(System.Net.Security.SslClientAuthenticationOptions! options) -> void
+Titanium.Tls.TlsStream.AuthenticateAsClientAsync(System.Net.Security.SslClientAuthenticationOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Tls.TlsStream.AuthenticateAsServer(System.Net.Security.SslServerAuthenticationOptions! options) -> void
+Titanium.Tls.TlsStream.AuthenticateAsServerAsync(System.Net.Security.SslServerAuthenticationOptions! options) -> System.Threading.Tasks.Task!
+Titanium.Tls.TlsStream.AuthenticateAsServerAsync(System.Net.Security.SslServerAuthenticationOptions! options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Titanium.Tls.TlsStream.AuthenticateAsServerAsync(Titanium.Tls.TlsServerOptionsSelectionCallback! callback, object? state, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Tls.TlsStream.ExportKeyingMaterial(System.Span<byte> destination, string! label, System.ReadOnlySpan<byte> context) -> void
+Titanium.Tls.TlsStream.FingerprintFidelity.get -> Titanium.Tls.TlsFingerprintFidelity
+Titanium.Tls.TlsStream.IsAuthenticated.get -> bool
+Titanium.Tls.TlsStream.IsEncrypted.get -> bool
+Titanium.Tls.TlsStream.IsMutuallyAuthenticated.get -> bool
+Titanium.Tls.TlsStream.IsServer.get -> bool
+Titanium.Tls.TlsStream.IsSigned.get -> bool
+Titanium.Tls.TlsStream.LocalCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate?
+Titanium.Tls.TlsStream.NegotiateClientCertificateAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Tls.TlsStream.NegotiatedApplicationProtocol.get -> System.Net.Security.SslApplicationProtocol
+Titanium.Tls.TlsStream.NegotiatedCipherSuite.get -> System.Net.Security.TlsCipherSuite
+Titanium.Tls.TlsStream.RemoteCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate?
+Titanium.Tls.TlsStream.ShutdownAsync() -> System.Threading.Tasks.Task!
+Titanium.Tls.TlsStream.SslProtocol.get -> System.Security.Authentication.SslProtocols
+Titanium.Tls.TlsStream.TargetHostName.get -> string!
+Titanium.Tls.TlsStream.TlsStream(System.IO.Stream! inner) -> void
+Titanium.Tls.TlsStream.TlsStream(System.IO.Stream! inner, bool leaveInnerStreamOpen) -> void
+Titanium.Tls.TlsStream.TlsStream(System.IO.Stream! inner, bool leaveInnerStreamOpen, Titanium.Tls.TlsStreamOptions? options) -> void
+Titanium.Tls.TlsStream.TlsStream(System.IO.Stream! inner, Titanium.Tls.TlsStreamOptions? options) -> void
+override Titanium.Tls.TlsStream.CanRead.get -> bool
+override Titanium.Tls.TlsStream.CanSeek.get -> bool
+override Titanium.Tls.TlsStream.CanWrite.get -> bool
+override Titanium.Tls.TlsStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override Titanium.Tls.TlsStream.Flush() -> void
+override Titanium.Tls.TlsStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override Titanium.Tls.TlsStream.Length.get -> long
+override Titanium.Tls.TlsStream.Position.get -> long
+override Titanium.Tls.TlsStream.Position.set -> void
+override Titanium.Tls.TlsStream.Read(byte[]! buffer, int offset, int count) -> int
+override Titanium.Tls.TlsStream.Read(System.Span<byte> buffer) -> int
+override Titanium.Tls.TlsStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override Titanium.Tls.TlsStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override Titanium.Tls.TlsStream.SetLength(long value) -> void
+override Titanium.Tls.TlsStream.Write(byte[]! buffer, int offset, int count) -> void
+override Titanium.Tls.TlsStream.Write(System.ReadOnlySpan<byte> buffer) -> void
+override Titanium.Tls.TlsStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Tls.TlsStreamOptions
+Titanium.Tls.TlsStreamOptions.FingerprintProfile.get -> Titanium.Tls.TlsFingerprintProfile?
+Titanium.Tls.TlsStreamOptions.FingerprintProfile.set -> void
+Titanium.Tls.TlsStreamOptions.KeyLog.get -> Titanium.Tls.ITlsKeyLogSink?
+Titanium.Tls.TlsStreamOptions.KeyLog.set -> void
+Titanium.Tls.TlsStreamOptions.StrictCloseNotify.get -> bool
+Titanium.Tls.TlsStreamOptions.StrictCloseNotify.set -> void
+Titanium.Tls.TlsStreamOptions.TlsStreamOptions() -> void

@@ -20,7 +20,7 @@ internal sealed partial class TlsEngine
 
     private static ReadOnlySpan<byte> DowngradeTls11 => [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x00];
 
-    private readonly ushort[] _offered = new ushort[12];
+    private readonly ushort[] _offered = new ushort[16];
     private int _offeredCount;
     private bool _certificateAllowsP256;
     private IPrivateKeyShare? _share;
@@ -36,6 +36,10 @@ internal sealed partial class TlsEngine
     internal X509Certificate2Collection? TrustAnchors { get; set; }
 
     internal X509Certificate2? LocalCertificate { get; set; }
+
+    internal string[]? ApplicationProtocols { get; set; }
+
+    internal bool OfferStatusRequest { get; set; }
 
     internal SslPolicyErrors ServerCertificateErrors { get; private set; }
 
@@ -72,6 +76,15 @@ internal sealed partial class TlsEngine
         _serverHandshakeSecret?.Dispose();
         _clientApplication?.Dispose();
         _serverApplication?.Dispose();
+        _exporter?.Dispose();
+        _serverCheck?.Dispose();
+        _remoteCertificate?.Dispose();
+        if (_plaintext is not null)
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(_plaintext, clearArray: true);
+            _plaintext = null;
+        }
+
         _resumptionMaster?.Dispose();
         _transcript?.Dispose();
         _schedule?.Dispose();
@@ -148,6 +161,12 @@ internal sealed partial class TlsEngine
         if (type == HandshakeType.NewSessionTicket)
         {
             OnTicket(bodyLength, output);
+            return;
+        }
+
+        if (type == HandshakeType.KeyUpdate)
+        {
+            OnKeyUpdate(bodyLength, output);
         }
     }
 
@@ -338,12 +357,11 @@ internal sealed partial class TlsEngine
         }
 
         _transcript!.Append(message);
-        using (TlsCertificateCheck check = TlsChainValidator.Evaluate(certificate.CertificateList, _serverName, TrustAnchors, serverCertificate: true))
-        {
-            ServerCertificateErrors = check.Errors;
-            StapledOcspResponse = check.StapledStatus;
-            SignedCertificateTimestamps = check.SignedCertificateTimestamps;
-        }
+        _serverCheck?.Dispose();
+        _serverCheck = TlsChainValidator.Evaluate(certificate.CertificateList, _serverName, TrustAnchors, serverCertificate: true);
+        ServerCertificateErrors = _serverCheck.Errors;
+        StapledOcspResponse = _serverCheck.StapledStatus;
+        SignedCertificateTimestamps = _serverCheck.SignedCertificateTimestamps;
 
         State = TlsEngineState.WaitCertificateDecision;
         _paused = true;
@@ -406,6 +424,7 @@ internal sealed partial class TlsEngine
         _schedule.ApplicationTrafficSecret(true, hash, clientApp);
         _schedule.ApplicationTrafficSecret(false, hash, serverApp);
         _schedule.ExporterMaster(hash, exporter);
+        RememberTrafficSecrets(clientApp, serverApp, exporter);
         ReadOnlySpan<byte> clientCertificate = default;
         ReadOnlySpan<byte> clientVerify = default;
         byte[]? certificateMessage = null;
@@ -421,6 +440,7 @@ internal sealed partial class TlsEngine
                 _transcript.Append(verifyMessage);
                 clientCertificate = certificateMessage;
                 clientVerify = verifyMessage;
+                _sentClientCertificate = true;
             }
             else
             {
@@ -577,6 +597,17 @@ internal sealed partial class TlsEngine
         if (_serverName is not null)
         {
             WriteServerName(ref writer, _serverName);
+        }
+
+        if (ApplicationProtocols is { Length: > 0 })
+        {
+            WriteAlpn(ref writer, ApplicationProtocols);
+        }
+
+        if (OfferStatusRequest)
+        {
+            WriteOffered(ref writer, ExtensionType.StatusRequest, [1, 0, 0, 0, 0]);
+            WriteOffered(ref writer, ExtensionType.SignedCertificateTimestamp, []);
         }
 
         if (_psk is not null)
@@ -800,6 +831,7 @@ internal sealed partial class TlsEngine
             return;
         }
 
+        RememberSelectedProtocol(extensions);
         _transcript!.Append(message);
         State = _pskSelected ? TlsEngineState.WaitFinished : TlsEngineState.WaitCertificateRequestOrCertificate;
     }
@@ -995,6 +1027,29 @@ internal sealed partial class TlsEngine
     {
         writer.TryWriteUInt16(type);
         writer.TryWriteVector16(body);
+    }
+
+    private void WriteAlpn(ref TlsWriter writer, string[] protocols)
+    {
+        int list = 0;
+        foreach (string protocol in protocols)
+        {
+            list += 1 + System.Text.Encoding.ASCII.GetByteCount(protocol);
+        }
+
+        var body = new byte[2 + list];
+        body[0] = (byte)(list >> 8);
+        body[1] = (byte)list;
+        int at = 2;
+        foreach (string protocol in protocols)
+        {
+            byte[] name = System.Text.Encoding.ASCII.GetBytes(protocol);
+            body[at++] = (byte)name.Length;
+            name.CopyTo(body.AsSpan(at));
+            at += name.Length;
+        }
+
+        WriteOffered(ref writer, ExtensionType.ApplicationLayerProtocolNegotiation, body);
     }
 
     private void WriteServerName(ref TlsWriter writer, string name)

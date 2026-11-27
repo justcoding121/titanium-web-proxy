@@ -92,6 +92,12 @@ internal sealed partial class TlsEngine
         if (type == HandshakeType.Finished)
         {
             OnClientFinished(bodyLength, output);
+            return;
+        }
+
+        if (type == HandshakeType.KeyUpdate)
+        {
+            OnKeyUpdate(bodyLength, output);
         }
     }
 
@@ -104,6 +110,7 @@ internal sealed partial class TlsEngine
             return;
         }
 
+        _loggedRandom = hello.Random.ToArray();
         _ignoreEarlyData = TryExtension(hello.Extensions, ExtensionType.EarlyData, out _);
         if (_hrrSeen)
         {
@@ -344,11 +351,11 @@ internal sealed partial class TlsEngine
         _schedule.AdvanceToMaster();
         _clientApplication = new SecretBuffer(hashLength);
         _serverApplication = new SecretBuffer(hashLength);
-        var exporter = new SecretBuffer(hashLength);
+        _exporter?.Dispose();
+        _exporter = new SecretBuffer(hashLength);
         _schedule.ApplicationTrafficSecret(true, transcriptHash[..hashLength], _clientApplication.Span);
         _schedule.ApplicationTrafficSecret(false, transcriptHash[..hashLength], _serverApplication.Span);
-        _schedule.ExporterMaster(transcriptHash[..hashLength], exporter.Span);
-        exporter.Dispose();
+        _schedule.ExporterMaster(transcriptHash[..hashLength], _exporter.Span);
         WriteServerRecord(output, serverHello);
         if (_sessionId!.Length > 0)
         {
@@ -427,6 +434,7 @@ internal sealed partial class TlsEngine
         }
 
         _transcript.Append(message);
+        _clientAuthenticated = true;
         State = TlsEngineState.WaitFinished;
     }
 

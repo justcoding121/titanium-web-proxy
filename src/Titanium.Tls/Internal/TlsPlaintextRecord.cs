@@ -5,7 +5,7 @@ namespace Titanium.Tls;
 /// <summary>Unprotected TLS records used before the handshake keys exist.</summary>
 internal static class TlsPlaintextRecord
 {
-    internal static bool TryReadHeader(ReadOnlySpan<byte> input, out byte contentType, out int version, out int length, out TlsRecordAlert alert)
+    internal static bool TryReadHeader(ReadOnlySpan<byte> input, out byte contentType, out int version, out int length, out TlsRecordAlert alert, int maxLength = TlsRecordProtector.MaxPlaintext)
     {
         contentType = 0;
         version = 0;
@@ -24,7 +24,7 @@ internal static class TlsPlaintextRecord
             return false;
         }
 
-        if (length > TlsRecordProtector.MaxPlaintext)
+        if (length > maxLength)
         {
             alert = TlsRecordAlert.RecordOverflow;
             return false;

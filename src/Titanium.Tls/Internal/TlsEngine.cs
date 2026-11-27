@@ -1,4 +1,5 @@
 using System;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Tls;
 
@@ -110,6 +111,20 @@ internal sealed partial class TlsEngine : IDisposable
     private bool _ignoreEarlyData;
     private int _earlyDataSkipped;
     private const int MaxIgnoredEarlyData = 16384;
+    private byte[]? _plaintext;
+    private int _plaintextLength;
+    private int _plaintextOffset;
+    private SecretBuffer? _exporter;
+    private TlsCertificateCheck? _serverCheck;
+    private X509Certificate2? _remoteCertificate;
+    private bool _sentClientCertificate;
+    private bool _clientAuthenticated;
+    private byte[]? _loggedRandom;
+    internal bool KeyUpdateResponseNeeded;
+
+    internal bool SendKeyUpdate;
+
+    internal byte LastLocalAlert { get; private set; }
     private readonly IEntropySource _entropy;
     private readonly string? _serverName;
     private readonly ITlsSessionCache? _cache;
@@ -334,10 +349,18 @@ internal sealed partial class TlsEngine : IDisposable
                     continue;
                 }
 
-                Consume(recordLength);
                 if (result.ContentType != 23 || State != TlsEngineState.Connected)
                 {
+                    Consume(recordLength);
                     Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+                    break;
+                }
+
+                AppendPlaintext(_stash.AsSpan(TlsRecordProtector.HeaderLength, result.ContentLength));
+                Consume(recordLength);
+                if (result.ContentLength > 0)
+                {
+                    break;
                 }
 
                 continue;
@@ -399,7 +422,8 @@ internal sealed partial class TlsEngine : IDisposable
             return true;
         }
 
-        if (!TlsPlaintextRecord.TryReadHeader(_stash, out _, out _, out recordLength, out TlsRecordAlert headerAlert))
+        int maxLength = _read is null ? TlsRecordProtector.MaxPlaintext : TlsRecordProtector.MaxCiphertext;
+        if (!TlsPlaintextRecord.TryReadHeader(_stash, out _, out _, out recordLength, out TlsRecordAlert headerAlert, maxLength))
         {
             alert = (byte)headerAlert;
             return false;
@@ -523,7 +547,7 @@ internal sealed partial class TlsEngine : IDisposable
                 TlsEngineState.WaitCertificate => type == HandshakeType.Certificate,
                 TlsEngineState.WaitCertificateVerify => type == HandshakeType.CertificateVerify,
                 TlsEngineState.WaitFinished => type == HandshakeType.Finished,
-                TlsEngineState.Connected => type == HandshakeType.NewSessionTicket,
+                TlsEngineState.Connected => type is HandshakeType.NewSessionTicket or HandshakeType.KeyUpdate,
                 _ => false,
             };
         }
@@ -534,7 +558,7 @@ internal sealed partial class TlsEngine : IDisposable
             TlsEngineState.WaitClientCertificate => type == HandshakeType.Certificate,
             TlsEngineState.WaitClientCertificateVerify => type == HandshakeType.CertificateVerify,
             TlsEngineState.WaitFinished => type == HandshakeType.Finished,
-            TlsEngineState.Connected => false,
+            TlsEngineState.Connected => type == HandshakeType.KeyUpdate,
             _ => false,
         };
     }
@@ -554,6 +578,7 @@ internal sealed partial class TlsEngine : IDisposable
     {
         State = TlsEngineState.Closed;
         _paused = false;
+        LastLocalAlert = description;
         if (_alertsEncrypted && _write != null)
         {
             Span<byte> plain = stackalloc byte[2];
