@@ -196,17 +196,21 @@ internal sealed class QuicLossRecovery
 
     internal List<QuicRetransmit> Pending { get; } = [];
 
-    internal void DiscardInitial()
+    internal void DiscardInitial() => Discard(0);
+
+    internal void DiscardHandshake() => Discard(1);
+
+    private void Discard(int space)
     {
         int bytes = 0;
-        foreach (Flight packet in _flight[0])
+        foreach (Flight packet in _flight[space])
         {
             bytes += packet.Bytes;
         }
 
-        _flight[0].Clear();
-        _lossTime[0] = null;
-        _lastAckEliciting[0] = null;
+        _flight[space].Clear();
+        _lossTime[space] = null;
+        _lastAckEliciting[space] = null;
         if (bytes > 0)
         {
             _controller.OnDiscarded(bytes);

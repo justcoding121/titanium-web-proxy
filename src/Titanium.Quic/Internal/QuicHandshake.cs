@@ -692,6 +692,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 }
 
                 _loss.HandshakeConfirmed = true;
+                _loss.DiscardHandshake();
                 continue;
             }
 
@@ -1185,6 +1186,9 @@ internal sealed partial class QuicConnectionCore : IDisposable
         {
             _sentHandshakeDone = true;
             SendHandshakeDone();
+            // The peer already has this flight: it had to, to send Finished. Leaving the
+            // packets in flight fills the congestion window, so the file never goes out.
+            _loss.DiscardHandshake();
         }
 
         ReleaseHeldApplication();
