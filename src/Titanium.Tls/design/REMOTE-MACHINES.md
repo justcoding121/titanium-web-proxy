@@ -23,7 +23,7 @@ Non-interactive SSH does not source the shell profile. Call `$HOME/.dotnet/dotne
 
 ## Installed for the QUIC interop leg
 
-- linuxmini: Docker Engine 29.1.3 from the Ubuntu package `docker.io` (29.1.3-0ubuntu4.1), with containerd 2.2.2 and runc 1.4.0. `docker.service` is enabled. The install is for the QUIC interop runner and h3spec. No extra firewall rule was added.
+- linuxmini: Docker Engine 29.1.3 from the Ubuntu package `docker.io` (29.1.3-0ubuntu4.1), with containerd 2.2.2 and runc 1.4.0. `docker.service` is enabled. Docker Compose 2.40.3 is the `docker-compose-v2` package. `tshark` 4.6.4 is installed for the interop runner. The install is for the QUIC interop runner and h3spec. No extra firewall rule was added.
 - linuxmini: `h3spec` 0.1.15, the Linux x86_64 release binary, at `/tmp/h3spec-linux-x86_64`. The release page did not publish a checksum file. The SHA-256 of the downloaded file is `c3c5f497153f4ba81f82023791ba7f9a4bc46d4141211e614196f141c5996830`.
 
 ## Still to install
