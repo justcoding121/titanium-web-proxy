@@ -220,19 +220,23 @@ internal sealed partial class QuicConnectionCore
 
     internal DateTimeOffset? NextTimeout()
     {
-        DateTimeOffset? loss = _loss.Timeout;
-        DateTimeOffset? pace = PaceDeadline();
-        if (loss is null)
+        DateTimeOffset? soonest = _loss.Timeout;
+        Consider(PaceDeadline(), ref soonest);
+        Consider(_idleDeadline, ref soonest);
+        return soonest;
+    }
+
+    private static void Consider(DateTimeOffset? candidate, ref DateTimeOffset? soonest)
+    {
+        if (candidate is null)
         {
-            return pace;
+            return;
         }
 
-        if (pace is null || loss.Value <= pace.Value)
+        if (soonest is null || candidate.Value < soonest.Value)
         {
-            return loss;
+            soonest = candidate;
         }
-
-        return pace;
     }
 
     internal void HandleDatagram(DateTimeOffset now, ReadOnlySpan<byte> datagram, in PathInfo path)
@@ -258,6 +262,13 @@ internal sealed partial class QuicConnectionCore
         if (HandshakeComplete)
         {
             _loss.HandshakeConfirmed = true;
+        }
+
+        if (_idleDeadline is DateTimeOffset idle && now >= idle)
+        {
+            IdleTimedOut = true;
+            IsClosed = true;
+            return true;
         }
 
         if (_loss.Timeout is DateTimeOffset due && now >= due)
@@ -318,6 +329,20 @@ internal sealed partial class QuicConnectionCore
         return true;
     }
 
+    internal void Migrate(in PathInfo path)
+    {
+        _path = path;
+        _hasPath = true;
+        if (IndexOf(path) < 0)
+        {
+            _paths.Add(new PathState { Path = path });
+        }
+    }
+
+    internal long CongestionWindow => _loss.CongestionWindow;
+
+    internal long BytesInFlight => _loss.BytesInFlight;
+
     internal bool IsPathValidated(in PathInfo path)
     {
         int index = IndexOf(path);
@@ -328,7 +353,7 @@ internal sealed partial class QuicConnectionCore
     {
         _now = now;
         path = default;
-        if (ClosedByStatelessReset)
+        if (ClosedByStatelessReset || IdleTimedOut)
         {
             return 0;
         }
@@ -357,6 +382,7 @@ internal sealed partial class QuicConnectionCore
             if (staged.Track && staged.Payload is not null)
             {
                 _loss.OnPacketSent(staged.Kind, staged.Number, staged.Length, now, staged.Payload);
+                NoteAckElicitingSend();
             }
 
             return staged.Length;

@@ -304,6 +304,10 @@ internal sealed partial class QuicConnectionCore : IDisposable
             }
 
             TakePayload(kind, plain.AsSpan(0, plainLength));
+            if (!IsClosed)
+            {
+                NotePeerPacket();
+            }
         }
         finally
         {
@@ -442,7 +446,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
             if (frame.Kind == QuicFrameKind.Ack)
             {
                 TimeSpan delay = TimeSpan.FromTicks((long)frame.AckDelay * 80);
-                if (!_loss.OnAck(kind, frame.LargestAcknowledged, delay, ranges, frame.AckRangeCount, _now))
+                if (!_loss.OnAck(kind, frame.LargestAcknowledged, delay, ranges, frame.AckRangeCount, _now, IsPathValidated(_path)))
                 {
                     MarkClosed(QuicFrameReader.ProtocolViolation, send: true);
                     return;
@@ -668,6 +672,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         if (match)
         {
             _flow.SetPeer(parsed);
+            NotePeerIdle(parsed.MaxIdleTimeout);
         }
 
         if (match)
@@ -1014,7 +1019,84 @@ internal sealed partial class QuicConnectionCore : IDisposable
         if (QuicTransportParametersCodec.TryRead(encoded, fromServer, retryReceived: false, out QuicTransportParameters parsed, out _))
         {
             _flow.SetLocal(parsed, _client);
+            _localIdleMs = parsed.MaxIdleTimeout;
+            ArmIdle(_now);
         }
+    }
+
+    internal void SendKeepAlive()
+    {
+        if (IsClosed || _applicationSend is null)
+        {
+            return;
+        }
+
+        Span<byte> frame = stackalloc byte[4];
+        var ping = new QuicFrame { Kind = QuicFrameKind.Ping };
+        int count = QuicFrameWriter.Write(in ping, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame, 0, probe: true);
+        }
+    }
+
+    private ulong _localIdleMs;
+
+    private ulong _peerIdleMs;
+
+    private bool _havePeerIdle;
+
+    private bool _sentSinceReceive;
+
+    private DateTimeOffset? _idleDeadline;
+
+    internal bool IdleTimedOut { get; private set; }
+
+    private void NotePeerIdle(ulong milliseconds)
+    {
+        _peerIdleMs = milliseconds;
+        _havePeerIdle = true;
+        ArmIdle(_now);
+    }
+
+    private void NotePeerPacket()
+    {
+        _sentSinceReceive = false;
+        ArmIdle(_now);
+    }
+
+    private void NoteAckElicitingSend()
+    {
+        if (_sentSinceReceive)
+        {
+            return;
+        }
+
+        _sentSinceReceive = true;
+        ArmIdle(_now);
+    }
+
+    private void ArmIdle(DateTimeOffset now)
+    {
+        ulong chosen = _localIdleMs;
+        if (_havePeerIdle && _peerIdleMs != 0 && (_localIdleMs == 0 || _peerIdleMs < chosen))
+        {
+            chosen = _peerIdleMs;
+        }
+        if (chosen == 0 || now == default)
+        {
+            _idleDeadline = null;
+            return;
+        }
+
+        TimeSpan period = TimeSpan.FromMilliseconds(chosen);
+        TimeSpan floor = TimeSpan.FromTicks(_loss.CurrentProbeTimeout().Ticks * 3);
+        if (period < floor)
+        {
+            period = floor;
+        }
+
+        _idleDeadline = now + period;
     }
 
     private void StageReady()

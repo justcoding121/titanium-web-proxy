@@ -47,3 +47,7 @@ Connection IDs, Retry, stateless reset, and path validation follow RFC 9000 sect
 ## T2.12
 
 Streams use the peer's initial credit and later MAX_DATA and MAX_STREAM_DATA values. A send that does not fit waits, then continues when the credit grows. Data past the advertised limit closes with FLOW_CONTROL_ERROR (0x03). CRYPTO and STREAM reassembly buffer at most 16,384 bytes of out-of-order data. A larger gap closes CRYPTO with CRYPTO_BUFFER_EXCEEDED (0x0d) and a stream with FLOW_CONTROL_ERROR. RESET_STREAM and STOP_SENDING are delivered once.
+
+## T2.13
+
+The idle timeout is the minimum of the two advertised values, and at least three times the current probe timeout. It shares `NextTimeout` with loss recovery. A silent close discards the connection and sends nothing. A keep-alive is a PING packet, padded so header protection has a sample, and tracked by loss recovery. Receiving it restarts the idle timeout. An acknowledgment on a path that is not validated does not increase the congestion window.

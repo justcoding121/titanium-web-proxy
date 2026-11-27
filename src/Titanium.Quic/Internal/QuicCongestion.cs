@@ -13,7 +13,7 @@ internal interface ICongestionController
 
     void OnSent(int bytes);
 
-    void OnAcked(int bytes, DateTimeOffset sent, DateTimeOffset now);
+    void OnAcked(int bytes, DateTimeOffset sent, DateTimeOffset now, bool grow);
 
     void OnLost(int bytes, DateTimeOffset sent, DateTimeOffset now, bool persistentCongestion);
 
@@ -50,13 +50,18 @@ internal sealed class QuicNewReno : ICongestionController
         BytesInFlight += bytes;
     }
 
-    public void OnAcked(int bytes, DateTimeOffset sent, DateTimeOffset now)
+    public void OnAcked(int bytes, DateTimeOffset sent, DateTimeOffset now, bool grow)
     {
         _ = now;
         BytesInFlight -= bytes;
         if (BytesInFlight < 0)
         {
             BytesInFlight = 0;
+        }
+
+        if (!grow)
+        {
+            return;
         }
 
         if (_recoveryStart is DateTimeOffset start && sent <= start)

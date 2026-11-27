@@ -78,6 +78,12 @@ internal sealed class QuicLossRecovery
 
     internal TimeSpan SmoothedRtt => _smoothed;
 
+    internal long CongestionWindow => _controller.CongestionWindow;
+
+    internal long BytesInFlight => _controller.BytesInFlight;
+
+    internal TimeSpan CurrentProbeTimeout() => PtoPeriod(HandshakeConfirmed);
+
     internal bool Allows(int bytes) => _controller.BytesInFlight + bytes <= _controller.CongestionWindow;
 
     internal void OnPacketSent(QuicPacketKind kind, ulong number, int bytes, DateTimeOffset sent, byte[] payload)
@@ -97,7 +103,7 @@ internal sealed class QuicLossRecovery
         Arm(sent);
     }
 
-    internal bool OnAck(QuicPacketKind kind, ulong largest, TimeSpan ackDelay, ReadOnlySpan<QuicAckRange> ranges, int rangeCount, DateTimeOffset now)
+    internal bool OnAck(QuicPacketKind kind, ulong largest, TimeSpan ackDelay, ReadOnlySpan<QuicAckRange> ranges, int rangeCount, DateTimeOffset now, bool grow = true)
     {
         int space = Space(kind);
         if (rangeCount < 1 || AcksUnsent(space, largest, ranges, rangeCount))
@@ -128,7 +134,7 @@ internal sealed class QuicLossRecovery
         foreach (Flight packet in newly)
         {
             _ackedSendTimes.Add(packet.Sent);
-            _controller.OnAcked(packet.Bytes, packet.Sent, now);
+            _controller.OnAcked(packet.Bytes, packet.Sent, now, grow);
         }
 
         DeclareLost(space, now);
