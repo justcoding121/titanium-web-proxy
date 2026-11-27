@@ -1,0 +1,52 @@
+Phase 3 connects the proxy to the managed TLS and QUIC stacks without changing the flag-off path. This spec is the kickoff. It is the task list. The proxy still calls `SslStream` and `System.Net.Quic`. No existing proxy file is edited by the kickoff.
+
+## Decisions this kickoff locks
+
+These follow Part B, Part L, and the Phase 3 sequence. They are not new product choices.
+
+- The first artifact is `TWP-TOUCH-MAP.md` in this folder. Creation sites are classified before any proxy edit.
+- A later seam adds new files first. An existing file changes only at a creation site, and only by one flag branch. The flag-off branch keeps the current lines and the raw `SslStream` or `QuicConnection`.
+- `UseManagedTlsStack` and `UseManagedQuicStack` default off for the library, the CLI, charts, and Gateway. Inspector defaults on, in its own later commit. This kickoff does not add the flags.
+- A managed handshake that fails because the server chose TLS 1.2 falls back to `SslStream` for that connection. The fallback lives in the proxy, not in `TlsEngine`.
+- HTTP/3 framing stays in the proxy until the extraction task. `TitaniumHttpHandler` waits until that extraction exists.
+- 0-RTT stays out of this kickoff. The QUIC stack does not send or accept early data.
+- FIPS stays fail-closed. An override is a later config task, not a silent switch.
+- The compatibility project may adapt option types. It must not reference `Titanium.Web.Proxy`.
+
+## Tasks
+
+### P3.1 Touch map
+
+Done with this kickoff. Every proxy file that constructs `SslStream`, `QuicConnection`, or `QuicListener`, or that calls a member those types own, is in the map. Comment-only mentions are listed as no seam.
+
+Exit: the map exists, and `git diff` of `src/Titanium.Web.Proxy` is empty.
+
+### P3.2 Flag-off seam at the creation sites
+
+Add adapters in new files. At each creation site in the map, one branch calls the adapter when the matching flag is on. The other branch is the current call. `HttpStream`'s `is SslStream` check and `Http3Frame`'s `is QuicStream` check learn a capability instead of a renamed field type, so a managed stream can opt in without wrapping the platform object on the flag-off path.
+
+Exit: existing proxy tests stay green and unedited. A flag-off run does not construct `TlsStream` or `ManagedQuicConnection`.
+
+### P3.3 Flags, defaults, and the FIPS guard
+
+Part L. Library and product defaults off, Inspector on, validator errors for managed-only features while the flag is off, and the FIPS refusal with the named override.
+
+### P3.4 Managed-mode test run
+
+`TWP_MANAGED_TLS=1` runs the existing proxy suites. Failures are split into a managed bug, a parity gap in `PARITY-DIFFS.md`, or a test assumption. None are skipped silently.
+
+### P3.5 Extract `Titanium.Http3`
+
+Move the stream-agnostic HTTP/3 framing, varint, QPACK, and capsule code into a new project with no proxy reference. The proxy keeps the same behavior and references the new project.
+
+### P3.6 `TitaniumHttpHandler`
+
+A separate package. HTTP/1.1 and HTTP/2 go through an inner handler whose connect callback owns the managed TLS stream. HTTP/3 uses the managed QUIC connection and the extracted HTTP/3 code. The handler always uses the managed stack.
+
+### P3.7 UDP injection
+
+SOCKS5 UDP ASSOCIATE, CONNECT-UDP, and transparent interception can terminate QUIC through the injection API. The platform path stays the default.
+
+## Self-review
+
+Checked against Part B and Part O. The kickoff does not add a pipe, a channel, a `Task` around crypto, a P/Invoke, or a second ClientHello parser. Listener fallback keeps the proxy's existing ClientHello parse. CUBIC stays off by default. The UDP offload project stays optional and is not wired here. Public QUIC names stay `Managed*`. The flag-off hot path is not wrapped.
