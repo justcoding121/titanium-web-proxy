@@ -14,27 +14,26 @@
 class Titanium < Formula
   desc "MITM and reverse proxy command-line"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
-  version "8.0.9-beta"
   license "MIT"
   on_macos do
     on_arm do
-      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9-beta/Titanium.Cli-osx-arm64.zip"
-      sha256 "a8ca4bc2d7e882cb05f844048c79cab31565bd0703158c1d2d927a3c5f788a6b"
+      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9/Titanium.Cli-osx-arm64.zip"
+      sha256 "27adfbf9b5300ad84fea8581a3e54829d57cec23ffc655d5050ec22b26278df9"
     end
     on_intel do
-      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9-beta/Titanium.Cli-osx-x64.zip"
-      sha256 "ee163a4fb55e8d9eac587399f96c764f95aa6334a6504e4e2a08b9069ae1ad9d"
+      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9/Titanium.Cli-osx-x64.zip"
+      sha256 "a1f5fec232b36718fa50e9de7d5708db66f6f026fa3e7c02b81a95be7ca95600"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9-beta/Titanium.Cli-linux-arm64.zip"
-      sha256 "b752841032285e5c0e11e89ee2f5ab7d4688cedd274753ebffa1ae5f7f1e63b9"
+      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9/Titanium.Cli-linux-arm64.zip"
+      sha256 "fb8f9f442d02c24ee9b2971d6f28766d8982cb12884321eefff9f495e478ea24"
     end
     on_intel do
-      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9-beta/Titanium.Cli-linux-x64.zip"
-      sha256 "db1ce96c151be97e4c834d7ce047691877cc53230f7357b3101d34e5635a69b2"
+      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.9/Titanium.Cli-linux-x64.zip"
+      sha256 "e22dc4918ff33e0bcb9356025fb8d9e704005ba022598386edaaa2f264692bf6"
     end
   end
 
