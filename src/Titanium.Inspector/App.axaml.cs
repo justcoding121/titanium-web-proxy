@@ -6,6 +6,7 @@ using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
 using Titanium.Inspector.Views;
+using Titanium.Web.Proxy.Abstractions.Updates;
 
 namespace Titanium.Inspector;
 
@@ -20,7 +21,18 @@ public partial class App : Application
         ThemeService.ApplyThemeMode(settings.Current.ThemeMode);
         var sessions = new SessionRegistry(SessionStoreOptions.FromSettings(settings.Current));
         var buffer = new SessionStreamBuffer();
-        var updates = new UpdateService(settings);
+        // Holder filled after MainWindowViewModel constructs InterceptionService.
+        InterceptionService? interception = null;
+        var updates = new UpdateService(
+            settings,
+            httpFactory: () => UpdateHttp.CreateClient(
+                TimeSpan.FromMinutes(5),
+                proxyUri => UpdateHttp.IsOwnLoopbackProxy(
+                    proxyUri,
+                    interception?.BoundPort ?? 0,
+                    interception is { IsRunning: true, SystemProxyEnabled: true })),
+            updateTrafficMayBeCaptured: () =>
+                interception is { IsRunning: true, SystemProxyEnabled: true, DecryptHttps: true });
         PlusInspectorLoader.TryLoadPanels(out _);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -36,6 +48,7 @@ public partial class App : Application
             }
 
             var vm = new MainWindowViewModel(buffer, sessions, updates, settings);
+            interception = vm.Interception;
             desktop.MainWindow = new MainWindow
             {
                 DataContext = vm,

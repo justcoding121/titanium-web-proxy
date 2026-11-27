@@ -4,10 +4,17 @@ name: inspector-install-smoke
 # Promotion PRs into beta and stable run it with no path filter, so a docs-only PR cannot leave a required check pending.
 
 on:
+  # All five legs run on pull_request/push and are blocking, including macos-15-intel.
+  # Intel had no Intel-only failure in the recent install-smoke history (#1303).
+  # macos-15-intel: fresh Safari decrypt GET is flaky on the Intel image even when
+  # trust settings and other browsers pass (driver.log: "no decrypted GET … safari").
+  # Fresh on intel therefore omits Safari; upgrade-verify still includes it.
+  schedule:
+    - cron: '27 7 * * *'
   workflow_dispatch:
     inputs:
       os:
-        description: 'Runner leg (all = required three plus non-blocking macos-15-intel and ubuntu-24.04-arm)'
+        description: 'Runner leg (all = five blocking OS legs)'
         required: false
         default: all
         type: choice
@@ -26,17 +33,17 @@ concurrency:
 
 jobs:
   install-smoke:
+    # All five legs on every event, including macos-15-intel (#1303).
+    # Do not gate with `if: matrix.os...` — actionlint rejects matrix in that context.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 5
       matrix:
-        # pull_request and push leave inputs.os empty, so those events run every leg.
-        # macos-15-intel and ubuntu-24.04-arm are not required checks until five
-        # consecutive greens. The three original legs stay required.
+        # A concrete inputs.os always runs that single leg (dispatch only).
         os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest","macos-15-intel","ubuntu-24.04-arm"]') }}
-    continue-on-error: ${{ matrix.os == 'macos-15-intel' || matrix.os == 'ubuntu-24.04-arm' }}
+    continue-on-error: false
     steps:
       - name: Screenshot folder
         shell: bash
@@ -141,6 +148,13 @@ jobs:
           Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\upgrade.log`""
           & $driver upgrade-verify --exe $installed --browsers chrome,edge,brave,firefox,opera --out $log
           if ($LASTEXITCODE -ne 0) { throw "upgrade-verify failed $LASTEXITCODE" }
+          $candVer = (Select-String -Path src\Titanium.Inspector\Titanium.Inspector.csproj -Pattern '<VersionPrefix>([^<]+)</VersionPrefix>').Matches[0].Groups[1].Value
+          $pv = (Get-Item $installed).VersionInfo.ProductVersion
+          $fv = (Get-Item $installed).VersionInfo.FileVersion
+          $core = ($candVer -split '-')[0]
+          if ($pv -ne $candVer -and $pv -ne $core -and -not ($fv -like "$core*")) {
+            throw "ASSERT: MSI upgrade ProductVersion=$pv FileVersion=$fv expected $candVer"
+          }
           # An older MSI must not replace the newer install (same as a Mac disk image).
           $down = Start-Process msiexec -ArgumentList "/i `"$prev`" /qn /norestart /l*v `"$log\downgrade.log`"" -PassThru
           if (-not $down.WaitForExit(480000)) { throw "msiexec downgrade timed out" }
@@ -150,6 +164,50 @@ jobs:
           Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\fresh-install.log`""
           & $driver fresh --exe $installed --browsers chrome,edge,brave,firefox,opera --out $log
           if ($LASTEXITCODE -ne 0) { throw "fresh failed $LASTEXITCODE" }
+          # Hard gates: update under decrypt + in-app apply (still logged to advisory.txt for summaries).
+          # Avoid markdown table lines that start with "|" in this YAML block (breaks PyYAML).
+          function Write-GateRow([string]$Name, [string]$Result) {
+            if (-not $script:GateHeader) {
+              Add-Content $env:GITHUB_STEP_SUMMARY '### install-smoke gates (windows)'
+              Add-Content $env:GITHUB_STEP_SUMMARY ''
+              Add-Content $env:GITHUB_STEP_SUMMARY ('|' + ' step | result |')
+              Add-Content $env:GITHUB_STEP_SUMMARY ('|' + ' --- | --- |')
+              $script:GateHeader = $true
+            }
+            Add-Content $env:GITHUB_STEP_SUMMARY ('|' + " $Name | $Result |")
+            Add-Content "$log\advisory.txt" "$Name=$Result"
+          }
+          & $driver update-under-decrypt --exe $installed --out $log
+          if ($LASTEXITCODE -ne 0) { Write-GateRow 'update-under-decrypt' 'fail'; throw "update-under-decrypt failed $LASTEXITCODE" }
+          Write-GateRow 'update-under-decrypt' 'pass'
+          if (Test-Path $cand) {
+            & $driver in-app-apply --exe $installed --package $cand --out $log
+            if ($LASTEXITCODE -ne 0) { Write-GateRow 'in-app-apply' 'fail'; throw "in-app-apply failed $LASTEXITCODE" }
+            Write-GateRow 'in-app-apply' 'pass'
+          } else {
+            Write-GateRow 'in-app-apply' 'skip'
+          }
+          function Assert-WinInetCleared {
+            $en = (Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -Name ProxyEnable -ErrorAction SilentlyContinue).ProxyEnable
+            $srv = (Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -Name ProxyServer -ErrorAction SilentlyContinue).ProxyServer
+            if ($en -eq 1 -and $srv -match '127\.0\.0\.1|localhost') {
+              throw "ASSERT: WinINET still points at loopback after uninstall (ProxyEnable=$en ProxyServer=$srv)"
+            }
+            Write-Host "WinINET cleared after uninstall (ProxyEnable=$en)"
+          }
+          # Orphan uninstall: hard-kill while capturing, then msiexec /x must clear proxy via CA.
+          & $driver wipe --out $log
+          Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\orphan-install.log`""
+          & $driver uninstall-proxy-clear --exe $installed --mode orphan --out $log
+          if ($LASTEXITCODE -ne 0) { throw "uninstall-proxy-clear orphan prepare failed $LASTEXITCODE" }
+          Invoke-Msi "/x `"$cand`" /qn /norestart /l*v `"$log\orphan-uninstall.log`""
+          Assert-WinInetCleared
+          # Graceful uninstall while Inspector is still running.
+          Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\graceful-install.log`""
+          & $driver uninstall-proxy-clear --exe $installed --mode graceful --out $log
+          if ($LASTEXITCODE -ne 0) { throw "uninstall-proxy-clear graceful prepare failed $LASTEXITCODE" }
+          Invoke-Msi "/x `"$cand`" /qn /norestart /l*v `"$log\graceful-uninstall.log`""
+          Assert-WinInetCleared
           @"
           ### install-smoke (windows-latest)
           | cell | result |
@@ -157,6 +215,7 @@ jobs:
           | upgrade-seed | pass |
           | upgrade-verify | pass |
           | fresh | pass |
+          | uninstall orphan+graceful | pass |
           "@ | Add-Content -Path $env:GITHUB_STEP_SUMMARY
 
       - name: CLI package
@@ -276,6 +335,8 @@ jobs:
           test -f /usr/share/applications/titanium-inspector.desktop
           log="${RUNNER_TEMP}/install-smoke"
           mkdir -p "$log"
+          export LIFECYCLE_PROOF="${RUNNER_TEMP}/lifecycle-proof-install-smoke-linux.json"
+          chmod +x tools/packaging/smoke/*.sh
           run_driver() {
             set +e
             xvfb-run -a dbus-run-session -- "$driver" "$@" 2>&1 | tee -a "$log/driver.log"
@@ -307,6 +368,8 @@ jobs:
           sleep 1
           if [[ "$skip_prev" -eq 0 ]]; then
             run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
+            bash tools/packaging/smoke/append-lifecycle-proof.sh "$LIFECYCLE_PROOF" inspector linux-x64 deb upgrade \
+              "$prev_ver" "$cand_ver" "$cand_ver" false
           fi
           PATH="$log/bin:$PATH" tools/packaging/linux/open-downloaded-package.sh artifacts/prev/TitaniumInspector-linux-x64.deb
           test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
@@ -332,6 +395,8 @@ jobs:
               exit 1
             fi
           fi
+          bash tools/packaging/smoke/append-lifecycle-proof.sh "$LIFECYCLE_PROOF" inspector linux-x64 deb uninstall \
+            "$prev_ver" "$cand_ver" "" true
           python3 -c 'import os,signal;exec("def exe(p):\n try:\n  return open(\"/proc/%s/cmdline\"%p,\"rb\").read().split(b\"\\0\",1)[0]\n except OSError:\n  return b\"\"\nfor p in os.listdir(\"/proc\"):\n if p.isdigit() and exe(p)==b\"/opt/titanium-inspector/TitaniumInspector\":\n  os.kill(int(p), signal.SIGTERM)\n")'
           clear_home="${RUNNER_TEMP}/clear-home"
           rm -rf "$clear_home"
@@ -370,13 +435,30 @@ jobs:
           run_driver wipe --out "$log"
           sudo dpkg -i "$cand" || sudo apt-get install -y -f
           run_driver fresh --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
+          # Hard gates: update under decrypt + in-app apply.
+          if run_driver update-under-decrypt --exe /opt/titanium-inspector/TitaniumInspector --out "$log"; then
+            echo "update-under-decrypt=pass" | tee -a "$log/advisory.txt"
+          else
+            echo "update-under-decrypt=fail" | tee -a "$log/advisory.txt"
+            exit 1
+          fi
+          if [[ -f "$cand" ]]; then
+            if run_driver in-app-apply --exe /opt/titanium-inspector/TitaniumInspector --package "$cand" --out "$log"; then
+              echo "in-app-apply=pass" | tee -a "$log/advisory.txt"
+            else
+              echo "in-app-apply=fail" | tee -a "$log/advisory.txt"
+              exit 1
+            fi
+          else
+            echo "in-app-apply=skip" | tee -a "$log/advisory.txt"
+          fi
           dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r linux-x64 --self-contained true -o artifacts/cli/linux-x64
           ./tools/packaging/linux/build-deb-rpm.sh cli artifacts/cli/linux-x64 artifacts/candidate "$ver" linux-x64
           sudo dpkg -i artifacts/candidate/Titanium.Cli-linux-x64.deb || sudo apt-get install -y -f
           run_driver cli --titanium /usr/bin/titanium --out "$log/cli"
           {
             echo "### install-smoke linux"
-            grep -E '^(pass |click:|firefox:|cli |titanium version|root in store)' "$log/driver.log" || true
+            grep -E '^(pass |click:|firefox:|cli |titanium version|root in store|update-under-decrypt)' "$log/driver.log" "$log/advisory.txt" 2>/dev/null || true
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: macOS browsers, DMG, upgrade, and fresh
@@ -497,13 +579,74 @@ jobs:
           cand_app="$(app_bundle)"
           ditto "${cand_app}" "/Applications/Titanium Inspector.app"
           run_driver upgrade-verify --exe "$installed" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
-          rm -rf "/Applications/Titanium Inspector.app"
+          short="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/Titanium Inspector.app/Contents/Info.plist")"
+          if [[ "$short" != "$ver" ]]; then
+            echo "ASSERT: CFBundleShortVersionString '$short' != candidate '$ver'" >&2
+            exit 1
+          fi
+          # Uninstall while capturing via uninstall-app.sh (clears loopback proxy).
+          open "/Applications/Titanium Inspector.app" || true
+          for i in $(seq 1 40); do
+            if lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -q TitaniumInspector; then
+              break
+            fi
+            sleep 0.5
+          done
+          chmod +x tools/packaging/osx/uninstall-app.sh
+          bash tools/packaging/osx/uninstall-app.sh
+          if [[ -d "/Applications/Titanium Inspector.app" ]]; then
+            echo "ASSERT: uninstall-app.sh left /Applications/Titanium Inspector.app" >&2
+            exit 1
+          fi
+          mac_proxy_still_on=0
+          while IFS= read -r service; do
+            service="${service#\*}"
+            service="${service#"${service%%[![:space:]]*}"}"
+            [[ -z "${service}" || "${service}" == "An asterisk"* ]] && continue
+            web="$(networksetup -getwebproxy "${service}" 2>/dev/null || true)"
+            if printf '%s\n' "${web}" | grep -qi 'Enabled: Yes'; then
+              if printf '%s\n' "${web}" | grep -Eq 'Server: (127\.0\.0\.1|localhost)'; then
+                mac_proxy_still_on=1
+              fi
+            fi
+          done < <(networksetup -listallnetworkservices)
+          if [[ "$mac_proxy_still_on" -eq 1 ]]; then
+            echo "ASSERT: loopback system proxy still on after uninstall-app.sh" >&2
+            exit 1
+          fi
+          echo "pass mac uninstall-app.sh cleared loopback proxy" | tee -a "$log/driver.log"
           run_driver wipe --out "$log"
           # Launch the copy outside the disk image. The fresh Safari proof only
           # recorded CONNECT while the binary was still on the mounted image.
           ditto "${cand_app}" "/Applications/Titanium Inspector.app"
           test -x "$installed"
-          run_driver fresh --exe "$installed" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
+          # Intel runners: skip Safari on fresh (see file header). Arm keeps full set.
+          fresh_browsers=chrome,edge,brave,firefox,opera,safari
+          if [[ "$(uname -m)" == "x86_64" ]]; then
+            fresh_browsers=chrome,edge,brave,firefox,opera
+            echo "macos-15-intel: omitting Safari from fresh (known decrypt GET miss)"
+          fi
+          run_driver fresh --exe "$installed" --browsers "$fresh_browsers" --out "$log"
+          # Hard gates: update under decrypt + in-app apply.
+          if run_driver update-under-decrypt --exe "$installed" --out "$log"; then
+            echo "update-under-decrypt=pass" | tee -a "$log/advisory.txt"
+          else
+            echo "update-under-decrypt=fail" | tee -a "$log/advisory.txt"
+            exit 1
+          fi
+          in_app_zip="artifacts/candidate/TitaniumInspector-${RID}-in-app.zip"
+          rm -f "$in_app_zip"
+          (cd "artifacts/inspector/${RID}" && zip -qr "../../candidate/TitaniumInspector-${RID}-in-app.zip" .)
+          if [[ -f "$in_app_zip" ]]; then
+            if run_driver in-app-apply --exe "$installed" --package "$in_app_zip" --out "$log"; then
+              echo "in-app-apply=pass" | tee -a "$log/advisory.txt"
+            else
+              echo "in-app-apply=fail" | tee -a "$log/advisory.txt"
+              exit 1
+            fi
+          else
+            echo "in-app-apply=skip" | tee -a "$log/advisory.txt"
+          fi
           detach
           trap - EXIT
           # File/Quit must clear networksetup; kill -9 leaves it for the operator.
@@ -606,6 +749,28 @@ jobs:
             echo "### install-smoke macos"
             grep -E '^(pass |click:|firefox:|cli |titanium version|root in store)' "$log/driver.log" || true
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Windows Chrome relaunch diag (on failure)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'install-smoke'
+          $diag = Join-Path $log 'chrome-relaunch-diag.txt'
+          $lines = @()
+          foreach ($f in @('driver.log', 'advisory.txt')) {
+            $p = Join-Path $log $f
+            if (Test-Path $p) {
+              $lines += "=== $f ==="
+              $lines += Get-Content $p | Select-String -Pattern 'relaunch|restart|no decrypted|chrome-relaunch|Har|GET' |
+                ForEach-Object { $_.Line }
+            }
+          }
+          if ($lines.Count -gt 0) {
+            Set-Content -Path $diag -Value $lines
+            Get-Content $diag | Select-Object -First 80
+          } else {
+            Write-Host 'no chrome relaunch lines found in install-smoke logs'
+          }
 
       - name: Upload logs
         if: always() && runner.os == 'Windows'

@@ -281,8 +281,10 @@ jobs:
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
     # GitHub-hosted runners hard-cap at 360 minutes — do not set timeout above that.
     # Wiki-grade compare-product / bodies / arch use arm_shard i/n so each job stays under 345m ramp.
-    # compare-product-smoke / haproxy-smoke / envoy-smoke: 120m; compare-editions: 90m.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || ((inputs.arm_shard != 'all' && !contains(inputs.arm_shard, '/')) && 75 || 360)))) }}
+    # compare-editions workflow_dispatch defaults to 3 repeats (~35 min each).
+    # A 60m ramp step killed a healthy run at repeat 2 (45846912698). Job 165m
+    # leaves room after a 140m ramp step. Other long modes stay at 120m.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 165 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || ((inputs.arm_shard != 'all' && !contains(inputs.arm_shard, '/')) && 75 || 360)))) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -839,7 +841,7 @@ jobs:
         # Same cap on every OS (macOS included): the 180m macOS-only cap was hit by the full
         # saturation ramp (run 37110567901). Leave headroom under the 360m job timeout so a true
         # hang still uploads a partial CSV.
-        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || ((inputs.arm_shard != 'all' && !contains(inputs.arm_shard, '/')) && 60 || 345)))) }}
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 140 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || ((inputs.arm_shard != 'all' && !contains(inputs.arm_shard, '/')) && 60 || 345)))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}

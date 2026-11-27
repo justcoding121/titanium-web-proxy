@@ -13,7 +13,7 @@ set -euo pipefail
 allow() {
   local policy_json="$1" policies_json="$2" ref_name="$3"
   python3 - "$policy_json" "$policies_json" "$ref_name" <<'PY'
-import json, sys
+import fnmatch, json, sys
 policy_raw, branches_raw, ref = sys.argv[1:]
 policy = json.loads(policy_raw) if policy_raw and policy_raw != "null" else None
 if policy is None:
@@ -29,6 +29,9 @@ if branches_raw and branches_raw != "null":
         names.append(item.get("name") or "")
 if "*" in names or ref in names:
     sys.exit(0)
+for name in names:
+    if name and fnmatch.fnmatch(ref, name):
+        sys.exit(0)
 print("policy does not admit", ref, "names=", ",".join(names))
 sys.exit(1)
 PY
@@ -44,6 +47,16 @@ if [[ "${1:-}" == "--self-test" ]]; then
   fi
   if allow '{"protected_branches":false,"custom_branch_policies":true}' '{"branch_policies":[{"name":"beta"}]}' "develop"; then
     echo "self-test: beta-only policy should reject develop" >&2
+    exit 1
+  fi
+  if allow '{"protected_branches":false,"custom_branch_policies":true}' '{"branch_policies":[{"name":"release/*"}]}' "release/809-to-beta"; then
+    echo "release/* policy admitted release/809-to-beta"
+  else
+    echo "self-test: release/* should admit release/809-to-beta" >&2
+    exit 1
+  fi
+  if allow '{"protected_branches":false,"custom_branch_policies":true}' '{"branch_policies":[{"name":"release/*"}]}' "develop"; then
+    echo "self-test: release/* should reject develop" >&2
     exit 1
   fi
   echo "signing-environment self-test ok"

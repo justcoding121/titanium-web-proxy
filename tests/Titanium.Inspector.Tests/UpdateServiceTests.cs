@@ -87,11 +87,12 @@ public class UpdateServiceTests
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "99");
         StringAssert.Contains(script, "Beta");
-        StringAssert.Contains(script, "cp -a");
+        StringAssert.Contains(script, "cp -Pp \"$f\" \"$target\"");
+        Assert.IsFalse(script.Contains("cp -a", StringComparison.Ordinal));
         // Non-.app relaunch uses nohup; .app path is the other branch in the same script.
         StringAssert.Contains(script, "nohup");
         var remove = script.IndexOf("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*", StringComparison.Ordinal);
-        var copy = script.IndexOf("cp -a \"$tmp\"/. \"$install_dir\"/", StringComparison.Ordinal);
+        var copy = script.LastIndexOf("cp -Pp \"$f\" \"$target\"", StringComparison.Ordinal);
         var guard = script.IndexOf("compgen -G \"$install_dir\"/libmsquic.so*", StringComparison.Ordinal);
         Assert.IsTrue(guard >= 0 && remove > guard, "OpenSSL removal must be limited to a directory that contains libmsquic.");
         Assert.IsTrue(remove >= 0 && copy > remove, "Linux zip apply must drop bundled OpenSSL before the overlay.");
@@ -432,5 +433,67 @@ public class UpdateServiceTests
         Assert.AreEqual(
             UpdateOfferKind.Upgrade,
             UpdateService.ClassifyOfferKind(new Version(7, 0, 5, 0), "7.0.6-beta", "Beta", null, null));
+    }
+
+    [TestMethod]
+    public void ClassifyOfferKind_SmokeInAppApply_RemoteAboveAssemblyOffersUpgrade()
+    {
+        // Linux/macOS FileVersionInfo often returns 0.0.0; the harness then serves a high
+        // sentinel so InformationalVersion 8.0.9 still sees an Upgrade (not a downgrade).
+        Assert.AreEqual(
+            UpdateOfferKind.None,
+            UpdateService.ClassifyOfferKind(
+                new Version(8, 0, 9, 0),
+                "0.0.1-smoke-in-app",
+                "Stable",
+                "0.0.0",
+                "Stable",
+                localInformationalVersion: "8.0.9"));
+        Assert.AreEqual(
+            UpdateOfferKind.Upgrade,
+            UpdateService.ClassifyOfferKind(
+                new Version(8, 0, 9, 0),
+                "99.0.0-smoke-in-app",
+                "Stable",
+                "0.0.0",
+                "Stable",
+                localInformationalVersion: "8.0.9"));
+        Assert.AreEqual(
+            UpdateOfferKind.Upgrade,
+            UpdateService.ClassifyOfferKind(
+                new Version(8, 0, 9, 0),
+                "8.0.10-smoke-in-app",
+                "Stable",
+                "8.0.9",
+                "Stable",
+                localInformationalVersion: "8.0.9"));
+    }
+
+    [TestMethod]
+    public void ShouldAutoApplyUpdate_RequiresLoopbackHttpFeed()
+    {
+        var prevApply = Environment.GetEnvironmentVariable("TITANIUM_UPDATE_AUTO_APPLY");
+        var prevFeed = Environment.GetEnvironmentVariable("TITANIUM_UPDATE_FEED");
+        try
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_AUTO_APPLY", "1");
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_FEED", "http://127.0.0.1:18700/release-manifest.json");
+            Assert.IsTrue(UpdateService.ShouldAutoApplyUpdate());
+
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_FEED", "https://example.com/release-manifest.json");
+            Assert.IsFalse(UpdateService.ShouldAutoApplyUpdate());
+
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_FEED", "http://updates.example.com/release-manifest.json");
+            Assert.IsFalse(UpdateService.ShouldAutoApplyUpdate());
+
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_AUTO_APPLY", null);
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_FEED", "http://127.0.0.1:18700/release-manifest.json");
+            Assert.IsFalse(UpdateService.ShouldAutoApplyUpdate());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_AUTO_APPLY", prevApply);
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_FEED", prevFeed);
+        }
     }
 }

@@ -33,9 +33,16 @@ jobs:
           set -euo pipefail
           FORMULA=tools/packaging/homebrew/titanium.rb
           test -f "$FORMULA"
-          # Formula version must match tag without leading v (e.g. 7.0.4-beta).
+          # Formula must match tag without leading v (e.g. 7.0.4-beta).
+          # Stable formulas omit the version stanza and embed /vX.Y.Z/ in urls;
+          # prereleases keep an explicit version "…" line.
           EXPECTED="${RELEASE_TAG#v}"
-          grep -q "version \"$EXPECTED\"" "$FORMULA"
+          if grep -qE '^\s*version\s+"' "$FORMULA"; then
+            grep -q "version \"$EXPECTED\"" "$FORMULA"
+          else
+            grep -q "/v${EXPECTED}/" "$FORMULA"
+          fi
+
           # Homebrew rejects bare paths; install via the published custom tap (kept in sync).
           export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
           brew tap justcoding121/titanium

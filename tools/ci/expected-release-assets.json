@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "description": "Shipped GitHub Release assets for the v8.0.8-style layout.",
+  "files": [
+    "Titanium.Cli-win-x64.zip",
+    "Titanium.Cli-linux-x64.zip",
+    "Titanium.Cli-linux-arm64.zip",
+    "Titanium.Cli-linux-musl-x64.zip",
+    "Titanium.Cli-linux-musl-arm64.zip",
+    "Titanium.Cli-osx-arm64.zip",
+    "Titanium.Cli-osx-x64.zip",
+
+    "Titanium.Cli-linux-x64.AppImage",
+    "Titanium.Cli-linux-x64.deb",
+    "Titanium.Cli-linux-x64.rpm",
+    "Titanium.Cli-linux-arm64.AppImage",
+    "Titanium.Cli-linux-arm64.deb",
+    "Titanium.Cli-linux-arm64.rpm",
+
+    "TitaniumInspector-win-x64.msi",
+    "TitaniumInspector-win-x64.zip",
+
+    "TitaniumInspector-osx-arm64.dmg",
+    "TitaniumInspector-osx-arm64.zip",
+    "TitaniumInspector-osx-x64.dmg",
+    "TitaniumInspector-osx-x64.zip",
+
+    "TitaniumInspector-linux-x64.AppImage",
+    "TitaniumInspector-linux-x64.deb",
+    "TitaniumInspector-linux-x64.rpm",
+    "TitaniumInspector-linux-x64.zip",
+    "TitaniumInspector-linux-arm64.AppImage",
+    "TitaniumInspector-linux-arm64.deb",
+    "TitaniumInspector-linux-arm64.rpm",
+    "TitaniumInspector-linux-arm64.zip",
+
+    "TitaniumInspector-linux-musl-x64.zip",
+    "TitaniumInspector-linux-musl-arm64.zip",
+
+    "SHA256SUMS",
+    "release-manifest.json"
+  ],
+  "globs": [
+    "Titanium.Plus-*.zip",
+    "Titanium.Plus-*.dll",
+    "titanium-*.tgz",
+    "titanium-gateway-*.tgz",
+    "titanium-manager-*.tgz"
+  ]
+}

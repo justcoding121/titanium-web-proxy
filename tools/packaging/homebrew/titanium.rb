@@ -6,32 +6,35 @@
 #
 # Place this file in a homebrew-titanium tap repo as Formula/titanium.rb
 # (kept here as the source of truth for CI bump scripts).
+#
+# Stable (X.Y.Z): omit the version stanza; URLs use a literal /vX.Y.Z/ path so
+# Homebrew infers version. Prerelease (X.Y.Z-beta): bump-formula-from-sums.sh
+# inserts an explicit version stanza (URL scanning is unreliable for suffixes).
 
 class Titanium < Formula
   desc "MITM and reverse proxy command-line"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
-  version "8.0.7-beta"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-osx-arm64.zip"
-      sha256 "7380bd4952c3a2d66e0f1c0ebde846e1f9eadfe85c32a9515c286dac220b93b1"
+      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.8/Titanium.Cli-osx-arm64.zip"
+      sha256 "c70219e705a863eee0ab094b586291aa9aca8354d9b91ee8269419930f8d02b2"
     end
     on_intel do
-      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-osx-x64.zip"
-      sha256 "8f0e6201f2b42340d12fb58d3902b64a882060333c44ef05b565191d7584abc4"
+      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.8/Titanium.Cli-osx-x64.zip"
+      sha256 "f37a6e978de8514b304e291a10c53199deb680c9d66b77f1622cc854dae2a4ef"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-linux-arm64.zip"
-      sha256 "b6d28994ee5fb1b426637ea47a0eb7d9a8b88972f70eab8d35758bdef6ddecdc"
+      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.8/Titanium.Cli-linux-arm64.zip"
+      sha256 "493f00e54dfad410b52fc1559237e55a4a2b2687a946f59a1baa652c0fa4f295"
     end
     on_intel do
-      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-linux-x64.zip"
-      sha256 "2f460db2bc19cb7ffcf1e24ab44a2125381651d675fd3914c0143c39f3b46e39"
+      url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v8.0.8/Titanium.Cli-linux-x64.zip"
+      sha256 "52496f8698da6a01c45eb18456eed7bfec2b5aa96e55eff43170d9c7a1d1883e"
     end
   end
 

@@ -10,6 +10,7 @@ param(
     [string]$ResultsRoot = 'coverage/integration',
     # Default matches develop push CI. Nightly Slow passes TestCategory=Slow.
     [string]$CategoryFilter = 'TestCategory!=Slow',
+    # Kept for callers; per-test / whole-batch retry is owned by Invoke-DotnetTestRetry.ps1.
     [int]$MaxAttempts = 2
 )
 
@@ -120,24 +121,31 @@ foreach ($class in $classes) {
     if ($ownProcess.ContainsKey($class)) { $solo.Add($class) } else { $batch.Add($class) }
 }
 
-function Write-TestRsp([string]$rspPath, [string]$testFilter, [string]$resultsDir) {
-    $lines = @(
+# Arg list for the retry helper (no --results-directory / --logger; helper owns those).
+# Rsp files are still written for job-log archaeology; MaxAttempts is retained for callers.
+function Get-TestArgList([string]$testFilter) {
+    return @(
+        $Project,
         '--configuration', 'Release',
         '--no-build', '--no-restore',
         '--settings', $Settings,
         '--filter', $testFilter,
         '--blame-hang', '--blame-hang-timeout', '5m',
-        '--collect:Code Coverage',
-        '--results-directory', $resultsDir
+        '--collect:Code Coverage'
     )
+}
+
+function Write-TestRsp([string]$rspPath, [string[]]$argList) {
     $utf8 = New-Object System.Text.UTF8Encoding $false
-    [IO.File]::WriteAllLines((Join-Path (Get-Location) $rspPath), $lines, $utf8)
+    [IO.File]::WriteAllLines((Join-Path (Get-Location) $rspPath), $argList, $utf8)
 }
 
 $results = Join-Path $ResultsRoot "shard-$ShardIndex"
 New-Item -ItemType Directory -Force -Path $results | Out-Null
 $rspDir = Join-Path $ResultsRoot 'rsp'
 New-Item -ItemType Directory -Force -Path $rspDir | Out-Null
+
+$retryHelper = Join-Path $PSScriptRoot 'Invoke-DotnetTestRetry.ps1'
 
 if ($batch.Count -gt 0) {
     $parts = New-Object System.Collections.Generic.List[string]
@@ -148,28 +156,23 @@ if ($batch.Count -gt 0) {
 
     # & binds tighter than | in the VSTest filter language, so the class disjunction stays in parentheses.
     $filter = '(' + ($parts -join '|') + ')&' + $CategoryFilter
+    $argsList = Get-TestArgList $filter
     $rsp = Join-Path $rspDir "shard-$ShardIndex.rsp"
-    Write-TestRsp $rsp $filter $results
+    Write-TestRsp $rsp ($argsList | Select-Object -Skip 1)
 
-    $batchOk = $false
-    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        Write-Host "Integration shard $ShardIndex attempt $attempt of $MaxAttempts"
-        & dotnet test $Project "@$rsp"
-        if ($LASTEXITCODE -eq 0) { $batchOk = $true; break }
-        if ($attempt -eq $MaxAttempts) { exit $LASTEXITCODE }
-        Write-Host "Integration shard $ShardIndex failed on attempt $attempt, retrying..."
-        Start-Sleep -Seconds 5
-    }
-    if (-not $batchOk) { exit 1 }
+    Write-Host "Integration shard $ShardIndex via Invoke-DotnetTestRetry (MaxAttempts hint=$MaxAttempts)"
+    & $retryHelper -Arguments $argsList -ResultsDir $results
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
 foreach ($class in $solo) {
     $soloFilter = "(FullyQualifiedName~$prefix$class.|FullyQualifiedName~$prefix$class+)&$CategoryFilter"
+    $soloArgs = Get-TestArgList $soloFilter
     $soloRsp = Join-Path $rspDir "shard-$ShardIndex-$class.rsp"
     $soloResults = Join-Path $results $class
-    Write-Host "Isolated class $class"
-    Write-TestRsp $soloRsp $soloFilter $soloResults
-    & dotnet test $Project "@$soloRsp"
+    Write-Host "Isolated class $class via Invoke-DotnetTestRetry"
+    Write-TestRsp $soloRsp ($soloArgs | Select-Object -Skip 1)
+    & $retryHelper -Arguments $soloArgs -ResultsDir $soloResults
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 

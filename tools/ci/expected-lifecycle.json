@@ -1,0 +1,446 @@
+{
+  "version": 1,
+  "exception_catalog": {
+    "musl-no-systemd": "Alpine musl hosts have no systemd; CLI machine service lifecycle is not automated there.",
+    "dmg-drag-to-trash-no-uninstall-hook": "macOS DMG drag-to-Trash has no uninstall hook; rely on uninstall-app.sh or next-launch stale-proxy clear.",
+    "winget-manifest-lint-only": "winget packages pin URLs that exist only after publish; CI runs manifest validation only.",
+    "scoop-manifest-lint-only": "scoop manifests pin post-publish URLs; CI runs JSON schema lint only.",
+    "nuget-not-applicable": "NuGet libraries have no install/upgrade/uninstall lifecycle beyond pre-immutable-nuget."
+  },
+  "entries": [
+    {
+      "product": "inspector",
+      "rid": "win-x64",
+      "format": "msi",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "win-x64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "osx-arm64",
+      "format": "dmg",
+      "phases": ["upgrade", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "osx-arm64",
+      "format": "dmg",
+      "phases": ["uninstall"],
+      "exception": "dmg-drag-to-trash-no-uninstall-hook"
+    },
+    {
+      "product": "inspector",
+      "rid": "osx-arm64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "osx-x64",
+      "format": "dmg",
+      "phases": ["upgrade", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "osx-x64",
+      "format": "dmg",
+      "phases": ["uninstall"],
+      "exception": "dmg-drag-to-trash-no-uninstall-hook"
+    },
+    {
+      "product": "inspector",
+      "rid": "osx-x64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-x64",
+      "format": "deb",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-x64",
+      "format": "rpm",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-x64",
+      "format": "AppImage",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-x64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-arm64",
+      "format": "deb",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-arm64",
+      "format": "rpm",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-arm64",
+      "format": "AppImage",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-arm64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-musl-x64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "linux-musl-arm64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+
+    {
+      "product": "cli",
+      "rid": "win-x64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "osx-arm64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "osx-x64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-x64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-x64",
+      "format": "deb",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-x64",
+      "format": "rpm",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-x64",
+      "format": "AppImage",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-arm64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-arm64",
+      "format": "deb",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-arm64",
+      "format": "rpm",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-arm64",
+      "format": "AppImage",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-musl-x64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-musl-arm64",
+      "format": "zip",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+
+    {
+      "product": "cli-service",
+      "rid": "win-x64",
+      "format": "windows-service",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli-service",
+      "rid": "linux-x64",
+      "format": "systemd",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli-service",
+      "rid": "osx-arm64",
+      "format": "launchd",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli-service",
+      "rid": "osx-x64",
+      "format": "launchd",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli-service",
+      "rid": "linux-musl-x64",
+      "format": "systemd",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": "musl-no-systemd"
+    },
+    {
+      "product": "cli-service",
+      "rid": "linux-musl-arm64",
+      "format": "systemd",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": "musl-no-systemd"
+    },
+
+    {
+      "product": "plus",
+      "rid": "win-x64",
+      "format": "bundle",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "plus",
+      "rid": "osx-arm64",
+      "format": "bundle",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "plus",
+      "rid": "osx-x64",
+      "format": "bundle",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "plus",
+      "rid": "linux-x64",
+      "format": "bundle",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "plus",
+      "rid": "linux-arm64",
+      "format": "bundle",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "plus",
+      "rid": "linux-musl-x64",
+      "format": "bundle",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "plus",
+      "rid": "linux-musl-arm64",
+      "format": "bundle",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+
+    {
+      "product": "chart",
+      "rid": "titanium",
+      "format": "helm",
+      "phases": ["upgrade", "rollback", "uninstall"],
+      "exception": null
+    },
+    {
+      "product": "chart",
+      "rid": "titanium-gateway",
+      "format": "helm",
+      "phases": ["upgrade", "rollback", "uninstall"],
+      "exception": null
+    },
+    {
+      "product": "chart",
+      "rid": "titanium-manager",
+      "format": "helm",
+      "phases": ["upgrade", "rollback", "uninstall"],
+      "exception": null
+    },
+
+    {
+      "product": "image",
+      "rid": "proxy",
+      "format": "oci",
+      "phases": ["load", "upgrade", "uninstall"],
+      "exception": null
+    },
+    {
+      "product": "image",
+      "rid": "gateway",
+      "format": "oci",
+      "phases": ["load", "upgrade", "uninstall"],
+      "exception": null
+    },
+    {
+      "product": "image",
+      "rid": "manager",
+      "format": "oci",
+      "phases": ["load", "upgrade", "uninstall"],
+      "exception": null
+    },
+    {
+      "product": "image",
+      "rid": "proxy-linux-arm64",
+      "format": "oci",
+      "phases": ["load", "upgrade", "uninstall"],
+      "exception": null
+    },
+    {
+      "product": "image",
+      "rid": "gateway-linux-arm64",
+      "format": "oci",
+      "phases": ["load", "upgrade", "uninstall"],
+      "exception": null
+    },
+    {
+      "product": "image",
+      "rid": "manager-linux-arm64",
+      "format": "oci",
+      "phases": ["load", "upgrade", "uninstall"],
+      "exception": null
+    },
+
+    {
+      "product": "cli",
+      "rid": "win-x64",
+      "format": "choco",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "osx-arm64",
+      "format": "brew",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "osx-x64",
+      "format": "brew",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "linux-x64",
+      "format": "brew",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "win-x64",
+      "format": "winget",
+      "phases": ["manifest-lint"],
+      "exception": null
+    },
+    {
+      "product": "cli",
+      "rid": "win-x64",
+      "format": "scoop",
+      "phases": ["manifest-lint"],
+      "exception": null
+    },
+    {
+      "product": "inspector",
+      "rid": "win-x64",
+      "format": "winget",
+      "phases": ["manifest-lint"],
+      "exception": null
+    },
+
+    {
+      "product": "nuget",
+      "rid": "any",
+      "format": "nupkg",
+      "phases": ["upgrade", "uninstall", "in-app-apply"],
+      "exception": "nuget-not-applicable"
+    }
+  ]
+}

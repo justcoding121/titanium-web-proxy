@@ -25,7 +25,8 @@ internal static class SmokeApp
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("commands: wipe | fresh | upgrade-seed | upgrade-verify | cli | local-windows");
+            Console.Error.WriteLine(
+                "commands: wipe | fresh | upgrade-seed | upgrade-verify | cli | local-windows | update-under-decrypt | in-app-apply | uninstall-proxy-clear");
             return 2;
         }
 
@@ -41,6 +42,9 @@ internal static class SmokeApp
                 "upgrade-verify" => await UpgradeVerifyAsync(opt),
                 "cli" => await CliAsync(opt),
                 "local-windows" => await LocalWindowsAsync(opt),
+                "update-under-decrypt" => await UpdateUnderDecryptAsync(opt),
+                "in-app-apply" => await InAppApplyAsync(opt),
+                "uninstall-proxy-clear" => await UninstallProxyClearAsync(opt),
                 _ => Fail(2, "unknown command " + cmd),
             };
         }
@@ -449,13 +453,21 @@ internal static class SmokeApp
                         ? TimeSpan.FromSeconds(20)
                         : null;
             firstUrl = false;
-            var ok = await WaitForHarAsync(
-                before, url, safari ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60), nudge, nudgeEvery);
+            // Windows Chrome/Edge first-window decrypt is flaky under load (#1301);
+            // match Safari's 75s budget and keep the 20s relaunch nudge.
+            var waitFor = safari || windowsChromium ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60);
+            var ok = await WaitForHarAsync(before, url, waitFor, nudge, nudgeEvery);
             launched.Kill();
             if (!ok)
             {
                 PrintRecentHarEntries(before);
                 DumpDiagnostics(null);
+                if (windowsChromium)
+                {
+                    Console.WriteLine(
+                        $"chrome-relaunch-diag name={name} url={url} waitSec={waitFor.TotalSeconds} nudgeEverySec={(nudgeEvery?.TotalSeconds.ToString() ?? "none")}");
+                }
+
                 Console.WriteLine($"no decrypted GET for {url} via {name}");
                 return false;
             }
@@ -542,7 +554,9 @@ internal static class SmokeApp
     {
         // Each process query takes longer than a few seconds. A short deadline
         // expired inside the first query and reported the profile busy.
-        var deadline = DateTime.UtcNow.AddSeconds(20);
+        // Chrome on Windows install-smoke upgrade-verify occasionally held the
+        // profile lock past 20s ("no decrypted page from the current window").
+        var deadline = DateTime.UtcNow.AddSeconds(45);
         List<int> left;
         do
         {
@@ -550,7 +564,7 @@ internal static class SmokeApp
             if (left.Count == 0)
                 return true;
             KillWindowsProcessesForDataDir(left);
-            Thread.Sleep(400);
+            Thread.Sleep(500);
         }
         while (DateTime.UtcNow < deadline);
 
@@ -1400,7 +1414,7 @@ internal static class SmokeApp
                 || dump.Contains("Policy OID", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static void WriteFreshSettings(int port, bool decrypt)
+    private static void WriteFreshSettings(int port, bool decrypt, bool checkUpdatesOnStartup = false)
     {
         Directory.CreateDirectory(ProfileDir());
         var settings = new InspectorSettings
@@ -1411,9 +1425,631 @@ internal static class SmokeApp
             EnableDecryptFailureBypass = false,
             AutoStartCapture = true,
             AutoSystemProxyOnStart = true,
-            CheckForUpdatesOnStartup = false,
+            CheckForUpdatesOnStartup = checkUpdatesOnStartup,
         };
         File.WriteAllText(Path.Combine(ProfileDir(), "settings.json"), JsonSerializer.Serialize(settings, SettingsJson));
+    }
+
+    /// <summary>
+    ///     Seed decrypt + system proxy + startup update check against a local HTTP feed.
+    ///     Pass when the feed is hit, the OS proxy still points at Inspector, the feed host is
+    ///     absent from HAR (loopback bypass), and ux-trace has no UntrustedRoot.
+    /// </summary>
+    private static async Task<int> UpdateUnderDecryptAsync(Options opt)
+    {
+        var exe = Require(opt.Exe, "--exe");
+        var port = FreePort();
+        WriteFreshSettings(port, decrypt: true, checkUpdatesOnStartup: true);
+
+        using var feed = LocalUpdateFeed.Start(version: "9.9.9-smoke");
+        var feedUrl = feed.ManifestUrl;
+        Console.WriteLine($"update-under-decrypt feed={feedUrl} bind={port}");
+
+        // A closed proxy in the environment is the proof that loopback update traffic
+        // bypasses it. The system proxy alone bypasses local addresses, so removing
+        // the bypass would still reach the feed.
+        var app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feedUrl, closedProxy: "http://127.0.0.1:1");
+        try
+        {
+            await TrustRootAsync();
+            if (!await app.CaptureIsListeningAsync())
+                return Fail(1, "update-under-decrypt: capture did not start");
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(25)))
+                return Fail(1, "update-under-decrypt: system proxy not on. " + ProxySnapshot());
+            if (!await WaitDecryptStableAsync(TimeSpan.FromSeconds(20), settle: TimeSpan.FromSeconds(8)))
+            {
+                // Seeded decrypt can flip off; re-enable without clearing the update feed.
+                await app.QuitAsync();
+                await app.DisposeAsync();
+                PatchDecrypt(true);
+                app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feedUrl, closedProxy: "http://127.0.0.1:1");
+                if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(25)))
+                    return Fail(1, "update-under-decrypt: proxy off after relaunch. " + ProxySnapshot());
+                if (!await WaitDecryptStableAsync(TimeSpan.FromSeconds(12), settle: TimeSpan.FromSeconds(4)))
+                    return Fail(1, "update-under-decrypt: decryptHttps did not stay on");
+            }
+
+            // Proxy must still point at us when the feed is contacted.
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(5)))
+                return Fail(1, "update-under-decrypt: proxy cleared before feed check. " + ProxySnapshot());
+
+            var hitDeadline = DateTime.UtcNow.AddSeconds(45);
+            while (DateTime.UtcNow < hitDeadline && feed.Hits < 1)
+                await Task.Delay(250);
+            if (feed.Hits < 1)
+                return Fail(1, "update-under-decrypt: feed was never requested (hits=0)");
+
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(3)))
+                return Fail(1, "update-under-decrypt: proxy not on when feed was hit. " + ProxySnapshot());
+
+            await Task.Delay(1500);
+            if (HarMentionsHost(app.StartedUtc, "127.0.0.1:" + feed.Port) ||
+                HarMentionsHost(app.StartedUtc, "localhost:" + feed.Port))
+            {
+                return Fail(1, "update-under-decrypt: feed host appeared in HAR (loopback bypass failed)");
+            }
+
+            var ux = Path.Combine(ProfileDir(), "logs", "ux-trace.log");
+            if (File.Exists(ux))
+            {
+                var text = await File.ReadAllTextAsync(ux);
+                if (text.Contains("UntrustedRoot", StringComparison.OrdinalIgnoreCase) ||
+                    text.Contains("update traffic may be going through", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Fail(1, "update-under-decrypt: UntrustedRoot / MITM failure in ux-trace");
+                }
+            }
+
+            Console.WriteLine($"pass update-under-decrypt hits={feed.Hits} proxy=on bypass=ok");
+            return 0;
+        }
+        finally
+        {
+            await app.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    ///     Startup update check with <c>TITANIUM_UPDATE_AUTO_APPLY=1</c> against a loopback feed
+    ///     serving a real candidate package. Pass when the feed is hit and either the process exits
+    ///     for restart (full apply) or download + SHA verification and apply-script construction
+    ///     completed (partial — e.g. MSI UAC on CI without elevation).
+    /// </summary>
+    private static async Task<int> InAppApplyAsync(Options opt)
+    {
+        var package = Require(opt.Package, "--package");
+        var exe = Require(opt.Exe, "--exe");
+        if (!File.Exists(package))
+            return Fail(2, "in-app-apply: package file missing: " + package);
+
+        var port = FreePort();
+        var fromVersion = ReadExeProductVersion(exe);
+        var remoteVersion = BumpVersionForFeed(fromVersion);
+        // Seed InstalledReleaseTag to the harness-visible version so the offer uses the
+        // same baseline the remote bump was computed from (not a stale hardcoded 0.0.1).
+        WriteInAppApplySettings(port, fromVersion);
+
+        using var feed = LocalUpdateFeed.StartFromPackage(remoteVersion, package);
+        Console.WriteLine($"in-app-apply feed={feed.ManifestUrl} package={package} remote={remoteVersion} from={fromVersion}");
+
+        var app = await InspectorProcess.StartAsync(exe, port, updateFeedUrl: feed.ManifestUrl, autoApplyUpdate: true);
+        try
+        {
+            await TrustRootAsync();
+            if (!await app.CaptureIsListeningAsync())
+                return Fail(1, "in-app-apply: capture did not start");
+
+            var hitDeadline = DateTime.UtcNow.AddSeconds(60);
+            while (DateTime.UtcNow < hitDeadline && feed.Hits < 1)
+                await Task.Delay(250);
+            if (feed.Hits < 1)
+                return Fail(1, "in-app-apply: feed manifest was never requested (hits=0)");
+
+            var ux = Path.Combine(ProfileDir(), "logs", "ux-trace.log");
+            var waitDeadline = DateTime.UtcNow.AddSeconds(120);
+            var fullApply = false;
+            var partialApply = false;
+            while (DateTime.UtcNow < waitDeadline)
+            {
+                if (app.HasExited)
+                {
+                    fullApply = true;
+                    break;
+                }
+
+                if (feed.AssetHits >= 1
+                    && ApplyHelperScriptExists()
+                    && !UxTraceHasUntrustedRoot(ux))
+                {
+                    partialApply = true;
+                    break;
+                }
+
+                await Task.Delay(500);
+            }
+
+            if (File.Exists(ux))
+            {
+                var text = await File.ReadAllTextAsync(ux);
+                if (text.Contains("UntrustedRoot", StringComparison.OrdinalIgnoreCase) ||
+                    text.Contains("update traffic may be going through", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Fail(1, "in-app-apply: UntrustedRoot / MITM failure in ux-trace");
+                }
+            }
+
+            var outcome = fullApply ? "full" : partialApply ? "partial" : "none";
+            if (outcome == "none")
+            {
+                return Fail(
+                    1,
+                    $"in-app-apply: timed out (from={fromVersion} remote={remoteVersion} hits={feed.Hits} assetHits={feed.AssetHits} applyScript={ApplyHelperScriptExists()})");
+            }
+
+            WriteInAppApplyLifecycleProof(opt, fromVersion, remoteVersion, outcome, feed.Hits, feed.AssetHits);
+
+            if (fullApply)
+            {
+                Console.WriteLine(
+                    $"pass in-app-apply full hits={feed.Hits} assetHits={feed.AssetHits} process-exited");
+                Console.WriteLine(
+                    "note: workflow may append lifecycle-proof via tools/packaging/smoke/append-lifecycle-proof.sh");
+                return 0;
+            }
+
+            Console.WriteLine(
+                $"pass in-app-apply partial hits={feed.Hits} assetHits={feed.AssetHits} apply-script=ok");
+            Console.WriteLine(
+                "headless-gap: MSI/deb apply may require UAC/pkexec; partial pass records download+sha+apply-script only.");
+            Console.WriteLine(
+                "note: workflow may append lifecycle-proof via tools/packaging/smoke/append-lifecycle-proof.sh");
+            return 0;
+        }
+        finally
+        {
+            if (!app.HasExited)
+                await app.DisposeAsync();
+        }
+    }
+
+    private static void WriteInAppApplyLifecycleProof(
+        Options opt,
+        string fromVersion,
+        string toVersion,
+        string outcome,
+        int manifestHits,
+        int assetHits)
+    {
+        var outDir = opt.Out ?? Path.GetTempPath();
+        Directory.CreateDirectory(outDir);
+        var row = new Dictionary<string, object?>
+        {
+            ["product"] = "inspector",
+            ["rid"] = UpdateService.SuggestRid(),
+            ["format"] = Path.GetExtension(Require(opt.Package, "--package")).TrimStart('.'),
+            ["phase"] = "in-app-apply",
+            ["from_version"] = fromVersion,
+            ["to_version"] = toVersion,
+            ["outcome"] = outcome,
+            ["manifest_hits"] = manifestHits,
+            ["asset_hits"] = assetHits,
+            ["state_restored"] = false,
+        };
+        var path = Path.Combine(outDir, "in-app-apply-lifecycle.json");
+        File.WriteAllText(path, JsonSerializer.Serialize(row, SettingsJson));
+    }
+
+    private static string ReadExeProductVersion(string exe)
+    {
+        try
+        {
+            var info = FileVersionInfo.GetVersionInfo(exe);
+            var text = info.ProductVersion?.Split('+')[0].Trim();
+            if (!string.IsNullOrEmpty(text))
+                return text;
+        }
+        catch
+        {
+            // fall through — common on Linux/macOS single-file publishes
+        }
+
+        var fromPlist = TryReadMacBundleShortVersion(exe);
+        if (!string.IsNullOrEmpty(fromPlist))
+            return fromPlist;
+
+        return "0.0.0";
+    }
+
+    /// <summary>
+    /// macOS .app bundles store the marketing version in Info.plist; FileVersionInfo is empty there.
+    /// </summary>
+    private static string? TryReadMacBundleShortVersion(string exe)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(exe));
+            while (!string.IsNullOrEmpty(dir))
+            {
+                if (dir.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
+                {
+                    var plist = Path.Combine(dir, "Contents", "Info.plist");
+                    if (!File.Exists(plist))
+                        return null;
+                    var text = File.ReadAllText(plist);
+                    // Prefer CFBundleShortVersionString; fall back to CFBundleVersion.
+                    foreach (var key in new[] { "CFBundleShortVersionString", "CFBundleVersion" })
+                    {
+                        var marker = $"<key>{key}</key>";
+                        var idx = text.IndexOf(marker, StringComparison.Ordinal);
+                        if (idx < 0)
+                            continue;
+                        var stringOpen = text.IndexOf("<string>", idx, StringComparison.Ordinal);
+                        var stringClose = text.IndexOf("</string>", stringOpen, StringComparison.Ordinal);
+                        if (stringOpen < 0 || stringClose < 0)
+                            continue;
+                        var value = text[(stringOpen + 8)..stringClose].Trim().Split('+')[0].Trim();
+                        if (!string.IsNullOrEmpty(value))
+                            return value;
+                    }
+
+                    return null;
+                }
+
+                dir = Path.GetDirectoryName(dir);
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Remote feed version that UpdateService will classify as <see cref="UpdateOfferKind.Upgrade"/>.
+    /// When FileVersionInfo/plist cannot read the binary (Linux single-file), the running assembly
+    /// still reports the real VersionPrefix (e.g. 8.0.9) via InformationalVersion — so a naïve
+    /// 0.0.0→0.0.1 bump is rejected as older. Use a high sentinel in that case.
+    /// </summary>
+    internal static string BumpVersionForFeed(string localVersion)
+    {
+        if (Version.TryParse(localVersion.Split('-')[0], out var v)
+            && (v.Major > 0 || v.Minor > 0 || Math.Max(v.Build, 0) > 0))
+        {
+            return $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0) + 1}-smoke-in-app";
+        }
+
+        return "99.0.0-smoke-in-app";
+    }
+
+    private static void WriteInAppApplySettings(int port, string installedTag)
+    {
+        Directory.CreateDirectory(ProfileDir());
+        var tag = string.IsNullOrWhiteSpace(installedTag) ? "0.0.0" : installedTag.Trim();
+        var settings = new InspectorSettings
+        {
+            BindPort = port,
+            BindAddress = "127.0.0.1",
+            DecryptHttps = true,
+            EnableDecryptFailureBypass = false,
+            AutoStartCapture = true,
+            AutoSystemProxyOnStart = true,
+            CheckForUpdatesOnStartup = true,
+            InstalledReleaseTag = tag,
+            InstalledReleaseChannel = "Stable",
+        };
+        File.WriteAllText(Path.Combine(ProfileDir(), "settings.json"), JsonSerializer.Serialize(settings, SettingsJson));
+    }
+
+    private static bool ApplyHelperScriptExists()
+    {
+        var workDir = Path.Combine(Path.GetTempPath(), "TitaniumInspector-update");
+        if (!Directory.Exists(workDir))
+            return false;
+        if (OperatingSystem.IsWindows())
+            return File.Exists(Path.Combine(workDir, "apply-update.ps1"));
+        return File.Exists(Path.Combine(workDir, "apply-update.sh"));
+    }
+
+    private static bool UxTraceHasUntrustedRoot(string uxPath)
+    {
+        if (!File.Exists(uxPath))
+            return false;
+        try
+        {
+            var text = File.ReadAllText(uxPath);
+            return text.Contains("UntrustedRoot", StringComparison.OrdinalIgnoreCase)
+                   || text.Contains("update traffic may be going through", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     Windows-only: start capturing, then either leave running (graceful) or kill (orphan)
+    ///     and require the caller to uninstall. This command only prepares state and prints the
+    ///     bind port; assertions live in the workflow after msiexec /x.
+    ///     Mode via --mode graceful|orphan (default graceful).
+    /// </summary>
+    private static async Task<int> UninstallProxyClearAsync(Options opt)
+    {
+        if (!OperatingSystem.IsWindows())
+            return Fail(2, "uninstall-proxy-clear is Windows-only");
+        var exe = Require(opt.Exe, "--exe");
+        var mode = opt.Mode ?? "graceful";
+        var port = FreePort();
+        WriteFreshSettings(port, decrypt: false);
+        var app = await InspectorProcess.StartAsync(exe, port);
+        try
+        {
+            if (!await app.CaptureIsListeningAsync())
+                return Fail(1, "uninstall-proxy-clear: capture did not start");
+            // The capture listener is allowed 45s. A 20s proxy wait expired once
+            // on a slow runner while msiexec /i was still bringing the proxy up.
+            if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(45)))
+                return Fail(1, "uninstall-proxy-clear: system proxy not on. " + ProxySnapshot());
+
+            if (string.Equals(mode, "orphan", StringComparison.OrdinalIgnoreCase))
+            {
+                // Hard-kill without CloseMainWindow so ForceClear does not run on quit.
+                try { Process.GetProcessById(app.Pid).Kill(entireProcessTree: true); }
+                catch { /* gone */ }
+                foreach (var p in Process.GetProcessesByName("TitaniumInspector"))
+                {
+                    try { p.Kill(entireProcessTree: true); } catch { /* gone */ }
+                }
+
+                await Task.Delay(1000);
+                if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(2)))
+                    return Fail(1, "uninstall-proxy-clear orphan: proxy cleared after kill; expected leftover");
+                Console.WriteLine($"uninstall-proxy-clear orphan ready port={port}");
+                return 0;
+            }
+
+            // Graceful: leave the process running for msiexec CloseApplication + ClearSystemProxy.
+            Console.WriteLine($"uninstall-proxy-clear graceful ready port={port} pid={app.Pid}");
+            return 0;
+        }
+        catch
+        {
+            await app.DisposeAsync();
+            throw;
+        }
+    }
+
+    private static bool HarMentionsHost(DateTime notBeforeUtc, string hostToken)
+    {
+        var root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TitaniumInspector",
+            "session-cache");
+        if (!Directory.Exists(root))
+            return false;
+        foreach (var file in Directory.EnumerateFiles(root, "*.har", SearchOption.AllDirectories))
+        {
+            DateTime write;
+            try { write = File.GetLastWriteTimeUtc(file); }
+            catch { continue; }
+            if (write < notBeforeUtc)
+                continue;
+            string text;
+            try
+            {
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var reader = new StreamReader(stream);
+                text = reader.ReadToEnd();
+            }
+            catch { continue; }
+            if (text.Contains(hostToken, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private sealed class LocalUpdateFeed : IDisposable
+    {
+        private readonly HttpListener _listener;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly string _dir;
+        private int _hits;
+        private int _assetHits;
+
+        public int Port { get; }
+        public string ManifestUrl { get; }
+        public int Hits => Volatile.Read(ref _hits);
+        public int AssetHits => Volatile.Read(ref _assetHits);
+
+        private LocalUpdateFeed(HttpListener listener, string dir, int port)
+        {
+            _listener = listener;
+            _dir = dir;
+            Port = port;
+            ManifestUrl = $"http://127.0.0.1:{port}/release-manifest.json";
+        }
+
+        public static LocalUpdateFeed Start(string version) =>
+            StartCore(version, BuildPlaceholderAssets);
+
+        public static LocalUpdateFeed StartFromPackage(string version, string packagePath)
+        {
+            packagePath = Path.GetFullPath(packagePath);
+            if (!File.Exists(packagePath))
+                throw new FileNotFoundException("package not found", packagePath);
+
+            return StartCore(version, (dir, port) => BuildPackageAssets(dir, port, packagePath));
+        }
+
+        private static LocalUpdateFeed StartCore(
+            string version,
+            Func<string, int, (Dictionary<string, object> Assets, string ManifestPath)> buildAssets)
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "twp-insp-feed-" + Guid.NewGuid().ToString("n"));
+            Directory.CreateDirectory(dir);
+            var (listener, port) = ListenOnLoopback();
+            var (assets, _) = buildAssets(dir, port);
+            var manifest = new Dictionary<string, object>
+            {
+                ["version"] = version,
+                ["channel"] = "stable",
+                ["products"] = new Dictionary<string, object>
+                {
+                    ["inspector"] = new Dictionary<string, object> { ["assets"] = assets },
+                },
+            };
+            File.WriteAllText(
+                Path.Combine(dir, "release-manifest.json"),
+                JsonSerializer.Serialize(manifest));
+
+            var feed = new LocalUpdateFeed(listener, dir, port);
+            _ = Task.Run(() => feed.ServeAsync());
+            return feed;
+        }
+
+        private static (HttpListener Listener, int Port) ListenOnLoopback()
+        {
+            var listener = new HttpListener();
+            for (var p = 18700; p < 18900; p++)
+            {
+                try
+                {
+                    listener.Prefixes.Clear();
+                    listener.Prefixes.Add($"http://127.0.0.1:{p}/");
+                    listener.Start();
+                    return (listener, p);
+                }
+                catch
+                {
+                    // try next
+                }
+            }
+
+            throw new InvalidOperationException("no free port for local update feed");
+        }
+
+        private static (Dictionary<string, object> Assets, string ManifestPath) BuildPlaceholderAssets(string dir, int port)
+        {
+            var url = $"http://127.0.0.1:{port}/inspector.zip";
+            var sha = new string('a', 64);
+            var asset = new Dictionary<string, object> { ["url"] = url, ["sha256"] = sha, ["size"] = 1 };
+            var assets = new Dictionary<string, object>
+            {
+                ["win-x64"] = asset,
+                ["osx-arm64"] = asset,
+                ["osx-x64"] = asset,
+                ["linux-x64"] = asset,
+                ["linux-arm64"] = asset,
+            };
+            File.WriteAllBytes(Path.Combine(dir, "inspector.zip"), [0x50, 0x4B, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+            return (assets, "release-manifest.json");
+        }
+
+        private static (Dictionary<string, object> Assets, string ManifestPath) BuildPackageAssets(
+            string dir,
+            int port,
+            string packagePath)
+        {
+            var (assetKey, serveName) = ResolvePackageAsset(packagePath);
+            var dest = Path.Combine(dir, serveName);
+            File.Copy(packagePath, dest, overwrite: true);
+            var bytes = File.ReadAllBytes(dest);
+            var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            var url = $"http://127.0.0.1:{port}/{serveName}";
+            var entry = new Dictionary<string, object> { ["url"] = url, ["sha256"] = sha, ["size"] = bytes.Length };
+            return (new Dictionary<string, object> { [assetKey] = entry }, "release-manifest.json");
+        }
+
+        private static (string AssetKey, string ServeFileName) ResolvePackageAsset(string packagePath)
+        {
+            var fileName = Path.GetFileName(packagePath);
+            var ext = Path.GetExtension(packagePath);
+            var rid = UpdateService.SuggestRid();
+            if (ext.Equals(".msi", StringComparison.OrdinalIgnoreCase))
+                return ("win-x64-msi", fileName);
+            if (ext.Equals(".deb", StringComparison.OrdinalIgnoreCase))
+                return ($"{rid}.deb", fileName);
+            if (ext.Equals(".rpm", StringComparison.OrdinalIgnoreCase))
+                return ($"{rid}.rpm", fileName);
+            if (ext.Equals(".AppImage", StringComparison.OrdinalIgnoreCase))
+                return ($"{rid}.AppImage", fileName);
+            if (ext.Equals(".dmg", StringComparison.OrdinalIgnoreCase))
+                return ($"{rid}.dmg", fileName);
+            if (ext.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+                return (rid, fileName);
+            throw new InvalidOperationException("unsupported package extension: " + ext);
+        }
+
+        private async Task ServeAsync()
+        {
+            while (!_cts.IsCancellationRequested && _listener.IsListening)
+            {
+                HttpListenerContext ctx;
+                try { ctx = await _listener.GetContextAsync(); }
+                catch { break; }
+                try
+                {
+                    var path = ctx.Request.Url?.AbsolutePath.TrimStart('/') ?? "release-manifest.json";
+                    if (string.IsNullOrEmpty(path))
+                        path = "release-manifest.json";
+                    // The feed directory is flat. A request path with a directory
+                    // segment (including "..") must not be combined onto _dir.
+                    var name = Path.GetFileName(path);
+                    if (string.IsNullOrEmpty(name)
+                        || !string.Equals(name, path, StringComparison.Ordinal)
+                        || name is "." or ".."
+                        || name.IndexOfAny(['/', '\\', ':']) >= 0)
+                    {
+                        ctx.Response.StatusCode = 404;
+                        ctx.Response.Close();
+                        continue;
+                    }
+
+                    var root = Path.GetFullPath(_dir);
+                    var file = Path.GetFullPath(Path.Combine(root, name));
+                    var rootPrefix = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (!file.StartsWith(rootPrefix, OperatingSystem.IsWindows()
+                            ? StringComparison.OrdinalIgnoreCase
+                            : StringComparison.Ordinal))
+                    {
+                        ctx.Response.StatusCode = 404;
+                        ctx.Response.Close();
+                        continue;
+                    }
+
+                    var isManifest = name.Equals("release-manifest.json", StringComparison.OrdinalIgnoreCase);
+                    if (isManifest)
+                        Interlocked.Increment(ref _hits);
+                    else
+                        Interlocked.Increment(ref _assetHits);
+
+                    if (File.Exists(file))
+                    {
+                        var bytes = await File.ReadAllBytesAsync(file);
+                        ctx.Response.StatusCode = 200;
+                        ctx.Response.ContentLength64 = bytes.Length;
+                        await ctx.Response.OutputStream.WriteAsync(bytes);
+                    }
+                    else
+                    {
+                        ctx.Response.StatusCode = 404;
+                    }
+
+                    ctx.Response.Close();
+                }
+                catch { /* client gone */ }
+            }
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            try { _listener.Stop(); } catch { /* */ }
+            try { _listener.Close(); } catch { /* */ }
+            try { Directory.Delete(_dir, true); } catch { /* */ }
+        }
     }
 
     private static void PatchDecrypt(bool value)
@@ -1986,7 +2622,12 @@ internal sealed class InspectorProcess : IAsyncDisposable
         StartedUtc = DateTime.UtcNow;
     }
 
-    public static Task<InspectorProcess> StartAsync(string exe, int port)
+    public static Task<InspectorProcess> StartAsync(
+        string exe,
+        int port,
+        string? updateFeedUrl = null,
+        bool autoApplyUpdate = false,
+        string? closedProxy = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -1999,7 +2640,20 @@ internal sealed class InspectorProcess : IAsyncDisposable
             RedirectStandardError = true,
         };
         psi.Environment["TITANIUM_SKIP_ROOT_STORE_UI"] = "1";
-        psi.Environment["TITANIUM_UPDATE_FEED"] = "";
+        // Empty string disables the startup update check (default for install smokes).
+        // Pass a feed URL for update-under-decrypt / in-app-apply.
+        psi.Environment["TITANIUM_UPDATE_FEED"] = updateFeedUrl ?? "";
+        if (autoApplyUpdate)
+            psi.Environment["TITANIUM_UPDATE_AUTO_APPLY"] = "1";
+        if (!string.IsNullOrEmpty(closedProxy))
+        {
+            psi.Environment["HTTP_PROXY"] = closedProxy;
+            psi.Environment["HTTPS_PROXY"] = closedProxy;
+            psi.Environment["http_proxy"] = closedProxy;
+            psi.Environment["https_proxy"] = closedProxy;
+            psi.Environment["NO_PROXY"] = "";
+            psi.Environment["no_proxy"] = "";
+        }
         var proc = Process.Start(psi) ?? throw new InvalidOperationException("Inspector did not start: " + exe);
         proc.OutputDataReceived += static (_, _) => { };
         proc.ErrorDataReceived += static (_, _) => { };
@@ -2013,22 +2667,32 @@ internal sealed class InspectorProcess : IAsyncDisposable
         var path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "TitaniumInspector", "settings.json");
-        if (!File.Exists(path))
-            return false;
-        int port;
-        try
-        {
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
-            port = doc.RootElement.GetProperty("bindPort").GetInt32();
-        }
-        catch
-        {
-            return false;
-        }
-
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        // TrustRootAsync waits on rootCert.pfx, which the app writes before settings.json.
+        // Returning as soon as settings.json is missing used to fail in-app-apply on a slow
+        // start (arm install-smoke: "capture did not start" about 16s after the feed line).
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        var reason = "settings.json missing";
         while (DateTime.UtcNow < deadline)
         {
+            if (!File.Exists(path))
+            {
+                await Task.Delay(300);
+                continue;
+            }
+
+            int port;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                port = doc.RootElement.GetProperty("bindPort").GetInt32();
+            }
+            catch
+            {
+                reason = "settings.json has no bindPort yet";
+                await Task.Delay(300);
+                continue;
+            }
+
             try
             {
                 using var tcp = new TcpClient();
@@ -2037,10 +2701,12 @@ internal sealed class InspectorProcess : IAsyncDisposable
             }
             catch
             {
+                reason = "bindPort " + port + " not accepting";
                 await Task.Delay(300);
             }
         }
 
+        Console.WriteLine("capture not listening: " + reason);
         return false;
     }
 
@@ -2363,11 +3029,13 @@ internal readonly record struct Options(
     string? Out,
     string? Thumb,
     string? ExpectThumb,
-    string[]? Browsers)
+    string[]? Browsers,
+    string? Mode = null,
+    string? Package = null)
 {
     public static Options Parse(string[] args)
     {
-        string? exe = null, prev = null, titanium = null, output = null, thumb = null, expect = null;
+        string? exe = null, prev = null, titanium = null, output = null, thumb = null, expect = null, mode = null, package = null;
         string[]? browsers = null;
         for (var i = 0; i < args.Length; i++)
         {
@@ -2382,11 +3050,12 @@ internal readonly record struct Options(
                 case "--thumb": thumb = Next(); break;
                 case "--expect-thumb": expect = Next(); break;
                 case "--browsers": browsers = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
-                case "--mode": Next(); break;
+                case "--mode": mode = Next(); break;
+                case "--package": package = Next(); break;
                 default: throw new InvalidOperationException("unknown option " + a);
             }
         }
 
-        return new Options(exe, prev, titanium, output, thumb, expect, browsers);
+        return new Options(exe, prev, titanium, output, thumb, expect, browsers, mode, package);
     }
 }

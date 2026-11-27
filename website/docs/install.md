@@ -30,6 +30,8 @@ titanium version --check
 
 Use `--channel beta` when you intentionally follow beta.
 
+**macOS in-place update note:** CLI builds through 8.0.8 generate an updater that cannot overwrite Homebrew-sourced `libssl.3.dylib` / `libcrypto.3.dylib` / `libmsquic.dylib` when those files are mode `0444`. If `titanium update` fails with `Permission denied` on those names, run `chmod -R u+w <install dir>` and retry, or reinstall from [Download](/download). Newer builds remove each destination file before copying so a fresh inode is used.
+
 **winget (Windows):** the Windows CLI is a single self-contained `titanium.exe` (plus `twp.exe`), so winget's `Links` shortcuts work. Update a winget install with `winget upgrade`, not `titanium update`. A downloaded Plus bundle may be placed beside the `Links` shortcut rather than the package folder.
 
 **Chocolatey (Windows):** package ids are `titanium-cli` and `titanium-inspector`. A release push is accepted into moderation before it becomes the approved package. Until a moderator approves it, `choco search titanium-cli --exact` keeps showing the last approved version. `choco search titanium-cli --pre --exact` lists a beta package once that package is visible.

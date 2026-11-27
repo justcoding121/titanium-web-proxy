@@ -1,0 +1,5 @@
+{
+  "conclusion": "cancelled",
+  "expect_rerun": false,
+  "description": "Jobs look infra-cancelled but workflow_run conclusion is cancelled — never rerun"
+}

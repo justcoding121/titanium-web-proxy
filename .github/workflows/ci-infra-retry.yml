@@ -1,0 +1,24 @@
+name: ci-infra-retry
+on:
+  workflow_run:
+    workflows: [".NET", "release-dry-run", "inspector-install-smoke", "release", "product-smoke", "kubernetes-ci", "RPS saturation", "conformance"]
+    types: [completed]
+permissions:
+  actions: write
+  contents: read
+concurrency:
+  group: ci-infra-retry-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+jobs:
+  retry:
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.run_attempt < 3 &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: python3 tools/ci/classify-infra-failures.py --repo "$GITHUB_REPOSITORY" --run "$RUN_ID" --rerun

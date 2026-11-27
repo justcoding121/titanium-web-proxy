@@ -1,0 +1,33 @@
+{
+  "total_count": 3,
+  "jobs": [
+    {
+      "id": 201,
+      "name": "build-cli (osx-arm64)",
+      "conclusion": "cancelled",
+      "status": "completed",
+      "steps": [
+        {"name": "Set up job", "conclusion": null, "number": 1}
+      ]
+    },
+    {
+      "id": 202,
+      "name": "unit",
+      "conclusion": "failure",
+      "status": "completed",
+      "steps": [
+        {"name": "Set up job", "conclusion": "success", "number": 1},
+        {"name": "Test", "conclusion": "failure", "number": 2}
+      ]
+    },
+    {
+      "id": 203,
+      "name": "release-gate",
+      "conclusion": "failure",
+      "status": "completed",
+      "steps": [
+        {"name": "Check", "conclusion": "failure", "number": 1}
+      ]
+    }
+  ]
+}

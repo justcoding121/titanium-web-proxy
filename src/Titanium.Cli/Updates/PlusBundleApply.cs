@@ -91,8 +91,15 @@ internal static partial class UpdateCommand
         try
         {
             stage = CreatePlusStageDirectory(installDir);
+            var priorList = TryReadInstalledPlusFileList(installDir);
             PopulatePlusStage(zipPath, stage);
-            return SwapPlusStageIntoInstall(stage, installDir);
+            var swapped = SwapPlusStageIntoInstall(stage, installDir);
+            if (swapped == 0)
+            {
+                RemovePlusFilesDroppedFromList(installDir, priorList);
+            }
+
+            return swapped;
         }
         catch (InvalidDataException ex)
         {
@@ -369,6 +376,52 @@ internal static partial class UpdateCommand
         }
 
         return names;
+    }
+
+    private static HashSet<string>? TryReadInstalledPlusFileList(string installDir)
+    {
+        var listPath = Path.Combine(installDir, PlusFileListName);
+        if (!File.Exists(listPath))
+        {
+            return null;
+        }
+
+        return ReadPlusFileList(listPath);
+    }
+
+    /// <summary>
+    /// After a successful bundle swap, delete install-dir files that were listed before but are absent from the new list.
+    /// </summary>
+    private static void RemovePlusFilesDroppedFromList(string installDir, HashSet<string>? priorList)
+    {
+        if (priorList is null or { Count: 0 })
+        {
+            return;
+        }
+
+        var listPath = Path.Combine(installDir, PlusFileListName);
+        if (!File.Exists(listPath))
+        {
+            return;
+        }
+
+        var current = ReadPlusFileList(listPath);
+        foreach (var name in priorList)
+        {
+            if (current.Contains(name))
+            {
+                continue;
+            }
+
+            if (!IsPlainPlusFileName(name))
+            {
+                continue;
+            }
+
+            var dest = Path.GetFullPath(Path.Combine(installDir, name));
+            EnsurePathInside(installDir, dest);
+            DeletePlusTrio(dest);
+        }
     }
 
     private static int SwapPlusStageIntoInstall(string stage, string installDir)

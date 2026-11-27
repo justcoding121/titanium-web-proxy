@@ -22,7 +22,7 @@ helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-val
 
 `config` in the values is the whole `twp.yaml`. The chart owns `server.admin`; set those fields through the `admin.*` values. Mount the config and any Secret files as **directories**, never with `subPath`: a single-file mount does not see the `..data` swap.
 
-`image.tag` defaults to the chart `appVersion` (`8.0.8` on chart `1.0.8`). A beta install sets `image.tag: 8.0.8-beta`, or the pod pulls `:8.0.8`. The gateway chart uses `controller.image.tag` and `dataPlane.image.tag` instead.
+`image.tag` defaults to the chart `appVersion` (`8.0.9` on chart `1.0.9`). A beta install sets `image.tag: 8.0.9-beta`, or the pod pulls `:8.0.9`. The gateway chart uses `controller.image.tag` and `dataPlane.image.tag` instead.
 
 ## Optional resources
 

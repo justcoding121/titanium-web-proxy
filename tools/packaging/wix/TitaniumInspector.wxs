@@ -27,6 +27,19 @@
                            RebootPrompt="no"
                            Timeout="10" />
 
+    <!-- Uninstall: clear leftover WinINET loopback proxy (HKCU) after CloseApplication.
+         Must impersonate the interactive user — ForceClear writes CurrentUser, not SYSTEM.
+         Immediate so the exe is still on disk before RemoveFiles. Return ignore. -->
+    <CustomAction Id="ClearSystemProxy"
+                  FileRef="InspectorExe"
+                  ExeCommand="--clear-system-proxy"
+                  Execute="immediate"
+                  Impersonate="yes"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="ClearSystemProxy" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+
     <!-- Launch the installed apphost (type 18). WixShellExec can reopen this MSI when the
          formatted path is empty or resolves to the source folder. -->
     <CustomAction Id="LaunchApplication"
