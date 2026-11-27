@@ -1,4 +1,4 @@
-This map is the survey for the Phase 3 seam. `ProxyServer.UseManagedTlsStack` and `ProxyServer.UseManagedQuicStack` default to false. `TcpConnectionFactory`, `ExplicitClientHandler`, and `TransparentClientHandler` read `UseManagedTlsStack`.
+This map is the survey for the Phase 3 seam. `ProxyServer.UseManagedTlsStack` and `ProxyServer.UseManagedQuicStack` default to false. `TcpConnectionFactory`, `ExplicitClientHandler`, `TransparentClientHandler`, and `TcpTlsTerminateHandler` read `UseManagedTlsStack`.
 
 A file is a creation site when it constructs `SslStream`, calls `QuicConnection.ConnectAsync`, or calls `QuicListener.ListenAsync`. A use site calls a member those types own on an object it did not construct. A capability site branches on the runtime type. Comment-only mentions are not a seam.
 
@@ -11,7 +11,7 @@ These are the only places a later flag branch belongs. The flag-off arm stays th
 | `Network/TcpConnection/TcpConnectionFactory.cs` | Upstream handshake. When `UseManagedTlsStack` is set, both sites authenticate a `TlsStream`. The other branch still constructs `SslStream`. |
 | `Handlers/ExplicitClientHandler.cs` | Client-facing handshake. When `UseManagedTlsStack` is set, the site authenticates a `TlsStream`. The other branch still constructs `SslStream`. |
 | `Handlers/TransparentClientHandler.cs` | Client-facing handshake. When `UseManagedTlsStack` is set, both sites authenticate a `TlsStream`, including the per-name certificate callback. The other branch still constructs `SslStream`. |
-| `Handlers/TcpTlsTerminateHandler.cs` | Client-facing `SslStream` around line 47, and an upstream `SslStream` around line 305. |
+| `Handlers/TcpTlsTerminateHandler.cs` | Client-facing and upstream handshakes. When `UseManagedTlsStack` is set, both authenticate a `TlsStream`. The other branch still constructs `SslStream`. |
 | `Handlers/MasqueClientHandler.cs` | Client-facing `SslStream` around line 45. |
 | `Handlers/WebTransportClientHandler.cs` | Client-facing `SslStream` around line 43. |
 | `WebTransport/WebTransportOrigin.cs` | Upstream `SslStream` around line 31. |
@@ -26,7 +26,7 @@ These branch on the platform type. A managed stream has to opt in without changi
 | File | Check |
 | --- | --- |
 | `Network/Streams/HttpStream.cs` | `baseStream is SslStream` sets `IsNetworkStream` and `SupportsBodyWriteHook` (lines 106 and 109). `ITransportCapableStream` already documents that hook. |
-| `Handlers/TcpTlsTerminateHandler.cs` | `sink is SslStream` calls `ShutdownAsync` (line 469). |
+| `Handlers/TcpTlsTerminateHandler.cs` | A half-close calls `ShutdownAsync` on an `SslStream` or a `TlsStream`. |
 | `Http3/Http3Frame.cs` | `stream is QuicStream` passes `completeWrites: true` (line 436). |
 | `Certificates/ClientCertificateHandshake.cs` | `Capture` reads `RemoteCertificate`. The `SslStream` overload forwards to an overload that takes the certificate, which the managed handshake calls. |
 

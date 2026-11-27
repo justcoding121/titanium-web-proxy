@@ -111,8 +111,8 @@ public sealed class TlsStream : Stream
     /// <summary>The local leaf used for authentication, or null.</summary>
     public X509Certificate? LocalCertificate => _engine?.LocalCertificate;
 
-    /// <summary>The name passed to client authentication.</summary>
-    public string TargetHostName => _clientOptions?.TargetHost ?? string.Empty;
+    /// <summary>The name passed to client authentication, or the server name from the ClientHello.</summary>
+    public string TargetHostName => _clientOptions?.TargetHost ?? _engine?.ClientHello?.ServerName ?? string.Empty;
 
     /// <summary>The fingerprint profile's fidelity, or the built-in hello's fidelity when no profile is set. FIPS policy reports <see cref="TlsFingerprintFidelity.ReducedFipsPolicy"/>.</summary>
     public TlsFingerprintFidelity FingerprintFidelity =>

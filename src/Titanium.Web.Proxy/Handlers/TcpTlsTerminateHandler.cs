@@ -10,6 +10,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Tls;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Abstractions.Scripting;
@@ -44,6 +45,61 @@ public partial class ProxyServer
         try
         {
             await using var networkStream = new NetworkStream(client, ownsSocket: false);
+            if (UseManagedTlsStack)
+            {
+                await using var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+                if (!await TryAuthenticateInboundManagedTlsAsync(managed, endPoint, cancellationToken).ConfigureAwait(false))
+                {
+                    result = "handshake_failed";
+                    return;
+                }
+
+                var serverName = managed.TargetHostName;
+                string? clusterId = null;
+                if (endPoint.PassthroughTable?.Match(serverName) is { } matched)
+                {
+                    clusterId = matched.ClusterId;
+                    route = matched.ServerName;
+                }
+                else if (!string.IsNullOrEmpty(endPoint.PassthroughDefaultClusterId))
+                {
+                    clusterId = endPoint.PassthroughDefaultClusterId;
+                    route = "default";
+                }
+
+                if (endPoint.StreamFilters is { } streamFilters)
+                {
+                    filters = StreamFilterChain.Create(streamFilters, client, serverName, clusterId);
+                    var accepted = await filters.OnNewConnectionAsync(cancellationToken).ConfigureAwait(false);
+                    if (accepted.Action == ScriptAction.Deny)
+                    {
+                        route = "filter";
+                        result = "denied";
+                        return;
+                    }
+
+                    if (accepted.ClusterId is { } chosenCluster)
+                    {
+                        clusterId = chosenCluster;
+                        route = "script";
+                    }
+                }
+
+                if (clusterId is null)
+                {
+                    route = "none";
+                    result = "no_route";
+                    return;
+                }
+
+                var relayOptions = CreatePassthroughOptions(client, endPoint);
+                relayOptions.Filters = filters;
+                relayOptions.HalfCloseGrace = TimeSpan.FromSeconds(5);
+                (bytesIn, bytesOut, result) = await RelayTlsTerminateToClusterAsync(
+                    client, managed, clusterId, relayOptions, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
             await using var clientTls = new SslStream(networkStream, leaveInnerStreamOpen: false);
             if (!await TryAuthenticateInboundTlsAsync(clientTls, endPoint, cancellationToken).ConfigureAwait(false))
             {
@@ -94,6 +150,7 @@ public partial class ProxyServer
             relayOptions.HalfCloseGrace = TimeSpan.FromSeconds(5);
             (bytesIn, bytesOut, result) = await RelayTlsTerminateToClusterAsync(
                 client, clientTls, clusterId, relayOptions, cancellationToken).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -130,6 +187,78 @@ public partial class ProxyServer
 
     private async Task<bool> TryAuthenticateInboundTlsAsync(
         SslStream clientTls,
+        TransparentBaseProxyEndPoint endPoint,
+        CancellationToken cancellationToken)
+    {
+        using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (endPoint.TlsHandshakeTimeout > TimeSpan.Zero)
+        {
+            handshakeCts.CancelAfter(endPoint.TlsHandshakeTimeout);
+        }
+
+        try
+        {
+            var certificate = endPoint.GenericCertificate;
+            if (certificate is null && endPoint.SniCertificates is not { Count: > 0 })
+            {
+                return false;
+            }
+
+            var clientCertMode = endPoint.ClientCertificateMode;
+            var requestsClientCert = ClientCertificateHandshake.RequestsCertificate(clientCertMode);
+            var clientCertificateTrustedRoots = endPoint.ClientCertificateTrustedRoots;
+
+            SslServerAuthenticationOptions BuildOptions(X509Certificate2 serverCertificate)
+            {
+                var built = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = serverCertificate,
+                    ClientCertificateRequired = requestsClientCert,
+                    EnabledSslProtocols = SupportedSslProtocols,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                    AllowRenegotiation = false,
+                };
+                if (endPoint.TerminateTlsAlpn is { Count: > 0 })
+                {
+                    built.ApplicationProtocols = endPoint.TerminateTlsAlpn
+                        .Select(static p => new System.Net.Security.SslApplicationProtocol(p))
+                        .ToList();
+                }
+
+                CertificateManager.ConfigureServerCertificate(built, serverCertificate);
+                ClientCertificateHandshake.Apply(built, clientCertMode, clientCertificateTrustedRoots);
+                return built;
+            }
+
+            if (endPoint.SniCertificates is { Count: > 0 } bindings)
+            {
+                var fallback = certificate ?? bindings[0].Certificate;
+                await clientTls.AuthenticateAsServerAsync(
+                    (_, hello, _, _) => new ValueTask<SslServerAuthenticationOptions>(
+                        BuildOptions(SniCertificateSelector.Select(hello.ServerName, bindings) ?? fallback)),
+                    null,
+                    handshakeCts.Token).ConfigureAwait(false);
+            }
+            else
+            {
+                await clientTls.AuthenticateAsServerAsync(BuildOptions(certificate!), handshakeCts.Token)
+                    .ConfigureAwait(false);
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (AuthenticationException)
+        {
+            return false;
+        }
+    }
+
+    private async Task<bool> TryAuthenticateInboundManagedTlsAsync(
+        TlsStream clientTls,
         TransparentBaseProxyEndPoint endPoint,
         CancellationToken cancellationToken)
     {
@@ -298,6 +427,30 @@ public partial class ProxyServer
             if (!destination.UseHttps)
             {
                 return stream;
+            }
+
+            if (UseManagedTlsStack)
+            {
+                var managedMaterial = UpstreamTlsMaterial.For(cluster.HttpClient);
+                managedMaterial?.ThrowIfFaulted();
+                var managed = new TlsStream(stream, leaveInnerStreamOpen: false);
+                var managedHost = managedMaterial?.ServerName ?? host;
+                var managedAuth = new SslClientAuthenticationOptions
+                {
+                    TargetHost = managedHost,
+                    EnabledSslProtocols = SupportedSslProtocols,
+                    CertificateRevocationCheckMode = CheckCertificateRevocation,
+                    RemoteCertificateValidationCallback = (_, certificate, chain, errors) =>
+                        ValidateUpstreamCertificate(managedMaterial, certificate, chain, errors),
+                    LocalCertificateSelectionCallback = (_, _, _, _, _) => managedMaterial?.ClientCertificate!,
+                };
+                if (managedMaterial?.ClientCertificate is { } managedCert)
+                {
+                    managedAuth.ClientCertificates = new X509CertificateCollection { managedCert };
+                }
+
+                await managed.AuthenticateAsClientAsync(managedAuth, cancellationToken).ConfigureAwait(false);
+                return managed;
             }
 
             var material = UpstreamTlsMaterial.For(cluster.HttpClient);
@@ -469,6 +622,12 @@ public partial class ProxyServer
             if (sink is SslStream ssl)
             {
                 await ssl.ShutdownAsync().ConfigureAwait(false);
+                return;
+            }
+
+            if (sink is TlsStream managed)
+            {
+                await managed.ShutdownAsync().ConfigureAwait(false);
                 return;
             }
 
