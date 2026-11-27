@@ -55,6 +55,61 @@ internal ref struct QuicDatagramReader
 
     internal const uint Version1 = 0x0000_0001;
 
+    internal static bool TryVersionNegotiation(ReadOnlySpan<byte> datagram, Span<byte> destination, out int written)
+    {
+        written = 0;
+        if (datagram.Length < 1200 || (datagram[0] & 0x80) == 0 || destination.Length < 11)
+        {
+            return false;
+        }
+
+        uint version = ((uint)datagram[1] << 24) | ((uint)datagram[2] << 16) | ((uint)datagram[3] << 8) | datagram[4];
+        if (version is 0 or Version1 || datagram.Length < 7)
+        {
+            return false;
+        }
+
+        int offset = 5;
+        int destinationLength = datagram[offset++];
+        if (destinationLength > MaxConnectionIdLength || datagram.Length < offset + destinationLength + 1)
+        {
+            return false;
+        }
+
+        ReadOnlySpan<byte> destinationId = datagram.Slice(offset, destinationLength);
+        offset += destinationLength;
+        int sourceLength = datagram[offset++];
+        if (sourceLength > MaxConnectionIdLength || datagram.Length < offset + sourceLength)
+        {
+            return false;
+        }
+
+        ReadOnlySpan<byte> sourceId = datagram.Slice(offset, sourceLength);
+        int needed = 7 + sourceId.Length + destinationId.Length + 4;
+        if (destination.Length < needed)
+        {
+            return false;
+        }
+
+        destination[0] = 0x80;
+        destination[1] = 0;
+        destination[2] = 0;
+        destination[3] = 0;
+        destination[4] = 0;
+        destination[5] = (byte)sourceId.Length;
+        sourceId.CopyTo(destination[6..]);
+        int at = 6 + sourceId.Length;
+        destination[at++] = (byte)destinationId.Length;
+        destinationId.CopyTo(destination[at..]);
+        at += destinationId.Length;
+        destination[at++] = 0;
+        destination[at++] = 0;
+        destination[at++] = 0;
+        destination[at++] = 1;
+        written = at;
+        return true;
+    }
+
     private ReadOnlySpan<byte> _remaining;
 
     private readonly int _shortDestinationIdLength;

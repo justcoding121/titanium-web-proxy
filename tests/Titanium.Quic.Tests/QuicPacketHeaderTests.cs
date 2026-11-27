@@ -127,6 +127,20 @@ public sealed class QuicPacketHeaderTests
         unknown[4] = 2;
         Assert.IsFalse(new QuicDatagramReader(unknown, 0).TryRead(out _));
 
+        byte[] probe = new byte[1200];
+        probe[0] = 0xC0;
+        probe[1] = 0x57;
+        probe[2] = 0x41;
+        probe[3] = 0x49;
+        probe[4] = 0x54;
+        byte[] reply = new byte[64];
+        Assert.IsTrue(QuicDatagramReader.TryVersionNegotiation(probe, reply, out int written));
+        Assert.AreEqual(11, written);
+        Assert.AreEqual(0, reply[1]);
+        Assert.AreEqual(0, reply[4]);
+        CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 1 }, reply.AsSpan(7, 4).ToArray());
+        Assert.IsFalse(QuicDatagramReader.TryVersionNegotiation(probe.AsSpan(0, 1199), reply, out _));
+
         var long20 = new List<byte> { 0xE0, 0, 0, 0, 1, 20 };
         long20.AddRange(new byte[20]);
         long20.Add(0);

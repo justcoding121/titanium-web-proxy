@@ -214,6 +214,7 @@ public sealed class ManagedQuicListener : IAsyncDisposable
     {
         if (!TryDestination(datagram, out byte[] id, out bool initial))
         {
+            await ReplyToUnknownVersionAsync(datagram, remote, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -411,6 +412,26 @@ public sealed class ManagedQuicListener : IAsyncDisposable
         }
 
         return concrete;
+    }
+
+    private async Task ReplyToUnknownVersionAsync(byte[] datagram, IPEndPoint remote, CancellationToken cancellationToken)
+    {
+        byte[] reply = new byte[64];
+        if (!QuicDatagramReader.TryVersionNegotiation(datagram, reply, out int written))
+        {
+            return;
+        }
+
+        try
+        {
+            await _transport.SendAsync(reply.AsMemory(0, written), remote, cancellationToken).ConfigureAwait(false);
+        }
+        catch (SocketException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private bool TryDestination(ReadOnlySpan<byte> datagram, out byte[] id, out bool initial)
