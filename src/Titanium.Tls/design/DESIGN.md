@@ -20,7 +20,7 @@ The engine is not thread-safe. `TlsStream` will serialize reads with one lock an
 
 ## Fingerprints
 
-A profile is data. `TlsFingerprintProfile` is the public abstract type. `ChromeFingerprintProfile` is the only profile this plan ships, and it is a thin subclass over an internal template. No code outside `Fingerprint/Profiles/Chrome*.cs` may mention Chrome. Adding another browser later is a template, captures, and tests. A template entry is either implemented or advertised-only. The engine aborts if a server selects an advertised-only item.
+A profile is data. `TlsFingerprintProfile` is the public abstract type. `ChromeFingerprintProfile` is the only profile this plan ships, and it is a thin subclass over an internal template. `ClientHelloTemplate` stays internal until a second browser lands. No code outside `Fingerprint/Profiles/Chrome*.cs` may mention Chrome. Adding another browser later is a template, captures, and tests. A template entry is either implemented or advertised-only. The engine aborts if a server selects an advertised-only item.
 
 Chrome 158 captures (see `SPIKES.md`) fix the cipher list, the group list, a 32-byte session id, GREASE in the first and last extension slots, and an X25519MLKEM768 key share whose X25519 half is independent of the separate X25519 share. Extension slots between the GREASE values permute. Fresh profiles have no padding and no `pre_shared_key`.
 

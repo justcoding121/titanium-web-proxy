@@ -1,1 +1,32 @@
 #nullable enable
+abstract Titanium.Tls.TlsFingerprintProfile.BuildClientHello(Titanium.Tls.ClientHelloContext! context, System.Buffers.IBufferWriter<byte>! destination) -> void
+abstract Titanium.Tls.TlsFingerprintProfile.Fidelity.get -> Titanium.Tls.TlsFingerprintFidelity
+abstract Titanium.Tls.TlsFingerprintProfile.Name.get -> string!
+abstract Titanium.Tls.TlsFingerprintProfile.Version.get -> string!
+override Titanium.Tls.ChromeFingerprintProfile.BuildClientHello(Titanium.Tls.ClientHelloContext! context, System.Buffers.IBufferWriter<byte>! destination) -> void
+override Titanium.Tls.ChromeFingerprintProfile.Fidelity.get -> Titanium.Tls.TlsFingerprintFidelity
+override Titanium.Tls.ChromeFingerprintProfile.Name.get -> string!
+override Titanium.Tls.ChromeFingerprintProfile.Version.get -> string!
+static Titanium.Tls.TlsFingerprintProfiles.Chrome.get -> Titanium.Tls.ChromeFingerprintProfile!
+Titanium.Tls.ChromeFingerprintProfile
+Titanium.Tls.ChromeFingerprintProfile.ChromeFingerprintProfile() -> void
+Titanium.Tls.ClientHelloContext
+Titanium.Tls.ClientHelloContext.ApplicationProtocols.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Tls.ClientHelloContext.ApplicationProtocols.set -> void
+Titanium.Tls.ClientHelloContext.ClientHelloContext() -> void
+Titanium.Tls.ClientHelloContext.HelloRetryState.get -> byte[]?
+Titanium.Tls.ClientHelloContext.HelloRetryState.set -> void
+Titanium.Tls.ClientHelloContext.KeyShares.get -> System.Collections.Generic.IReadOnlyDictionary<ushort, byte[]!>?
+Titanium.Tls.ClientHelloContext.KeyShares.set -> void
+Titanium.Tls.ClientHelloContext.PskBinder.get -> byte[]?
+Titanium.Tls.ClientHelloContext.PskBinder.set -> void
+Titanium.Tls.ClientHelloContext.ServerName.get -> string?
+Titanium.Tls.ClientHelloContext.ServerName.set -> void
+Titanium.Tls.ClientHelloContext.SessionTicket.get -> byte[]?
+Titanium.Tls.ClientHelloContext.SessionTicket.set -> void
+Titanium.Tls.TlsFingerprintFidelity
+Titanium.Tls.TlsFingerprintFidelity.Full = 0 -> Titanium.Tls.TlsFingerprintFidelity
+Titanium.Tls.TlsFingerprintFidelity.ReducedNoPostQuantum = 1 -> Titanium.Tls.TlsFingerprintFidelity
+Titanium.Tls.TlsFingerprintProfile
+Titanium.Tls.TlsFingerprintProfile.TlsFingerprintProfile() -> void
+Titanium.Tls.TlsFingerprintProfiles

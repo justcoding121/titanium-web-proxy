@@ -6,7 +6,7 @@ namespace Titanium.Tls;
 
 /// <summary>
 /// X25519MLKEM768. The share is the ML-KEM-768 encapsulation key or ciphertext followed by the X25519
-/// public key. Chrome 158 and OpenSSL 3.5.9 both use that order, and the X25519 half is a separate key
+/// public key. Captured ClientHellos and OpenSSL 3.5.9 both use that order, and the X25519 half is a separate key
 /// from a standalone X25519 share.
 /// </summary>
 internal sealed class HybridKeyExchange : IKeyExchangeGroup
