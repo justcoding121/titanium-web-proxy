@@ -271,6 +271,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
         }
 
         _staged.Clear();
+        for (int i = 0; i < _heldApplication.Count; i++)
+        {
+            CryptographicOperations.ZeroMemory(_heldApplication[i].Payload);
+        }
+
+        _heldApplication.Clear();
     }
 
     private bool _sawInitialPath;
@@ -350,7 +356,6 @@ internal sealed partial class QuicConnectionCore : IDisposable
                     _expectedRetryToken = null;
                 }
 
-                Remember(kind, packetNumber);
                 if (kind == QuicPacketKind.Initial && !_sawInitialPath)
                 {
                     _initialPath = _path;
@@ -362,15 +367,38 @@ internal sealed partial class QuicConnectionCore : IDisposable
                     MarkAddressValidated(_path);
                 }
 
-                bool eliciting = TakePayload(kind, plain.AsSpan(0, plainLength));
-                if (eliciting && !IsClosed)
+                // Acknowledging 1-RTT before the handshake finishes lets the peer drop handshake
+                // keys and stop resending the packet that would complete this handshake.
+                bool hold = kind == QuicPacketKind.OneRtt && !HandshakeComplete;
+                if (hold && _heldApplication.Count >= HeldApplicationLimit)
                 {
-                    StageAck(kind, packetNumber);
+                    if (!IsClosed)
+                    {
+                        NotePeerPacket();
+                    }
                 }
-
-                if (!IsClosed)
+                else
                 {
-                    NotePeerPacket();
+                    Remember(kind, packetNumber);
+                    if (hold)
+                    {
+                        var saved = new byte[plainLength];
+                        plain.AsSpan(0, plainLength).CopyTo(saved);
+                        _heldApplication.Add(new HeldApplication(packetNumber, saved));
+                    }
+                    else
+                    {
+                        bool eliciting = TakePayload(kind, plain.AsSpan(0, plainLength));
+                        if (eliciting && !IsClosed)
+                        {
+                            StageAck(kind, packetNumber);
+                        }
+                    }
+
+                    if (!IsClosed)
+                    {
+                        NotePeerPacket();
+                    }
                 }
             }
             finally
@@ -1129,15 +1157,61 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     private bool _sentHandshakeDone;
 
+    private const int HeldApplicationLimit = 16;
+
+    private readonly List<HeldApplication> _heldApplication = new();
+
+    private readonly struct HeldApplication
+    {
+        internal HeldApplication(ulong number, byte[] payload)
+        {
+            Number = number;
+            Payload = payload;
+        }
+
+        internal ulong Number { get; }
+
+        internal byte[] Payload { get; }
+    }
+
     private void SendHandshakeDoneOnce()
     {
-        if (_client || _sentHandshakeDone || !HandshakeComplete || _applicationSend is null)
+        if (!HandshakeComplete || _applicationSend is null)
         {
             return;
         }
 
-        _sentHandshakeDone = true;
-        SendHandshakeDone();
+        if (!_client && !_sentHandshakeDone)
+        {
+            _sentHandshakeDone = true;
+            SendHandshakeDone();
+        }
+
+        ReleaseHeldApplication();
+    }
+
+    private void ReleaseHeldApplication()
+    {
+        if (_heldApplication.Count == 0)
+        {
+            return;
+        }
+
+        HeldApplication[] held = _heldApplication.ToArray();
+        _heldApplication.Clear();
+        for (int i = 0; i < held.Length; i++)
+        {
+            if (IsClosed)
+            {
+                return;
+            }
+
+            bool eliciting = TakePayload(QuicPacketKind.OneRtt, held[i].Payload);
+            if (eliciting && !IsClosed)
+            {
+                StageAck(QuicPacketKind.OneRtt, held[i].Number);
+            }
+        }
     }
 
     internal void SendHandshakeDone()

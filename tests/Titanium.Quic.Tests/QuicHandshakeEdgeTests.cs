@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -381,6 +382,101 @@ public sealed class QuicHandshakeEdgeTests
         server.HandleDatagram(Now, buffer.AsSpan(0, sentCount), oneRtt);
         Assert.IsFalse(server.IsClosed);
         Assert.IsTrue(server.IsPathValidated(path));
+    }
+
+    [TestMethod]
+    public void AnApplicationPacketBeforeTheHandshakeIsDeliveredWhenTheHandshakeArrives()
+    {
+        using X509Certificate2 certificate = Certificate();
+        var local = new IPEndPoint(IPAddress.Loopback, 9);
+        var remote = new IPEndPoint(IPAddress.Loopback, 10);
+        PathInfo path = QuicConnectionSession.PathOf(local, remote);
+        byte[] clientId = QuicConnectionSession.NewConnectionId();
+        byte[] serverId = QuicConnectionSession.NewConnectionId();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.StartClient(path, clientId, serverId, Limits(clientId, idleMs: 0, server: false));
+        server.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        byte[] buffer = new byte[8192];
+        var held = new List<byte[]>();
+        for (int turn = 0; turn < 80 && !client.HandshakeComplete; turn++)
+        {
+            int count = client.PollTransmit(Now, buffer, out PathInfo sent);
+            if (count > 0 && IsHandshakePacket(buffer[0]))
+            {
+                var copy = new byte[count];
+                buffer.AsSpan(0, count).CopyTo(copy);
+                held.Add(copy);
+            }
+            else if (count > 0)
+            {
+                server.HandleDatagram(Now, buffer.AsSpan(0, count), sent);
+            }
+
+            count = server.PollTransmit(Now, buffer, out sent);
+            if (count > 0)
+            {
+                client.HandleDatagram(Now, buffer.AsSpan(0, count), sent);
+            }
+        }
+
+        Assert.IsTrue(client.HandshakeComplete);
+        Assert.IsFalse(server.HandshakeComplete);
+        for (int turn = 0; turn < 10 && held.Count == 0; turn++)
+        {
+            int count = client.PollTransmit(Now, buffer, out PathInfo sent);
+            if (count == 0)
+            {
+                break;
+            }
+
+            if (IsHandshakePacket(buffer[0]))
+            {
+                var copy = new byte[count];
+                buffer.AsSpan(0, count).CopyTo(copy);
+                held.Add(copy);
+            }
+            else
+            {
+                server.HandleDatagram(Now, buffer.AsSpan(0, count), sent);
+            }
+        }
+
+        Assert.IsTrue(held.Count > 0);
+        byte[] body = [1, 2, 3, 4];
+        Assert.AreEqual(body.Length, client.SendStream(0, body));
+        bool delivered = false;
+        for (int turn = 0; turn < 10 && !delivered; turn++)
+        {
+            int count = client.PollTransmit(Now, buffer, out PathInfo sent);
+            if (count == 0)
+            {
+                break;
+            }
+
+            if (IsHandshakePacket(buffer[0]))
+            {
+                var copy = new byte[count];
+                buffer.AsSpan(0, count).CopyTo(copy);
+                held.Add(copy);
+                continue;
+            }
+
+            server.HandleDatagram(Now, buffer.AsSpan(0, count), sent);
+            delivered = true;
+        }
+
+        Assert.IsTrue(delivered);
+        Assert.IsFalse(server.HandshakeComplete);
+        Assert.AreEqual(0, server.ReceivedStream.Length);
+        foreach (byte[] packet in held)
+        {
+            server.HandleDatagram(Now, packet, path);
+        }
+
+        Assert.IsFalse(server.IsClosed);
+        Assert.IsTrue(server.HandshakeComplete);
+        CollectionAssert.AreEqual(body, server.ReceivedStream);
     }
 
     private static bool IsHandshakePacket(byte first) => (first & 0x80) != 0 && ((first >> 4) & 0x03) == 2;
