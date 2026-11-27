@@ -12,6 +12,8 @@ public sealed class QuicCampaignTests
 
     private static readonly PathInfo Path = new([10, 0, 0, 1], 443, [10, 0, 0, 2], 50000);
 
+    private static readonly PathInfo Rebound = new([10, 0, 0, 1], 443, [10, 0, 0, 2], 50099);
+
     private static readonly byte[] ClientId = [0xC1, 0xC1, 0xC1, 0xC1];
 
     private static readonly byte[] ServerId = [0x51, 0x51, 0x51, 0x51];
@@ -129,6 +131,42 @@ public sealed class QuicCampaignTests
             receiver.InjectApplicationPayload(mutant);
             Assert.IsTrue(receiver.ReceivedStream.Length <= mutant.Length);
         }
+    }
+
+    [TestMethod]
+    public void AReboundAddressGetsTheReplyWithinTheAmplificationLimit()
+    {
+        using X509Certificate2 certificate = Certificate();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        var sim = new QuicSimulator();
+        client.StartClient(Path, ClientId, ServerId, Parameters(client: true));
+        server.StartServer(ServerId, certificate, Parameters(client: false));
+        DateTimeOffset time = Now;
+        Assert.IsTrue(Run(client, server, sim, ref time, static (left, right) => left.HandshakeComplete && right.HandshakeComplete));
+        byte[] buffer = new byte[16384];
+        while (client.PollTransmit(time, buffer, out _) > 0)
+        {
+        }
+
+        while (server.PollTransmit(time, buffer, out _) > 0)
+        {
+        }
+
+        byte[] body = new byte[32];
+        Assert.AreEqual(body.Length, client.SendStream(0, body));
+        int count = client.PollTransmit(time, buffer, out _);
+        Assert.IsTrue(count > 0);
+        server.HandleDatagram(time, buffer.AsSpan(0, count), Rebound);
+        Assert.IsFalse(server.IsClosed);
+        Assert.IsFalse(server.IsPathValidated(Rebound));
+        int reply = server.PollTransmit(time, buffer, out PathInfo path);
+        Assert.IsTrue(reply > 0);
+        Assert.IsTrue(path.Equals(Rebound));
+        long received = server.BytesReceived(Rebound);
+        Assert.IsTrue(received >= count);
+        Assert.IsTrue(server.BytesSent(Rebound) <= received * 3);
+        Assert.AreEqual(body.Length, server.ReceivedStream.Length);
     }
 
     [TestMethod]
