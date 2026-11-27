@@ -27,8 +27,11 @@ resolve_prev_published() {
     return 1
   fi
   local tag
+  # The beta tag is a newer non-draft release and reuses this chart version.
+  # Taking it skips the upgrade, including the live twp.yaml preserve check.
+  # Match the other package jobs and use the latest non-prerelease.
   tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=15" \
-    --jq '[.[] | select(.draft==false)][0].tag_name' 2>/dev/null || true)"
+    --jq '[.[] | select(.draft==false and .prerelease==false)][0].tag_name' 2>/dev/null || true)"
   if [[ -z "$tag" || "$tag" == "null" ]]; then
     return 1
   fi
