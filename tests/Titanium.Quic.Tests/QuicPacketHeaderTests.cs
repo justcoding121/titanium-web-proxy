@@ -93,6 +93,59 @@ public sealed class QuicPacketHeaderTests
     }
 
     [TestMethod]
+    public void HeaderEdgesKeepTheLengthAndTheBits()
+    {
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new QuicDatagramReader([0x40], -1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new QuicDatagramReader([0x40], 21));
+
+        byte[] cid = new byte[20];
+        cid[0] = 0x11;
+        var shortHeader = new List<byte> { 0x40 };
+        shortHeader.AddRange(cid);
+        shortHeader.Add(0x05);
+        Assert.IsTrue(new QuicDatagramReader(shortHeader.ToArray(), 20).TryRead(out QuicPacket packet));
+        Assert.AreEqual(20, packet.DestinationConnectionId.Length);
+        Assert.AreEqual(1, packet.PacketNumber.Length);
+        Assert.IsFalse(packet.Spin);
+        Assert.IsFalse(packet.KeyPhase);
+        Assert.IsFalse(new QuicDatagramReader(shortHeader.ToArray().AsSpan(0, shortHeader.Count - 1), 20).TryRead(out _));
+
+        Assert.IsTrue(new QuicDatagramReader([0x00, 0x01], 0).TryRead(out packet));
+        Assert.IsFalse(packet.FixedBit);
+        Assert.IsTrue(new QuicDatagramReader([0x60, 0x09, 0x01], 1).TryRead(out packet));
+        Assert.IsTrue(packet.Spin);
+        Assert.IsFalse(packet.KeyPhase);
+
+        var versions = new List<byte> { 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+        Assert.IsTrue(new QuicDatagramReader(versions.ToArray(), 0).TryRead(out packet));
+        Assert.AreEqual(4, packet.SupportedVersions.Length);
+        Assert.IsFalse(new QuicDatagramReader(versions.GetRange(0, versions.Count - 2).ToArray(), 0).TryRead(out _));
+        versions.AddRange(new byte[] { 0, 2 });
+        Assert.IsFalse(new QuicDatagramReader(versions.ToArray(), 0).TryRead(out _));
+
+        byte[] unknown = LongPacket(0x00, token: [], packetNumber: [1], payload: [2]);
+        unknown[4] = 2;
+        Assert.IsFalse(new QuicDatagramReader(unknown, 0).TryRead(out _));
+
+        var long20 = new List<byte> { 0xE0, 0, 0, 0, 1, 20 };
+        long20.AddRange(new byte[20]);
+        long20.Add(0);
+        long20.Add(1);
+        long20.Add(9);
+        Assert.IsTrue(new QuicDatagramReader(long20.ToArray(), 0).TryRead(out packet));
+        Assert.AreEqual(20, packet.DestinationConnectionId.Length);
+
+        var longSource = new List<byte> { 0xE0, 0, 0, 0, 1, 0, 21 };
+        longSource.AddRange(new byte[21]);
+        Assert.IsFalse(new QuicDatagramReader(longSource.ToArray(), 0).TryRead(out _));
+
+        Assert.IsTrue(new QuicDatagramReader([0xE1, 0, 0, 0, 1, 0, 0, 2, 0x11, 0x22], 0).TryRead(out packet));
+        Assert.AreEqual(2, packet.PacketNumber.Length);
+        Assert.AreEqual(0, packet.Payload.Length);
+        Assert.IsFalse(new QuicDatagramReader([0xE1, 0, 0, 0, 1, 0, 0, 1, 0x11, 0x22], 0).TryRead(out _));
+    }
+
+    [TestMethod]
     public void TruncatedAndOversizedHeadersAreRejected()
     {
         Assert.IsFalse(new QuicDatagramReader([0xC0, 0, 0, 0], 0).TryRead(out _));
