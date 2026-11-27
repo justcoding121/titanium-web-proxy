@@ -65,6 +65,42 @@ public sealed class ManagedQuicTests
         await server.CloseAsync(0, cancel.Token);
     }
 
+    [TestMethod]
+    public async Task AWriteLargerThanTheCongestionWindowIsDelivered()
+    {
+        using X509Certificate2 certificate = Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions { ServerCertificate = certificate },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        await using ManagedQuicConnection client = await ManagedQuicConnection.ConnectAsync(new ManagedQuicClientConnectionOptions
+        {
+            RemoteEndPoint = listener.LocalEndPoint,
+            ClientAuthenticationOptions = new SslClientAuthenticationOptions { TargetHost = "localhost" },
+        }, cancel.Token);
+        await using ManagedQuicConnection server = await accepted;
+        ManagedQuicStream outbound = await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancel.Token);
+        ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
+        byte[] payload = RandomNumberGenerator.GetBytes(32 * 1024);
+        await outbound.WriteAsync(payload, cancel.Token);
+        byte[] got = new byte[payload.Length];
+        int read = 0;
+        while (read < got.Length)
+        {
+            int count = await inbound.ReadAsync(got.AsMemory(read), cancel.Token);
+            Assert.IsTrue(count > 0);
+            read += count;
+        }
+
+        Assert.IsTrue(SHA256.HashData(payload).AsSpan().SequenceEqual(SHA256.HashData(got)));
+    }
+
     private static void AssertEphemeral(int port)
     {
         Assert.AreNotEqual(0, port);

@@ -234,6 +234,18 @@ internal sealed class QuicFlow
         return true;
     }
 
+    internal void ReturnReady(ulong streamId, ulong offset, ReadOnlySpan<byte> data)
+    {
+        if (data.IsEmpty)
+        {
+            return;
+        }
+
+        StreamFlow stream = Open(streamId);
+        stream.Ready.InsertRange(0, data.ToArray());
+        stream.ReadyOffset = offset;
+    }
+
     internal IReadOnlyList<Outgoing> TakeReady()
     {
         var ready = new List<Outgoing>();

@@ -376,7 +376,7 @@ internal sealed partial class QuicConnectionCore
 
             if (staged.Track && !staged.Probe && !_loss.Allows(staged.Length))
             {
-                continue;
+                return 0;
             }
 
             staged.Buffer.AsSpan(0, staged.Length).CopyTo(destination);

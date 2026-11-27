@@ -308,7 +308,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 MarkAddressValidated(_path);
             }
 
-            TakePayload(kind, plain.AsSpan(0, plainLength));
+            bool eliciting = TakePayload(kind, plain.AsSpan(0, plainLength));
+            if (eliciting && kind == QuicPacketKind.OneRtt && !IsClosed)
+            {
+                StageAck(kind, packetNumber);
+            }
+
             if (!IsClosed)
             {
                 NotePeerPacket();
@@ -437,15 +442,21 @@ internal sealed partial class QuicConnectionCore : IDisposable
         return seen is null || packetNumber > seen.Value;
     }
 
-    private void TakePayload(QuicPacketKind kind, ReadOnlySpan<byte> plaintext)
+    private bool TakePayload(QuicPacketKind kind, ReadOnlySpan<byte> plaintext)
     {
+        bool eliciting = false;
         var reader = new QuicFrameReader(plaintext, kind);
         Span<QuicAckRange> ranges = new QuicAckRange[QuicFrameReader.MaxAckRanges];
         while (reader.TryNext(ranges, out QuicFrame frame))
         {
             if (IsClosed)
             {
-                return;
+                return false;
+            }
+
+            if (frame.Kind is not (QuicFrameKind.Ack or QuicFrameKind.Padding or QuicFrameKind.ConnectionClose))
+            {
+                eliciting = true;
             }
 
             if (frame.Kind == QuicFrameKind.Ack)
@@ -454,22 +465,23 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 if (!_loss.OnAck(kind, frame.LargestAcknowledged, delay, ranges, frame.AckRangeCount, _now, IsPathValidated(_path)))
                 {
                     MarkClosed(QuicFrameReader.ProtocolViolation, send: true);
-                    return;
+                    return false;
                 }
 
                 ObservePathMtu();
-            foreach (QuicRetransmit item in _loss.Pending)
+                foreach (QuicRetransmit item in _loss.Pending)
                 {
                     Retransmit(item.Kind, item.Payload);
                 }
 
+                StageReady();
                 continue;
             }
 
             if (frame.Kind == QuicFrameKind.ConnectionClose && !frame.ApplicationClose)
             {
                 MarkClosed(frame.ErrorCode, send: false);
-                return;
+                return false;
             }
 
             if (frame.Kind == QuicFrameKind.Stream)
@@ -477,7 +489,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 if (!_flow.AcceptStream(frame.StreamId, frame.Offset, frame.Data, out ulong error))
                 {
                     MarkClosed(error, send: true);
-                    return;
+                    return false;
                 }
 
                 byte[] received = _flow.Received;
@@ -494,7 +506,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 if (!_flow.NoteReset(frame.StreamId, frame.Limit, out ulong error))
                 {
                     MarkClosed(error, send: true);
-                    return;
+                    return false;
                 }
 
                 continue;
@@ -526,7 +538,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 if (!_ids.TryAddPeer(frame.Sequence, frame.RetirePriorTo, frame.Data, frame.Token, retire, out ulong error))
                 {
                     MarkClosed(error, send: true);
-                    return;
+                    return false;
                 }
 
                 foreach (ulong sequence in retire)
@@ -542,7 +554,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 if (!_ids.TryRetire(frame.Sequence, out ulong error))
                 {
                     MarkClosed(error, send: true);
-                    return;
+                    return false;
                 }
 
                 continue;
@@ -568,14 +580,17 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
             if (frame.Kind == QuicFrameKind.Crypto && !TakeCrypto(kind, frame.Offset, frame.Data))
             {
-                return;
+                return false;
             }
         }
 
         if (reader.Error != 0)
         {
             MarkClosed(reader.Error, send: true);
+            return false;
         }
+
+        return eliciting;
     }
 
     private bool TakeCrypto(QuicPacketKind kind, ulong offset, ReadOnlySpan<byte> data)
@@ -1254,22 +1269,69 @@ internal sealed partial class QuicConnectionCore : IDisposable
             return;
         }
 
-        foreach (Outgoing outgoing in _flow.TakeReady())
+        IReadOnlyList<Outgoing> ready = _flow.TakeReady();
+        Span<byte> frame = stackalloc byte[1040];
+        for (int i = 0; i < ready.Count; i++)
         {
-            Span<byte> frame = new byte[outgoing.Data.Length + 32];
-            var stream = new QuicFrame
+            Outgoing outgoing = ready[i];
+            int sent = 0;
+            while (sent < outgoing.Data.Length)
             {
-                Kind = QuicFrameKind.Stream,
-                StreamId = outgoing.StreamId,
-                Offset = outgoing.Offset,
-                HasLength = true,
-                Data = outgoing.Data,
-            };
-            int count = QuicFrameWriter.Write(in stream, default, frame);
-            if (count > 0)
-            {
-                SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+                int chunk = Math.Min(1000, outgoing.Data.Length - sent);
+                var stream = new QuicFrame
+                {
+                    Kind = QuicFrameKind.Stream,
+                    StreamId = outgoing.StreamId,
+                    Offset = outgoing.Offset + (ulong)sent,
+                    HasLength = true,
+                    Data = outgoing.Data.AsSpan(sent, chunk),
+                };
+                int count = QuicFrameWriter.Write(in stream, default, frame);
+                if (count == 0 || !_loss.Allows(count + 64) || SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0) == 0)
+                {
+                    ReturnUnsent(ready, i, sent);
+                    return;
+                }
+
+                sent += chunk;
             }
+        }
+    }
+
+    private void ReturnUnsent(IReadOnlyList<Outgoing> ready, int index, int sent)
+    {
+        Outgoing current = ready[index];
+        if (sent < current.Data.Length)
+        {
+            _flow.ReturnReady(current.StreamId, current.Offset + (ulong)sent, current.Data.AsSpan(sent));
+        }
+
+        for (int i = index + 1; i < ready.Count; i++)
+        {
+            _flow.ReturnReady(ready[i].StreamId, ready[i].Offset, ready[i].Data);
+        }
+    }
+
+    private void StageAck(QuicPacketKind kind, ulong number)
+    {
+        QuicPacketProtector? protector = Protector(kind, send: true);
+        if (protector is null)
+        {
+            return;
+        }
+
+        Span<byte> frame = stackalloc byte[16];
+        var ranges = new QuicAckRange[1];
+        var ack = new QuicFrame
+        {
+            Kind = QuicFrameKind.Ack,
+            LargestAcknowledged = number,
+            AckRangeCount = 1,
+        };
+        int written = QuicFrameWriter.Write(in ack, ranges, frame);
+        if (written > 0)
+        {
+            SealAndStage(kind, protector, frame[..written], 0);
         }
     }
 
