@@ -21,12 +21,14 @@ public sealed class TlsStream : Stream
     private readonly TlsStreamOptions _options;
     private readonly SemaphoreSlim _readLock = new(1, 1);
     private readonly SemaphoreSlim _writeLock = new(1, 1);
-    private readonly byte[] _encrypt = new byte[TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxPlaintext + 1 + TlsRecordProtector.TagLength];
+    private byte[]? _encryptStorage;
+    private byte[] _encrypt => _encryptStorage ??= new byte[TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxPlaintext + 1 + TlsRecordProtector.TagLength];
     private readonly TlsOutput _pull = new();
     private TlsEngine? _engine;
     private SslClientAuthenticationOptions? _clientOptions;
     private SslServerAuthenticationOptions? _serverOptions;
-    private readonly byte[] _inbound = new byte[TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxCiphertext];
+    private byte[]? _inboundStorage;
+    private byte[] _inbound => _inboundStorage ??= new byte[TlsRecordProtector.HeaderLength + TlsRecordProtector.MaxCiphertext];
     private int _inboundCount;
     private int _inboundUsed;
     private bool _authenticated;
@@ -559,6 +561,7 @@ public sealed class TlsStream : Stream
             ApplicationProtocols = ProtocolNames(options.ApplicationProtocols),
             OfferStatusRequest = true,
             AlgorithmPolicy = policy,
+            DeferSealedAlerts = true,
         };
     }
 
@@ -576,6 +579,7 @@ public sealed class TlsStream : Stream
         _engine = new TlsEngine(TlsRole.Server, entropy: _options.Entropy, cache: _options.SessionCache)
         {
             AlgorithmPolicy = policy,
+            DeferSealedAlerts = true,
         };
     }
 
@@ -639,7 +643,9 @@ public sealed class TlsStream : Stream
             write(output.Bytes);
         }
 
+        SealDeferredAlertSync();
         Apply(output, write);
+        SealDeferredAlertSync();
         FinishDrive();
         return consumed;
     }
@@ -655,7 +661,9 @@ public sealed class TlsStream : Stream
             await _inner.WriteAsync(flight, cancellationToken).ConfigureAwait(false);
         }
 
+        await SealDeferredAlertAsync(cancellationToken).ConfigureAwait(false);
         await ApplyAsync(output, cancellationToken).ConfigureAwait(false);
+        await SealDeferredAlertAsync(cancellationToken).ConfigureAwait(false);
         FinishDrive();
         return consumed;
     }
@@ -682,7 +690,15 @@ public sealed class TlsStream : Stream
         }
     }
 
-    private ReadOnlySpan<byte> Unconsumed() => _inbound.AsSpan(_inboundUsed, _inboundCount - _inboundUsed);
+    private ReadOnlySpan<byte> Unconsumed()
+    {
+        if (_inboundStorage is null || _inboundUsed >= _inboundCount)
+        {
+            return ReadOnlySpan<byte>.Empty;
+        }
+
+        return _inboundStorage.AsSpan(_inboundUsed, _inboundCount - _inboundUsed);
+    }
 
     private void FillSync()
     {
@@ -765,6 +781,7 @@ public sealed class TlsStream : Stream
                         write(resumed.Bytes);
                     }
 
+                    SealDeferredAlertSync();
                     _engine.ReleaseServerCheck();
                     throw;
                 }
@@ -775,6 +792,37 @@ public sealed class TlsStream : Stream
                     write(resumed.Bytes);
                 }
 
+                SealDeferredAlertSync();
+                NoteCompleted(resumed);
+            }
+            else if (ev.Kind == TlsEventKind.ClientCertificateReceived)
+            {
+                var resumed = new TlsOutput();
+                try
+                {
+                    TlsCertificateDecision.ThrowIfRejected(_engine!.ClientCertificateErrors, _serverOptions?.RemoteCertificateValidationCallback, this, _engine.RemoteCertificate, _engine.ClientChain);
+                    _engine.Resume(true, resumed);
+                }
+                catch (AuthenticationException)
+                {
+                    _engine!.Resume(false, resumed);
+                    if (resumed.Bytes.Length > 0)
+                    {
+                        write(resumed.Bytes);
+                    }
+
+                    SealDeferredAlertSync();
+                    _engine.ReleaseClientCheck();
+                    throw;
+                }
+
+                _engine.ReleaseClientCheck();
+                if (resumed.Bytes.Length > 0)
+                {
+                    write(resumed.Bytes);
+                }
+
+                SealDeferredAlertSync();
                 NoteCompleted(resumed);
             }
             else if (ev.Kind == TlsEventKind.ClientHelloReceived)
@@ -791,6 +839,7 @@ public sealed class TlsStream : Stream
                     write(resumed.Bytes);
                 }
 
+                SealDeferredAlertSync();
                 NoteCompleted(resumed);
             }
             else if (ev.Kind == TlsEventKind.PeerAlert)
@@ -821,6 +870,7 @@ public sealed class TlsStream : Stream
                         await _inner.WriteAsync(resumed.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
                     }
 
+                    await SealDeferredAlertAsync(cancellationToken).ConfigureAwait(false);
                     _engine.ReleaseServerCheck();
                     throw;
                 }
@@ -831,6 +881,37 @@ public sealed class TlsStream : Stream
                     await _inner.WriteAsync(resumed.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
                 }
 
+                await SealDeferredAlertAsync(cancellationToken).ConfigureAwait(false);
+                NoteCompleted(resumed);
+            }
+            else if (ev.Kind == TlsEventKind.ClientCertificateReceived)
+            {
+                var resumed = new TlsOutput();
+                try
+                {
+                    TlsCertificateDecision.ThrowIfRejected(_engine!.ClientCertificateErrors, _serverOptions?.RemoteCertificateValidationCallback, this, _engine.RemoteCertificate, _engine.ClientChain);
+                    _engine.Resume(true, resumed);
+                }
+                catch (AuthenticationException)
+                {
+                    _engine!.Resume(false, resumed);
+                    if (resumed.Bytes.Length > 0)
+                    {
+                        await _inner.WriteAsync(resumed.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
+                    }
+
+                    await SealDeferredAlertAsync(cancellationToken).ConfigureAwait(false);
+                    _engine.ReleaseClientCheck();
+                    throw;
+                }
+
+                _engine.ReleaseClientCheck();
+                if (resumed.Bytes.Length > 0)
+                {
+                    await _inner.WriteAsync(resumed.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
+                }
+
+                await SealDeferredAlertAsync(cancellationToken).ConfigureAwait(false);
                 NoteCompleted(resumed);
             }
             else if (ev.Kind == TlsEventKind.ClientHelloReceived)
@@ -849,12 +930,71 @@ public sealed class TlsStream : Stream
                     await _inner.WriteAsync(resumed.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
                 }
 
+                await SealDeferredAlertAsync(cancellationToken).ConfigureAwait(false);
                 NoteCompleted(resumed);
             }
             else if (ev.Kind == TlsEventKind.PeerAlert)
             {
                 throw new TlsAlertException(ev.Alert, sent: false);
             }
+        }
+    }
+
+    private void SealDeferredAlertSync()
+    {
+        if (_engine is not { HasDeferredAlert: true })
+        {
+            return;
+        }
+
+        _writeLock.Wait();
+        try
+        {
+            if (!_engine.HasDeferredAlert)
+            {
+                return;
+            }
+
+            int written = _engine.ProtectAlert(2, _engine.LastLocalAlert, _encrypt);
+            _engine.ClearDeferredAlert();
+            _inner.Write(_encrypt.AsSpan(0, written));
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    private async Task SealDeferredAlertAsync(CancellationToken cancellationToken)
+    {
+        if (_engine is not { HasDeferredAlert: true })
+        {
+            return;
+        }
+
+        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!_engine.HasDeferredAlert)
+            {
+                return;
+            }
+
+            int written = _engine.ProtectAlert(2, _engine.LastLocalAlert, _encrypt);
+            _engine.ClearDeferredAlert();
+            try
+            {
+                await _inner.WriteAsync(_encrypt.AsMemory(0, written), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                _broken = true;
+                throw;
+            }
+        }
+        finally
+        {
+            _writeLock.Release();
         }
     }
 
@@ -891,6 +1031,7 @@ public sealed class TlsStream : Stream
                 _inner.Write(_pull.Bytes);
             }
 
+            SealDeferredAlertSync();
             NoteReadEvents(_pull);
             TrySendKeyUpdateFromReaderSync();
             if (consumed == 0 && _engine.PlaintextAvailable == 0 && !_readClosed)
@@ -918,6 +1059,7 @@ public sealed class TlsStream : Stream
                 await _inner.WriteAsync(_pull.WrittenMemory, cancellationToken).ConfigureAwait(false);
             }
 
+            await SealDeferredAlertAsync(cancellationToken).ConfigureAwait(false);
             NoteReadEvents(_pull);
             if (_engine.KeyUpdateResponseNeeded)
             {
@@ -1100,6 +1242,8 @@ public sealed class TlsStream : Stream
             ApplicationProtocols = protocols,
             RequireApplicationProtocol = protocols is { Length: > 0 },
             RequestClientCertificate = options.ClientCertificateRequired || _options.RequestClientCertificate,
+            RequireClientCertificate = options.ClientCertificateRequired,
+            ClientCertificateCallback = options.RemoteCertificateValidationCallback,
             ClientTrustAnchors = _options.ClientTrustAnchors,
             Groups = _options.Groups,
             CipherSuites = ciphers,

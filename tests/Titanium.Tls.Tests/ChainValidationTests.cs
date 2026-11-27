@@ -129,6 +129,34 @@ public sealed class ChainValidationTests
     }
 
     [TestMethod]
+    public void ClientCertificatePausesForTheCallback()
+    {
+        using X509Certificate2 serverCertificate = ServerHandshakeTests.Certificate();
+        using X509Certificate2 root = Authority("CN=Client Root");
+        using X509Certificate2 clientCertificate = ClientLeaf(root);
+        var trust = new X509Certificate2Collection(root);
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost") { LocalCertificate = clientCertificate };
+        using var server = new TlsEngine(TlsRole.Server);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        server.Advance(output.Bytes.ToArray(), out _, output);
+        server.Resume(_ => new TlsServerSelection
+        {
+            Certificate = serverCertificate,
+            RequestClientCertificate = true,
+            ClientTrustAnchors = trust,
+            ClientCertificateCallback = static (_, _, _, _) => false,
+        }, output);
+        client.Advance(output.Bytes.ToArray(), out _, output);
+        client.Resume(true, output);
+        server.Advance(output.Bytes.ToArray(), out _, output);
+        Assert.AreEqual(TlsEngineState.WaitClientCertificateDecision, server.State);
+        Assert.IsNotNull(server.RemoteCertificate);
+        server.Resume(false, output);
+        Assert.AreEqual((byte)42, server.LastLocalAlert);
+    }
+
+    [TestMethod]
     public void RejectedSchemesDoNotVerify()
     {
         byte[] content = "handshake"u8.ToArray();

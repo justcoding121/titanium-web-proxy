@@ -1,4 +1,5 @@
 using System;
+using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -14,6 +15,11 @@ internal sealed class TlsServerSelection
     internal bool RequireApplicationProtocol { get; init; }
 
     internal bool RequestClientCertificate { get; init; }
+
+    /// <summary>An empty client Certificate is <c>certificate_required</c> (116). Resumption is refused while a certificate is requested.</summary>
+    internal bool RequireClientCertificate { get; init; }
+
+    internal RemoteCertificateValidationCallback? ClientCertificateCallback { get; init; }
 
     internal X509Certificate2Collection? ClientTrustAnchors { get; init; }
 

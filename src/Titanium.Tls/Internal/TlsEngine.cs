@@ -22,6 +22,7 @@ internal enum TlsEngineState
     WaitClientHelloDecision = 7,
     WaitClientCertificate = 12,
     WaitClientCertificateVerify = 13,
+    WaitClientCertificateDecision = 14,
     WaitFinished = 8,
     Connected = 9,
     Closed = 10,
@@ -36,6 +37,7 @@ internal enum TlsEventKind
     NeedMoreData = 5,
     TicketReceived = 6,
     KeyUpdateRequired = 7,
+    ClientCertificateReceived = 8,
 }
 
 internal readonly struct TlsEvent
@@ -102,9 +104,11 @@ internal sealed partial class TlsEngine : IDisposable
 
     private readonly TlsRole _role;
     private readonly int _maxBufferedBytes;
-    private readonly byte[] _stash;
-    private readonly byte[] _body;
-    private readonly HandshakeReassembler _handshake;
+    private readonly int _maxHandshakeMessage;
+    private byte[] _stash = [];
+    private byte[] _body = [];
+    private HandshakeReassembler _handshake = null!;
+    private bool _buffersReady;
     private int _stashLength;
     private int _pendingHandshake;
     private int _emptyRecords;
@@ -131,6 +135,13 @@ internal sealed partial class TlsEngine : IDisposable
     internal bool SendKeyUpdate;
 
     internal byte LastLocalAlert { get; private set; }
+
+    /// <summary>When set, a protected alert is recorded and <see cref="TlsStream"/> writes it under the write lock.</summary>
+    internal bool DeferSealedAlerts { get; set; }
+
+    internal bool HasDeferredAlert { get; private set; }
+
+    internal void ClearDeferredAlert() => HasDeferredAlert = false;
 
     private TlsAlgorithmPolicy _algorithmPolicy;
 
@@ -164,12 +175,10 @@ internal sealed partial class TlsEngine : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBufferedBytes);
         _role = role;
         _maxBufferedBytes = maxBufferedBytes;
+        _maxHandshakeMessage = maxHandshakeMessage;
         _entropy = entropy ?? new SystemEntropy();
         _serverName = serverName;
         _cache = cache;
-        _stash = new byte[Math.Max(maxBufferedBytes, TlsRecordProtector.HeaderLength + 1)];
-        _body = new byte[maxHandshakeMessage];
-        _handshake = new HandshakeReassembler(maxHandshakeMessage);
         if (role == TlsRole.Client)
         {
             _transcript = new TranscriptStore(System.Security.Cryptography.HashAlgorithmName.SHA256);
@@ -204,6 +213,11 @@ internal sealed partial class TlsEngine : IDisposable
         if (_role == TlsRole.Client && State == TlsEngineState.Start)
         {
             WriteClientHello(output, helloRetry: false);
+            if (State == TlsEngineState.Closed)
+            {
+                return;
+            }
+
             State = TlsEngineState.WaitServerHelloOrHrr;
         }
 
@@ -438,8 +452,28 @@ internal sealed partial class TlsEngine : IDisposable
             return;
         }
 
+        if (State == TlsEngineState.WaitClientCertificateDecision)
+        {
+            State = TlsEngineState.WaitClientCertificateVerify;
+            DrainHandshake(output);
+            return;
+        }
+
         State = TlsEngineState.WaitCertificateVerify;
         DrainHandshake(output);
+    }
+
+    private void EnsureBuffers()
+    {
+        if (_buffersReady)
+        {
+            return;
+        }
+
+        _stash = new byte[Math.Max(_maxBufferedBytes, TlsRecordProtector.HeaderLength + 1)];
+        _body = new byte[_maxHandshakeMessage];
+        _handshake = new HandshakeReassembler(_maxHandshakeMessage);
+        _buffersReady = true;
     }
 
     private bool TryFillRecord(ReadOnlySpan<byte> input, ref int offset, out int recordLength, out bool incomplete, out byte alert)
@@ -478,6 +512,17 @@ internal sealed partial class TlsEngine : IDisposable
 
     private bool Pull(ReadOnlySpan<byte> input, ref int offset, int total)
     {
+        if (_stash.Length < total)
+        {
+            // An idle connection has no handshake bytes yet. Allocate when the peer sends some.
+            if (!_buffersReady && input.Length == offset && _stashLength == 0)
+            {
+                return false;
+            }
+
+            EnsureBuffers();
+        }
+
         if (total > _stash.Length)
         {
             return false;
@@ -503,6 +548,7 @@ internal sealed partial class TlsEngine : IDisposable
 
     private bool AppendHandshake(ReadOnlySpan<byte> payload, TlsOutput output)
     {
+        EnsureBuffers();
         if (_pendingHandshake + payload.Length > _maxBufferedBytes)
         {
             Fail(output, (byte)TlsRecordAlert.RecordOverflow);
@@ -521,6 +567,7 @@ internal sealed partial class TlsEngine : IDisposable
 
     private bool DrainHandshake(TlsOutput output)
     {
+        EnsureBuffers();
         while (State != TlsEngineState.Closed && !_paused)
         {
             if (!_handshake.TryTake(_body, out HandshakeType type, out int bodyLength, out bool needMore, out HandshakeAlert alert))
@@ -612,6 +659,12 @@ internal sealed partial class TlsEngine : IDisposable
         LastLocalAlert = description;
         if (_alertsEncrypted && _write != null)
         {
+            if (DeferSealedAlerts)
+            {
+                HasDeferredAlert = true;
+                return;
+            }
+
             Span<byte> plain = stackalloc byte[2];
             plain[0] = 2;
             plain[1] = description;

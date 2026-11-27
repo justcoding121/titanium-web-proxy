@@ -51,3 +51,20 @@ No consult. The profile constants matched the capture, including `0xCA34`. The g
 | Parity | `TlsStreamTests` covers the S1 rows, a 10 MiB hash compare both ways, ALPN, the cipher, and `SslStream` in both directions. Differences are in `PARITY-DIFFS.md`. |
 
 No consult. Two gaps were closed: a KeyUpdate response was dropped when the reader could not take the write lock immediately, and a cancel during I/O left the record layer usable. Still deferred, and not a second design: the locks are taken on every call rather than only when the direction is busy, the receive buffer is a fixed full record rather than a pooled 4 KiB buffer that grows, and a steady-state 16 KiB read or write is not yet allocation-free. Those belong to the performance gates.
+
+## C7. Whole-library security review
+
+Consulted once, read-only, on the Phase 1 library. The review named one blocker and seven majors. Categories it left alone, apart from those items, were the state machine, parsing, secret handling, timing, and the other DoS and resumption checks.
+
+| Finding | What changed |
+| --- | --- |
+| Required client certificate | `RequireClientCertificate` comes from `ClientCertificateRequired`. An empty client Certificate is alert 116. `TryAcceptTicket` returns without resuming whenever a client certificate was requested, so a ticket cannot skip the request. An optional empty certificate, with no require flag, still goes to `WaitFinished`. |
+| Callback and identity | The server pauses on `ClientCertificateReceived`. `TlsStream` runs `RemoteCertificateValidationCallback` with the stream as sender and resumes. `RemoteCertificate` on a server loads the client leaf. A rejection is `bad_certificate` (42). |
+| Alert nonce | After the handshake keys exist, `Fail` records the alert when `DeferSealedAlerts` is set. `TlsStream` sets that flag and writes `ProtectAlert` under `_writeLock`. Engine tests still receive the alert bytes from `Fail`. |
+| ALPN | EncryptedExtensions must carry exactly one protocol name, and it must be one the client offered. Otherwise `illegal_parameter`. A selection when nothing was offered stays `unsupported_extension`. |
+| ClientHello size | The hello buffer is sized from the share, the name, the protocols, the cookie, and the ticket. A failed write returns no hello. A ticket that does not fit is dropped and the hello is built again. Anything still too large is `internal_error` (80). |
+| Ticket cache | `MemoryTlsSessionCache` takes a lock, and it enqueues a key only the first time. One connection stores at most eight tickets. An identity longer than 2048 bytes is not stored, and a stored one that large is forgotten. |
+| Certificate list | One hundred entries still parse, matching `CertificateListsOfZeroOneAndOneHundredParse`. The next entry is `decode_error`, in the handshake parser and again before `X509Chain.Build`. The review suggested 10 to 16. That would reject a list this suite already treats as legal, so the cap is 100. |
+| Idle buffers | `_stash`, `_body`, and the handshake reassembler are allocated when the first byte arrives, not in the constructor. `TlsStream` allocates its record buffers on first use. The earlier idle-memory measurement is from before this change. The gate is not claimed. |
+
+No second consult. The regressions are named in `BUG-LEDGER.md`. Known limits that the review did not treat as findings stay: the client offers AES-128-GCM-SHA256 and `ecdsa_secp256r1_sha256` only, stapled OCSP and SCTs are copied and not checked, revocation runs inline, the Chrome profile is not the engine hello, cross-stack tickets do not resume, the 60 µs X25519 budget is missed, and the 900 µs ceiling stays.

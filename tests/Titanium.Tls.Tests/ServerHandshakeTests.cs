@@ -139,6 +139,56 @@ public sealed class ServerHandshakeTests
     }
 
     [TestMethod]
+    public void RequiredClientCertificateRejectsAnEmptyList()
+    {
+        using X509Certificate2 certificate = Certificate();
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost");
+        using var server = new TlsEngine(TlsRole.Server);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        server.Advance(output.Bytes.ToArray(), out _, output);
+        server.Resume(_ => new TlsServerSelection
+        {
+            Certificate = certificate,
+            RequestClientCertificate = true,
+            RequireClientCertificate = true,
+        }, output);
+        client.Advance(output.Bytes.ToArray(), out _, output);
+        if (client.State == TlsEngineState.WaitCertificateDecision)
+        {
+            client.Resume(true, output);
+        }
+
+        server.Advance(output.Bytes.ToArray(), out _, output);
+        Assert.AreEqual((byte)116, server.LastLocalAlert);
+        Assert.AreEqual(TlsEngineState.Closed, server.State);
+    }
+
+    [TestMethod]
+    public void RequestedClientCertificateDoesNotResume()
+    {
+        using X509Certificate2 certificate = Certificate();
+        using var tickets = new MemoryTicketProtector { UnixTimeSeconds = 1_000 };
+        var cache = new MemoryTlsSessionCache();
+        using HandshakePair first = Complete(certificate, tickets, cache, clientClock: 1_000, serverClock: 1_000);
+        Assert.AreEqual(TlsEngineState.Connected, first.Client.State);
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost", cache: cache) { UnixTimeSeconds = 1_001 };
+        using var server = new TlsEngine(TlsRole.Server) { UnixTimeSeconds = 1_001 };
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        server.Advance(output.Bytes.ToArray(), out _, output);
+        server.Resume(_ => new TlsServerSelection
+        {
+            Certificate = certificate,
+            Tickets = tickets,
+            RequestClientCertificate = true,
+            RequireClientCertificate = true,
+        }, output);
+        Assert.IsFalse(server.IsResumption);
+        Assert.AreEqual(TlsEngineState.WaitClientCertificate, server.State);
+    }
+
+    [TestMethod]
     public void ResumptionUsesTheTicketTwiceAndRejectsABadOne()
     {
         using X509Certificate2 certificate = Certificate();

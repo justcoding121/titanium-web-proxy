@@ -17,9 +17,10 @@ internal sealed partial class TlsEngine
     {
         get
         {
-            if (_remoteCertificate is null && _leaf is not null)
+            byte[]? encoded = _role == TlsRole.Server ? _clientLeaf : _leaf;
+            if (_remoteCertificate is null && encoded is not null)
             {
-                _remoteCertificate = X509CertificateLoader.LoadCertificate(_leaf);
+                _remoteCertificate = X509CertificateLoader.LoadCertificate(encoded);
             }
 
             return _remoteCertificate;
@@ -169,20 +170,48 @@ internal sealed partial class TlsEngine
         exporter.CopyTo(_exporter.Span);
     }
 
-    private void RememberSelectedProtocol(ReadOnlySpan<byte> extensions)
+    private bool TryRememberSelectedProtocol(ReadOnlySpan<byte> extensions, out byte alert)
     {
-        if (!TryExtension(extensions, ExtensionType.ApplicationLayerProtocolNegotiation, out ReadOnlySpan<byte> body) || body.Length < 3)
+        alert = 0;
+        if (!TryExtension(extensions, ExtensionType.ApplicationLayerProtocolNegotiation, out ReadOnlySpan<byte> body))
         {
-            return;
+            return true;
         }
 
-        int length = body[2];
-        if (body.Length < 3 + length)
+        // protocol_name_list is one uint16 length and exactly one name. A second name, or a name
+        // this client did not offer, is illegal_parameter (RFC 7301).
+        if (body.Length < 4)
         {
-            return;
+            alert = (byte)HandshakeAlert.DecodeError;
+            return false;
         }
 
-        _selectedAlpn = System.Text.Encoding.ASCII.GetString(body.Slice(3, length));
+        int listLength = (body[0] << 8) | body[1];
+        int nameLength = body[2];
+        if (listLength != body.Length - 2 || nameLength == 0 || nameLength != listLength - 1)
+        {
+            alert = (byte)HandshakeAlert.IllegalParameter;
+            return false;
+        }
+
+        string selected = System.Text.Encoding.ASCII.GetString(body.Slice(3, nameLength));
+        if (ApplicationProtocols is not { Length: > 0 })
+        {
+            alert = (byte)HandshakeAlert.UnsupportedExtension;
+            return false;
+        }
+
+        foreach (string offered in ApplicationProtocols)
+        {
+            if (offered == selected)
+            {
+                _selectedAlpn = selected;
+                return true;
+            }
+        }
+
+        alert = (byte)HandshakeAlert.IllegalParameter;
+        return false;
     }
 
     private void AppendPlaintext(ReadOnlySpan<byte> plaintext)

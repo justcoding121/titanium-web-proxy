@@ -15,6 +15,13 @@ public sealed class BoundaryLimitTests
     }
 
     [TestMethod]
+    public void CertificateListPastOneHundredIsDecodeError()
+    {
+        Assert.IsFalse(HandshakeMessages.TryReadCertificate(CertificateMessage(101), out _, out HandshakeAlert alert));
+        Assert.AreEqual(HandshakeAlert.DecodeError, alert);
+    }
+
+    [TestMethod]
     public void CertificateEntryPastTheBufferIsDecodeError()
     {
         byte[] message = CertificateMessage(1);

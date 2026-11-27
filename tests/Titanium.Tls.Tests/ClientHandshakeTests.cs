@@ -187,6 +187,128 @@ public sealed class ClientHandshakeTests
     }
 
     [TestMethod]
+    public void SelectedProtocolMustBeOneOfferedName()
+    {
+        Assert.AreEqual(47, SelectedProtocolAlert(["http/1.1"], "h2"));
+        Assert.AreEqual(47, SelectedProtocolAlert(["http/1.1"], "http/1.1", "h2"));
+        Assert.AreEqual(110, SelectedProtocolAlert([], "h2"));
+    }
+
+    [TestMethod]
+    public void WideTicketStillProducesAConsistentClientHello()
+    {
+        byte[] identity = new byte[900];
+        identity[0] = 0xAB;
+        var cache = new MemoryTlsSessionCache();
+        cache.Store("localhost", "tls", new TlsResumptionTicket(identity, 60, 0, [0], new byte[32], 0x1301, 1_000));
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost", cache: cache) { UnixTimeSeconds = 1_000 };
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        int recordLength = (output.Bytes[3] << 8) | output.Bytes[4];
+        Assert.AreEqual(output.Bytes.Length, 5 + recordLength);
+        Assert.IsTrue(output.Bytes.Length > 900);
+    }
+
+    [TestMethod]
+    public void OversizedTicketIsDroppedInsteadOfCorruptingTheHello()
+    {
+        var cache = new MemoryTlsSessionCache();
+        cache.Store("localhost", "tls", new TlsResumptionTicket(new byte[3000], 60, 0, [0], new byte[32], 0x1301, 1_000));
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost", cache: cache) { UnixTimeSeconds = 1_000 };
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        Assert.IsFalse(cache.TryGet("localhost", "tls", 1_000, out _));
+        int recordLength = (output.Bytes[3] << 8) | output.Bytes[4];
+        Assert.AreEqual(output.Bytes.Length, 5 + recordLength);
+        Assert.IsTrue(output.Bytes.Length < 3000);
+    }
+
+    [TestMethod]
+    public void RepeatingOneTicketDoesNotGrowTheCacheQueue()
+    {
+        var cache = new MemoryTlsSessionCache();
+        for (int i = 0; i < 1000; i++)
+        {
+            cache.Store("localhost", "tls", new TlsResumptionTicket([(byte)i], 60, 0, [0], new byte[32], 0x1301, 1_000));
+        }
+
+        Assert.AreEqual(1, cache.QueuedKeys);
+        Assert.IsTrue(cache.TryGet("localhost", "tls", 1_000, out TlsResumptionTicket stored));
+        Assert.AreEqual(231, stored.Ticket[0]);
+    }
+
+    [TestMethod]
+    public void NinthNewSessionTicketIsNotStored()
+    {
+        var cache = new MemoryTlsSessionCache();
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost", cache: cache) { UnixTimeSeconds = 200 };
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        using var server = ScriptedServer.Accept(output.Bytes.ToArray());
+        client.Advance(server.Flight(), out _, output);
+        client.Resume(true, output);
+        for (int i = 1; i <= 9; i++)
+        {
+            client.Advance(server.EncryptedApplication(
+            [
+                4, 0, 0, 15,
+                0, 0, 0, 60,
+                0, 0, 0, 1,
+                1, 0,
+                0, 1, (byte)i,
+                0, 0,
+            ]), out _, output);
+        }
+
+        Assert.IsTrue(cache.TryGet("localhost", "tls", 200, out TlsResumptionTicket stored));
+        Assert.AreEqual(8, stored.Ticket[0]);
+    }
+
+    private static byte SelectedProtocolAlert(string[] offered, params string[] selected)
+    {
+        using var client = new TlsEngine(TlsRole.Client, serverName: "localhost") { ApplicationProtocols = offered.Length == 0 ? null : offered };
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        using var server = ScriptedServer.Accept(output.Bytes.ToArray());
+        client.Advance(server.ServerHelloRecord(), out _, output);
+        client.Advance(server.Encrypted(AlpnExtensions(selected)), out _, output);
+        return client.LastLocalAlert;
+    }
+
+    private static byte[] AlpnExtensions(params string[] names)
+    {
+        int list = 0;
+        foreach (string name in names)
+        {
+            list += 1 + name.Length;
+        }
+
+        int extensionBody = 2 + list;
+        int block = 4 + extensionBody;
+        int body = 2 + block;
+        var message = new byte[4 + body];
+        message[0] = 8;
+        message[2] = (byte)(body >> 8);
+        message[3] = (byte)body;
+        message[4] = (byte)(block >> 8);
+        message[5] = (byte)block;
+        message[7] = 16;
+        message[9] = (byte)extensionBody;
+        message[11] = (byte)list;
+        int at = 12;
+        foreach (string name in names)
+        {
+            message[at++] = (byte)name.Length;
+            foreach (char letter in name)
+            {
+                message[at++] = (byte)letter;
+            }
+        }
+
+        return message;
+    }
+
+    [TestMethod]
     public void PreSharedKeyEncodesAWideIdentityAndAge()
     {
         byte[] identity = new byte[256];

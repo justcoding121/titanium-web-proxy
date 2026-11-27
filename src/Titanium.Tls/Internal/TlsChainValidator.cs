@@ -104,8 +104,16 @@ internal static class TlsChainValidator
         signedTimestamps = null;
         TlsReader reader = new(list);
         bool first = true;
+        int count = 0;
         while (reader.Remaining > 0)
         {
+            count++;
+            if (count > HandshakeMessages.MaxCertificateEntries)
+            {
+                certificates = loaded.ToArray();
+                return false;
+            }
+
             if (!reader.TryReadVector24(out ReadOnlySpan<byte> encoded) || encoded.IsEmpty || !reader.TryReadVector16(out ReadOnlySpan<byte> extensions))
             {
                 certificates = loaded.ToArray();

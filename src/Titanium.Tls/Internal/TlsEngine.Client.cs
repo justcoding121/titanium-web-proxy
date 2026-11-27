@@ -12,6 +12,8 @@ internal sealed partial class TlsEngine
     private const byte AlertIllegalParameter = 47;
     private const byte AlertDecryptError = 51;
     private const byte AlertMissingExtension = 109;
+    private const int MaxTicketsStored = 8;
+    private const int MaxStoredTicketBytes = 2048;
 
     private static readonly byte[] EmptyCertificate = [11, 0, 0, 4, 0, 0, 0, 0];
     private const string ProfileName = "tls";
@@ -49,6 +51,7 @@ internal sealed partial class TlsEngine
     private byte[]? _cookie;
     private byte[]? _psk;
     private byte[]? _ticketIdentity;
+    private int _ticketsStored;
     private uint _ticketAgeAdd;
     private uint _ticketLifetime;
     private long _ticketIssued;
@@ -110,7 +113,22 @@ internal sealed partial class TlsEngine
         }
 
         EnsureShare();
-        byte[] hello = BuildClientHello();
+        byte[]? hello = BuildClientHello();
+        if (hello is null && _psk is not null)
+        {
+            CryptographicOperations.ZeroMemory(_psk);
+            _psk = null;
+            _ticketIdentity = null;
+            _cache?.Forget(_serverName ?? string.Empty, ProfileName);
+            hello = BuildClientHello();
+        }
+
+        if (hello is null)
+        {
+            Fail(output, AlertInternalError);
+            return;
+        }
+
         if (_psk is not null)
         {
             PatchBinder(hello);
@@ -330,6 +348,11 @@ internal sealed partial class TlsEngine
         _transcript!.ReplaceWithMessageHash();
         _transcript.Append(message);
         WriteClientHello(output, helloRetry: true);
+        if (State == TlsEngineState.Closed)
+        {
+            return;
+        }
+
         State = TlsEngineState.WaitServerHelloOrHrr;
     }
 
@@ -497,11 +520,12 @@ internal sealed partial class TlsEngine
         }
 
         output.AddEvent(TlsEventKind.TicketReceived);
-        if (_cache is null || _resumptionMaster is null || lifetime == 0)
+        if (_cache is null || _resumptionMaster is null || lifetime == 0 || ticket.Length > MaxStoredTicketBytes || _ticketsStored >= MaxTicketsStored)
         {
             return;
         }
 
+        _ticketsStored++;
         var psk = new byte[32];
         TlsKeySchedule.ResumptionPsk(HashAlgorithmName.SHA256, _resumptionMaster.Span, nonce, psk);
         _cache.Store(_serverName ?? string.Empty, ProfileName, new TlsResumptionTicket(ticket.ToArray(), lifetime, ageAdd, nonce.ToArray(), psk, _selectedCipher, Now()));
@@ -582,72 +606,101 @@ internal sealed partial class TlsEngine
         output.AddBytes(encrypted.AsSpan(0, written));
     }
 
-    private byte[] BuildClientHello()
+    private byte[]? BuildClientHello()
     {
         _offeredCount = 0;
         Span<byte> share = stackalloc byte[128];
         _share!.WritePublicKey(share[.._publicLength]);
-        var buffer = new byte[1024];
+        int variable = _publicLength + (_cookie?.Length ?? 0) + (_serverName?.Length ?? 0) + (_ticketIdentity?.Length ?? 0);
+        if (ApplicationProtocols is { Length: > 0 } protocols)
+        {
+            foreach (string protocol in protocols)
+            {
+                variable += protocol.Length + 1;
+            }
+        }
+
+        int capacity = 768 + variable;
+        if (capacity > 16000)
+        {
+            return null;
+        }
+
+        var buffer = new byte[capacity];
         TlsWriter writer = TlsWriter.Over(buffer);
         if (!writer.TryWriteUInt8((byte)HandshakeType.ClientHello) || !writer.TryReserveLength(3, out int lengthAt))
         {
-            throw new TlsProtocolViolation("The ClientHello buffer is too small.");
+            return null;
         }
 
-        writer.TryWriteUInt16(0x0303);
-        writer.TryWrite(_clientRandom);
-        writer.TryWriteVector8(_legacySessionId);
-        writer.TryWriteVector16([0x13, 0x01]);
-        writer.TryWriteVector8([0]);
-        int extensionsAt = writer.Written;
-        writer.TryReserveLength(2, out int extensionsLengthAt);
+        if (!writer.TryWriteUInt16(0x0303)
+            || !writer.TryWrite(_clientRandom)
+            || !writer.TryWriteVector8(_legacySessionId)
+            || !writer.TryWriteVector16([0x13, 0x01])
+            || !writer.TryWriteVector8([0])
+            || !writer.TryReserveLength(2, out int extensionsLengthAt))
+        {
+            return null;
+        }
+
         ReadOnlySpan<byte> groups = _algorithmPolicy == TlsAlgorithmPolicy.FipsApprovedOnly
             ? [0x00, 0x04, 0x00, 0x17, 0x00, 0x18]
             : [0x00, 0x04, 0x00, 0x1D, 0x00, 0x17];
         ReadOnlySpan<byte> signatures = _algorithmPolicy == TlsAlgorithmPolicy.FipsApprovedOnly
             ? [0x00, 0x0A, 0x04, 0x03, 0x05, 0x03, 0x08, 0x04, 0x08, 0x05, 0x08, 0x06]
             : [0x00, 0x02, 0x04, 0x03];
-        WriteOffered(ref writer, ExtensionType.SupportedGroups, groups);
-        WriteOffered(ref writer, ExtensionType.SignatureAlgorithms, signatures);
-        WriteOffered(ref writer, ExtensionType.SupportedVersions, [0x02, 0x03, 0x04]);
+        if (!WriteOffered(ref writer, ExtensionType.SupportedGroups, groups)
+            || !WriteOffered(ref writer, ExtensionType.SignatureAlgorithms, signatures)
+            || !WriteOffered(ref writer, ExtensionType.SupportedVersions, [0x02, 0x03, 0x04]))
+        {
+            return null;
+        }
+
         byte[] shareBytes = share[.._publicLength].ToArray();
-        WriteKeyShare(ref writer, shareBytes);
-        if (_cookie is not null)
+        if (!WriteKeyShare(ref writer, shareBytes))
         {
-            WriteOffered(ref writer, ExtensionType.Cookie, _cookie);
+            return null;
         }
 
-        if (_serverName is not null)
+        if (_cookie is not null && !WriteOffered(ref writer, ExtensionType.Cookie, _cookie))
         {
-            WriteServerName(ref writer, _serverName);
+            return null;
         }
 
-        if (ApplicationProtocols is { Length: > 0 })
+        if (_serverName is not null && !WriteServerName(ref writer, _serverName))
         {
-            WriteAlpn(ref writer, ApplicationProtocols);
+            return null;
         }
 
-        if (OfferStatusRequest)
+        if (ApplicationProtocols is { Length: > 0 } offered && !WriteAlpn(ref writer, offered))
         {
-            WriteOffered(ref writer, ExtensionType.StatusRequest, [1, 0, 0, 0, 0]);
-            WriteOffered(ref writer, ExtensionType.SignedCertificateTimestamp, []);
+            return null;
         }
 
-        if (_psk is not null)
+        if (OfferStatusRequest
+            && (!WriteOffered(ref writer, ExtensionType.StatusRequest, [1, 0, 0, 0, 0])
+                || !WriteOffered(ref writer, ExtensionType.SignedCertificateTimestamp, [])))
         {
-            WriteOffered(ref writer, ExtensionType.PskKeyExchangeModes, [0x01, 0x01]);
-            WritePreSharedKey(ref writer);
+            return null;
         }
 
-        writer.TryPatchLength(extensionsLengthAt, 2);
-        _ = extensionsAt;
-        writer.TryPatchLength(lengthAt, 3);
+        if (_psk is not null
+            && (!WriteOffered(ref writer, ExtensionType.PskKeyExchangeModes, [0x01, 0x01]) || !WritePreSharedKey(ref writer)))
+        {
+            return null;
+        }
+
+        if (!writer.TryPatchLength(extensionsLengthAt, 2) || !writer.TryPatchLength(lengthAt, 3))
+        {
+            return null;
+        }
+
         var hello = new byte[writer.Written];
         buffer.AsSpan(0, writer.Written).CopyTo(hello);
         return hello;
     }
 
-    private void WriteKeyShare(ref TlsWriter writer, ReadOnlySpan<byte> share)
+    private bool WriteKeyShare(ref TlsWriter writer, ReadOnlySpan<byte> share)
     {
         var body = new byte[2 + 2 + 2 + share.Length];
         body[0] = (byte)((2 + 2 + share.Length) >> 8);
@@ -657,10 +710,10 @@ internal sealed partial class TlsEngine
         body[4] = (byte)(share.Length >> 8);
         body[5] = (byte)share.Length;
         share.CopyTo(body.AsSpan(6));
-        WriteOffered(ref writer, ExtensionType.KeyShare, body);
+        return WriteOffered(ref writer, ExtensionType.KeyShare, body);
     }
 
-    private void WritePreSharedKey(ref TlsWriter writer)
+    private bool WritePreSharedKey(ref TlsWriter writer)
     {
         uint age = ObfuscatedAge();
         int identities = 2 + _ticketIdentity!.Length + 4;
@@ -680,7 +733,7 @@ internal sealed partial class TlsEngine
         body[offset++] = 0;
         body[offset++] = (byte)(1 + 32);
         body[offset++] = 32;
-        WriteOffered(ref writer, ExtensionType.PreSharedKey, body);
+        return WriteOffered(ref writer, ExtensionType.PreSharedKey, body);
     }
 
     private void PatchBinder(byte[] hello)
@@ -722,8 +775,13 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (ticket.CipherSuite != CipherAes128GcmSha256)
+        if (ticket.CipherSuite != CipherAes128GcmSha256 || ticket.Ticket.Length > MaxStoredTicketBytes)
         {
+            if (ticket.Ticket.Length > MaxStoredTicketBytes)
+            {
+                _cache.Forget(_serverName ?? string.Empty, ProfileName);
+            }
+
             return;
         }
 
@@ -876,7 +934,12 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        RememberSelectedProtocol(extensions);
+        if (!TryRememberSelectedProtocol(extensions, out byte protocolAlert))
+        {
+            Fail(output, protocolAlert);
+            return;
+        }
+
         _transcript!.Append(message);
         State = _pskSelected ? TlsEngineState.WaitFinished : TlsEngineState.WaitCertificateRequestOrCertificate;
     }
@@ -1070,6 +1133,7 @@ internal sealed partial class TlsEngine
 
     private byte[] Message(HandshakeType type, int bodyLength)
     {
+        EnsureBuffers();
         var message = new byte[4 + bodyLength];
         message[0] = (byte)type;
         // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
@@ -1092,24 +1156,28 @@ internal sealed partial class TlsEngine
         output.AddBytes(record);
     }
 
-    private void WriteOffered(ref TlsWriter writer, ushort type, ReadOnlySpan<byte> body)
+    private bool WriteOffered(ref TlsWriter writer, ushort type, ReadOnlySpan<byte> body)
     {
         if (_offeredCount == _offered.Length)
         {
             throw new TlsProtocolViolation("The ClientHello offers more extensions than the engine records.");
         }
 
+        if (!WriteExtension(ref writer, type, body))
+        {
+            return false;
+        }
+
         _offered[_offeredCount++] = type;
-        WriteExtension(ref writer, type, body);
+        return true;
     }
 
-    private static void WriteExtension(ref TlsWriter writer, ushort type, ReadOnlySpan<byte> body)
+    private static bool WriteExtension(ref TlsWriter writer, ushort type, ReadOnlySpan<byte> body)
     {
-        writer.TryWriteUInt16(type);
-        writer.TryWriteVector16(body);
+        return writer.TryWriteUInt16(type) && writer.TryWriteVector16(body);
     }
 
-    private void WriteAlpn(ref TlsWriter writer, string[] protocols)
+    private bool WriteAlpn(ref TlsWriter writer, string[] protocols)
     {
         int list = 0;
         foreach (string protocol in protocols)
@@ -1129,10 +1197,10 @@ internal sealed partial class TlsEngine
             at += name.Length;
         }
 
-        WriteOffered(ref writer, ExtensionType.ApplicationLayerProtocolNegotiation, body);
+        return WriteOffered(ref writer, ExtensionType.ApplicationLayerProtocolNegotiation, body);
     }
 
-    private void WriteServerName(ref TlsWriter writer, string name)
+    private bool WriteServerName(ref TlsWriter writer, string name)
     {
         byte[] ascii = System.Text.Encoding.ASCII.GetBytes(name);
         var body = new byte[2 + 1 + 2 + ascii.Length];
@@ -1142,7 +1210,7 @@ internal sealed partial class TlsEngine
         body[3] = (byte)(ascii.Length >> 8);
         body[4] = (byte)ascii.Length;
         ascii.CopyTo(body.AsSpan(5));
-        WriteOffered(ref writer, ExtensionType.ServerName, body);
+        return WriteOffered(ref writer, ExtensionType.ServerName, body);
     }
 
     private uint ObfuscatedAge()

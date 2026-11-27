@@ -158,6 +158,8 @@ internal readonly ref struct CertificateView
 
 internal static class HandshakeMessages
 {
+    /// <summary>One hundred entries still parse. The boundary test locks that. The next entry is <c>decode_error</c>.</summary>
+    internal const int MaxCertificateEntries = 100;
     private static ReadOnlySpan<byte> HelloRetryRequestRandom =>
     [
         0xCF, 0x21, 0xAD, 0x74, 0xE5, 0x9A, 0x61, 0x11, 0xBE, 0x1D, 0x8C, 0x02, 0x1E, 0x65, 0xB8, 0x91,
@@ -508,8 +510,16 @@ internal static class HandshakeMessages
             return true;
         }
 
+        int count = 0;
         while (reader.Remaining > 0)
         {
+            count++;
+            if (count > MaxCertificateEntries)
+            {
+                alert = HandshakeAlert.DecodeError;
+                return false;
+            }
+
             if (!reader.TryReadVector24(out ReadOnlySpan<byte> certificate) || certificate.IsEmpty || !reader.TryReadVector16(out ReadOnlySpan<byte> extensions))
             {
                 alert = HandshakeAlert.DecodeError;

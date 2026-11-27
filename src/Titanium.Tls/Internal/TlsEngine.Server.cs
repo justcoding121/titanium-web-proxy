@@ -38,6 +38,18 @@ internal sealed partial class TlsEngine
 
     internal bool AcceptedResumption => _resumed;
     private byte[]? _clientLeaf;
+    private TlsCertificateCheck? _clientCheck;
+
+    internal SslPolicyErrors ClientCertificateErrors => _clientCheck?.Errors ?? SslPolicyErrors.None;
+
+    internal X509Chain? ClientChain => _clientCheck?.Chain;
+
+    internal void ReleaseClientCheck()
+    {
+        _clientCheck?.Dispose();
+        _clientCheck = null;
+    }
+
     private string? _selectedAlpn;
     private SecretBuffer? _clientApplication;
     private SecretBuffer? _serverApplication;
@@ -395,21 +407,43 @@ internal sealed partial class TlsEngine
 
         if (certificate.CertificateList.IsEmpty)
         {
+            if (_selection?.RequireClientCertificate == true)
+            {
+                Fail(output, 116);
+                return;
+            }
+
             _transcript!.Append(message);
             State = TlsEngineState.WaitFinished;
             return;
         }
 
-        using (TlsCertificateCheck check = TlsChainValidator.Evaluate(certificate.CertificateList, targetHost: null, _selection?.ClientTrustAnchors, serverCertificate: false))
+        TlsCertificateCheck check = TlsChainValidator.Evaluate(certificate.CertificateList, targetHost: null, _selection?.ClientTrustAnchors, serverCertificate: false);
+        if (!TryCopyClientLeaf(certificate.CertificateList))
         {
-            if (check.Errors != SslPolicyErrors.None || !TryCopyClientLeaf(certificate.CertificateList))
-            {
-                Fail(output, 42);
-                return;
-            }
+            check.Dispose();
+            Fail(output, 42);
+            return;
         }
 
         _transcript!.Append(message);
+        if (_selection?.ClientCertificateCallback is not null)
+        {
+            _clientCheck = check;
+            _paused = true;
+            State = TlsEngineState.WaitClientCertificateDecision;
+            output.AddEvent(TlsEventKind.ClientCertificateReceived);
+            return;
+        }
+
+        if (check.Errors != SslPolicyErrors.None)
+        {
+            check.Dispose();
+            Fail(output, 42);
+            return;
+        }
+
+        check.Dispose();
         State = TlsEngineState.WaitClientCertificateVerify;
     }
 
@@ -607,6 +641,12 @@ internal sealed partial class TlsEngine
         psk = null;
         alert = 0;
         _resumed = false;
+        // A requested client certificate is not stored in the ticket. Resuming would skip CertificateRequest.
+        if (_selection?.RequestClientCertificate == true)
+        {
+            return false;
+        }
+
         if (_selection?.Tickets is null || !TryExtension(hello.Extensions, ExtensionType.PreSharedKey, out ReadOnlySpan<byte> body))
         {
             return false;
