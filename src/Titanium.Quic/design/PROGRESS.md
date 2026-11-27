@@ -79,3 +79,7 @@ BenchmarkDotNet on linuxmini compared this stack with System.Net.Quic. The hands
 ## UDP offload
 
 `Titanium.Quic.UdpOffload` is the only project that calls `sendmmsg` and `recvmmsg`. A loopback probe has to accept the batch before a connection uses it, and `TITANIUM_UDP_OFFLOAD=0` forces the one-datagram send. Equal-sized datagrams can go out as one segmented send when that probe also accepts the split. A flush of more than one datagram uses the batch. Windows stays on the one-datagram send. The same linuxmini 64 KiB cell, with the batch path on, has platform median 124.8 µs (Error 22.79 µs) and managed median 12.613 ms (Error 5.563 ms). The median ratio is 0.010. The 0.80 gate is missed and is not lowered. The managed row still allocates about 139 MiB. The proxy still does not call this library.
+
+## BH-2
+
+The campaign ledger is `BUG-LEDGER.md`. The in-process network can corrupt one datagram and can drop every datagram after the handshake. Two hundred and fifty-six bytes still arrive once and in order when the network delays, reorders, and duplicates them. A flipped bit is not delivered as stream data. A black hole delivers none of the following payload. The interop runner, h3spec, Stryker, and the 30 minute soak have not run.

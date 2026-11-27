@@ -19,7 +19,7 @@ internal sealed class QuicQlog
     }
 }
 
-/// <summary>In-process network. It can drop, reorder, duplicate, delay, and enforce an MTU.</summary>
+/// <summary>In-process network. It can drop, reorder, duplicate, delay, corrupt, black-hole, and enforce an MTU.</summary>
 internal sealed class QuicSimulator
 {
     private readonly List<Item> _items = [];
@@ -35,6 +35,10 @@ internal sealed class QuicSimulator
     internal TimeSpan Delay { get; set; }
 
     internal int LossEvery { get; set; }
+
+    internal int CorruptCount { get; set; }
+
+    internal bool Blackhole { get; set; }
 
     internal QuicQlog? Qlog { get; set; }
 
@@ -65,10 +69,23 @@ internal sealed class QuicSimulator
             }
         }
 
-        Add(toServer, datagram.ToArray(), now + Delay);
+        if (Blackhole)
+        {
+            Qlog?.Write("packet_dropped");
+            return;
+        }
+
+        byte[] copy = datagram.ToArray();
+        if (CorruptCount > 0 && copy.Length > 0)
+        {
+            CorruptCount--;
+            copy[^1] ^= 0x01;
+        }
+
+        Add(toServer, copy, now + Delay);
         if (Duplicate)
         {
-            Add(toServer, datagram.ToArray(), now + Delay);
+            Add(toServer, (byte[])copy.Clone(), now + Delay);
         }
     }
 
