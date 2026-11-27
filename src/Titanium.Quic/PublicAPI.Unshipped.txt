@@ -1,1 +1,60 @@
 #nullable enable
+Titanium.Quic.ManagedQuicClientConnectionOptions
+Titanium.Quic.ManagedQuicClientConnectionOptions.AllowManagedStackUnderFips.get -> bool
+Titanium.Quic.ManagedQuicClientConnectionOptions.AllowManagedStackUnderFips.set -> void
+Titanium.Quic.ManagedQuicClientConnectionOptions.ClientAuthenticationOptions.get -> System.Net.Security.SslClientAuthenticationOptions?
+Titanium.Quic.ManagedQuicClientConnectionOptions.ClientAuthenticationOptions.set -> void
+Titanium.Quic.ManagedQuicClientConnectionOptions.HandshakeTimeout.get -> System.TimeSpan
+Titanium.Quic.ManagedQuicClientConnectionOptions.HandshakeTimeout.set -> void
+Titanium.Quic.ManagedQuicClientConnectionOptions.LocalEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Quic.ManagedQuicClientConnectionOptions.LocalEndPoint.set -> void
+Titanium.Quic.ManagedQuicClientConnectionOptions.ManagedQuicClientConnectionOptions() -> void
+Titanium.Quic.ManagedQuicClientConnectionOptions.RemoteEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Quic.ManagedQuicClientConnectionOptions.RemoteEndPoint.set -> void
+Titanium.Quic.ManagedQuicConnection
+Titanium.Quic.ManagedQuicConnection.AcceptInboundStreamAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Quic.ManagedQuicStream!>
+Titanium.Quic.ManagedQuicConnection.CloseAsync(long errorCode, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Quic.ManagedQuicConnection.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Titanium.Quic.ManagedQuicConnection.LocalEndPoint.get -> System.Net.IPEndPoint!
+Titanium.Quic.ManagedQuicConnection.OpenOutboundStreamAsync(System.Net.Quic.QuicStreamType type, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Quic.ManagedQuicStream!>
+Titanium.Quic.ManagedQuicConnection.RemoteEndPoint.get -> System.Net.IPEndPoint!
+Titanium.Quic.ManagedQuicConnectionOptionsCallback
+Titanium.Quic.ManagedQuicListener
+Titanium.Quic.ManagedQuicListener.AcceptConnectionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Quic.ManagedQuicConnection!>
+Titanium.Quic.ManagedQuicListener.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Titanium.Quic.ManagedQuicListener.LocalEndPoint.get -> System.Net.IPEndPoint!
+Titanium.Quic.ManagedQuicListenerOptions
+Titanium.Quic.ManagedQuicListenerOptions.AllowManagedStackUnderFips.get -> bool
+Titanium.Quic.ManagedQuicListenerOptions.AllowManagedStackUnderFips.set -> void
+Titanium.Quic.ManagedQuicListenerOptions.ConnectionOptionsCallback.get -> Titanium.Quic.ManagedQuicConnectionOptionsCallback?
+Titanium.Quic.ManagedQuicListenerOptions.ConnectionOptionsCallback.set -> void
+Titanium.Quic.ManagedQuicListenerOptions.HandshakeTimeout.get -> System.TimeSpan
+Titanium.Quic.ManagedQuicListenerOptions.HandshakeTimeout.set -> void
+Titanium.Quic.ManagedQuicListenerOptions.ListenEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Quic.ManagedQuicListenerOptions.ListenEndPoint.set -> void
+Titanium.Quic.ManagedQuicListenerOptions.ManagedQuicListenerOptions() -> void
+Titanium.Quic.ManagedQuicServerConnectionOptions
+Titanium.Quic.ManagedQuicServerConnectionOptions.AllowManagedStackUnderFips.get -> bool
+Titanium.Quic.ManagedQuicServerConnectionOptions.AllowManagedStackUnderFips.set -> void
+Titanium.Quic.ManagedQuicServerConnectionOptions.ManagedQuicServerConnectionOptions() -> void
+Titanium.Quic.ManagedQuicServerConnectionOptions.ServerAuthenticationOptions.get -> System.Net.Security.SslServerAuthenticationOptions?
+Titanium.Quic.ManagedQuicServerConnectionOptions.ServerAuthenticationOptions.set -> void
+Titanium.Quic.ManagedQuicStream
+Titanium.Quic.ManagedQuicStream.Id.get -> long
+Titanium.Quic.ManagedQuicStream.Type.get -> System.Net.Quic.QuicStreamType
+override Titanium.Quic.ManagedQuicStream.CanRead.get -> bool
+override Titanium.Quic.ManagedQuicStream.CanSeek.get -> bool
+override Titanium.Quic.ManagedQuicStream.CanWrite.get -> bool
+override Titanium.Quic.ManagedQuicStream.Flush() -> void
+override Titanium.Quic.ManagedQuicStream.Length.get -> long
+override Titanium.Quic.ManagedQuicStream.Position.get -> long
+override Titanium.Quic.ManagedQuicStream.Position.set -> void
+override Titanium.Quic.ManagedQuicStream.Read(byte[]! buffer, int offset, int count) -> int
+override Titanium.Quic.ManagedQuicStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override Titanium.Quic.ManagedQuicStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override Titanium.Quic.ManagedQuicStream.SetLength(long value) -> void
+override Titanium.Quic.ManagedQuicStream.Write(byte[]! buffer, int offset, int count) -> void
+override Titanium.Quic.ManagedQuicStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+static Titanium.Quic.ManagedQuicConnection.ConnectAsync(Titanium.Quic.ManagedQuicClientConnectionOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Quic.ManagedQuicConnection!>
+static Titanium.Quic.ManagedQuicListener.ListenAsync(Titanium.Quic.ManagedQuicListenerOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Quic.ManagedQuicListener!>
+virtual Titanium.Quic.ManagedQuicConnectionOptionsCallback.Invoke(Titanium.Quic.ManagedQuicConnection! connection, System.Net.Security.SslClientHelloInfo clientHello, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Quic.ManagedQuicServerConnectionOptions!>

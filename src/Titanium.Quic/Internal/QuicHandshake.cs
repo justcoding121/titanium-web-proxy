@@ -112,7 +112,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     internal bool CorruptNextHandshakePayload { get; set; }
 
-    internal void StartClient(in PathInfo path, ReadOnlySpan<byte> localId, ReadOnlySpan<byte> remoteId, ReadOnlySpan<byte> transportParameters, ReadOnlySpan<byte> token = default)
+    internal void StartClient(in PathInfo path, ReadOnlySpan<byte> localId, ReadOnlySpan<byte> remoteId, ReadOnlySpan<byte> transportParameters, ReadOnlySpan<byte> token = default, string? serverName = null)
     {
         _client = true;
         _limitAmplification = false;
@@ -127,7 +127,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         AddReceived(path, 0);
         InstallInitial(remoteId, clientSend: true);
         RememberLocalLimits(transportParameters, fromServer: false);
-        _engine = new TlsEngine(TlsRole.Client, serverName: "localhost")
+        _engine = new TlsEngine(TlsRole.Client, serverName: string.IsNullOrEmpty(serverName) ? "localhost" : serverName)
         {
             DatagramTransport = true,
             LocalTransportParameters = transportParameters.ToArray(),
@@ -143,7 +143,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         Emit(output);
     }
 
-    internal void StartServer(ReadOnlySpan<byte> localId, X509Certificate2 certificate, ReadOnlySpan<byte> transportParameters)
+    internal void StartServer(ReadOnlySpan<byte> localId, X509Certificate2? certificate, ReadOnlySpan<byte> transportParameters)
     {
         _localId = localId.ToArray();
         _originalDestinationId = localId.ToArray();
@@ -629,6 +629,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 return false;
             }
 
+            if (hello && _certificate is null)
+            {
+                PendingHello = true;
+                return true;
+            }
+
             if (hello)
             {
                 _engine.Resume(_ => new TlsServerSelection { Certificate = _certificate! }, output);
@@ -844,6 +850,33 @@ internal sealed partial class QuicConnectionCore : IDisposable
         secret.Clear();
         return _engine is not null && _engine.TryCopyTrafficSecret(application, client, secret);
     }
+
+    internal bool PendingHello { get; private set; }
+
+    internal string PendingServerName => _engine?.ClientHello?.ServerName ?? string.Empty;
+
+    internal bool CompleteHello(X509Certificate2 certificate)
+    {
+        if (!PendingHello || _engine is null)
+        {
+            return false;
+        }
+
+        _certificate = certificate;
+        PendingHello = false;
+        var output = new TlsOutput();
+        _engine.Resume(_ => new TlsServerSelection { Certificate = certificate }, output);
+        if (_engine.State == TlsEngineState.Closed)
+        {
+            MarkClosed(CryptoError(_engine.LastLocalAlert), send: true);
+            return false;
+        }
+
+        Emit(output);
+        return !IsClosed;
+    }
+
+    internal void Close(ulong error) => MarkClosed(error, send: true);
 
     private void MarkClosed(ulong error, bool send)
     {
