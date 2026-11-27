@@ -66,7 +66,11 @@ public sealed class QuicFlowEdgeTests
         flow.SetPeer(Parameters(100, 100, 100, 100, 1, 1));
 
         Assert.IsFalse(flow.AcceptStream(4, 0, [1], out ulong error));
+        Assert.AreEqual(QuicFlow.StreamStateError, error);
+        Assert.IsFalse(flow.AcceptStream(5, 0, [1], out error));
         Assert.AreEqual(QuicFlow.StreamLimitError, error);
+        Assert.IsTrue(flow.Queue(0, [9], out _) > 0);
+        Assert.AreEqual(1, flow.TakeReady().Count);
         Assert.IsFalse(flow.AcceptStream(0, ulong.MaxValue, [1], out error));
         Assert.AreEqual(QuicFrameReader.ProtocolViolation, error);
 
@@ -81,6 +85,8 @@ public sealed class QuicFlowEdgeTests
         var limited = new QuicFlow();
         limited.SetLocal(Parameters(4, 2, 8, 8, 4, 4), client: true);
         limited.SetPeer(Parameters(4, 2, 8, 8, 4, 4));
+        Assert.IsTrue(limited.Queue(0, [9], out _) > 0);
+        Assert.AreEqual(1, limited.TakeReady().Count);
         Assert.IsFalse(limited.AcceptStream(0, 0, [1, 2, 3], out error));
         Assert.AreEqual(QuicFlow.FlowControlError, error);
         Assert.IsTrue(limited.AcceptStream(0, 0, [1, 2], out _));
@@ -95,6 +101,8 @@ public sealed class QuicFlowEdgeTests
         var granted = new QuicFlow();
         granted.SetLocal(Parameters(100, 2, 100, 100, 4, 4), client: true);
         granted.SetPeer(Parameters(100, 2, 100, 100, 4, 4));
+        Assert.IsTrue(granted.Queue(0, [9], out _) > 0);
+        Assert.AreEqual(1, granted.TakeReady().Count);
         Assert.IsTrue(granted.AcceptStream(0, 0, [1, 2], out _));
         granted.Grant(0, 2, 100);
         Assert.IsFalse(granted.AcceptStream(0, 2, [3, 4], out error));
@@ -106,6 +114,8 @@ public sealed class QuicFlowEdgeTests
         var wide = new QuicFlow();
         wide.SetLocal(Parameters(100000, 100000, 100000, 100000, 4, 4), client: true);
         wide.SetPeer(Parameters(100000, 100000, 100000, 100000, 4, 4));
+        Assert.IsTrue(wide.Queue(0, [9], out _) > 0);
+        Assert.AreEqual(1, wide.TakeReady().Count);
         Assert.IsFalse(wide.AcceptStream(0, 16385, [1], out error));
         Assert.AreEqual(QuicFlow.FlowControlError, error);
 
@@ -119,9 +129,16 @@ public sealed class QuicFlowEdgeTests
         Assert.AreEqual(QuicFlow.FinalSizeError, error);
         Assert.AreEqual(1, flow.ResetsDelivered);
 
-        Assert.IsTrue(flow.NoteStopSending(2));
-        Assert.IsTrue(flow.NoteStopSending(2));
+        Assert.IsFalse(flow.NoteStopSending(2, out error));
+        Assert.AreEqual(QuicFlow.StreamStateError, error);
+        Assert.AreEqual(1, flow.Queue(2, [1], out _));
+        Assert.IsTrue(flow.NoteStopSending(2, out error));
+        Assert.AreEqual(0UL, error);
+        Assert.IsTrue(flow.NoteStopSending(2, out _));
         Assert.AreEqual(1, flow.StopsDelivered);
+        Assert.IsFalse(flow.NoteReset(2, 1, out error));
+        Assert.AreEqual(QuicFlow.StreamStateError, error);
+        Assert.IsFalse(flow.RaiseSend(null, 3, 10));
 
         flow.ReturnReady(0, 9, []);
         flow.ReturnReady(0, 9, [8]);
@@ -194,7 +211,7 @@ public sealed class QuicFlowEdgeTests
         Assert.IsTrue(server.AcceptStream(0, 0, [1, 2], out _));
         Assert.IsTrue(server.AcceptStream(1, 0, [3, 4, 5, 6, 7], out _));
         Assert.IsFalse(server.AcceptStream(3, 0, [1, 2, 3, 4, 5], out error));
-        Assert.AreEqual(QuicFlow.FlowControlError, error);
+        Assert.AreEqual(QuicFlow.StreamStateError, error);
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7 }, server.Received);
     }
 

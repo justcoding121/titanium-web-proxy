@@ -13,6 +13,8 @@ internal sealed class QuicFlow
 
     internal const ulong StreamLimitError = 0x04;
 
+    internal const ulong StreamStateError = 0x05;
+
     internal const ulong FinalSizeError = 0x06;
 
     internal const ulong CryptoBufferExceeded = 0x0d;
@@ -119,6 +121,11 @@ internal sealed class QuicFlow
 
         if (streamId is ulong id && maxStreamData is ulong streamLimit)
         {
+            if (ReceiveOnly(id) || (LocallyInitiated(id) && !_streams.ContainsKey(id)))
+            {
+                return false;
+            }
+
             StreamFlow stream = Open(id);
             if (streamLimit > stream.SendLimit)
             {
@@ -156,6 +163,12 @@ internal sealed class QuicFlow
     internal bool AcceptStream(ulong streamId, ulong offset, ReadOnlySpan<byte> data, out ulong error)
     {
         error = 0;
+        if (SendOnly(streamId) || (LocallyInitiated(streamId) && !_streams.ContainsKey(streamId)))
+        {
+            error = StreamStateError;
+            return false;
+        }
+
         if (!CanOpen(streamId, peer: false))
         {
             error = StreamLimitError;
@@ -198,6 +211,12 @@ internal sealed class QuicFlow
     internal bool NoteReset(ulong streamId, ulong finalSize, out ulong error)
     {
         error = 0;
+        if (SendOnly(streamId))
+        {
+            error = StreamStateError;
+            return false;
+        }
+
         StreamFlow stream = Open(streamId);
         if (stream.Reset)
         {
@@ -221,8 +240,15 @@ internal sealed class QuicFlow
         return true;
     }
 
-    internal bool NoteStopSending(ulong streamId)
+    internal bool NoteStopSending(ulong streamId, out ulong error)
     {
+        error = 0;
+        if (ReceiveOnly(streamId) || (LocallyInitiated(streamId) && !_streams.ContainsKey(streamId)))
+        {
+            error = StreamStateError;
+            return false;
+        }
+
         StreamFlow stream = Open(streamId);
         if (stream.StopSending)
         {
@@ -233,6 +259,12 @@ internal sealed class QuicFlow
         StopsDelivered++;
         return true;
     }
+
+    private bool LocallyInitiated(ulong streamId) => _client ? (streamId & 1) == 0 : (streamId & 1) == 1;
+
+    private bool SendOnly(ulong streamId) => (streamId & 2) != 0 && LocallyInitiated(streamId);
+
+    private bool ReceiveOnly(ulong streamId) => (streamId & 2) != 0 && !LocallyInitiated(streamId);
 
     internal void ReturnReady(ulong streamId, ulong offset, ReadOnlySpan<byte> data)
     {

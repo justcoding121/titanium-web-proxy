@@ -554,7 +554,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
             if (frame.Kind == QuicFrameKind.StopSending)
             {
-                _flow.NoteStopSending(frame.StreamId);
+                if (!_flow.NoteStopSending(frame.StreamId, out ulong error))
+                {
+                    MarkClosed(error, send: true);
+                    return false;
+                }
+
                 continue;
             }
 
@@ -567,7 +572,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
             if (frame.Kind == QuicFrameKind.MaxStreamData)
             {
-                _flow.RaiseSend(null, frame.StreamId, frame.Limit);
+                if (!_flow.RaiseSend(null, frame.StreamId, frame.Limit))
+                {
+                    MarkClosed(QuicFlow.StreamStateError, send: true);
+                    return false;
+                }
+
                 StageReady();
                 continue;
             }
@@ -600,9 +610,27 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 continue;
             }
 
-            if (frame.Kind == QuicFrameKind.NewToken && _client)
+            if (frame.Kind == QuicFrameKind.NewToken)
             {
+                if (!_client)
+                {
+                    MarkClosed(QuicFrameReader.ProtocolViolation, send: true);
+                    return false;
+                }
+
                 IssuedNewToken = frame.Data.ToArray();
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.HandshakeDone)
+            {
+                if (!_client)
+                {
+                    MarkClosed(QuicFrameReader.ProtocolViolation, send: true);
+                    return false;
+                }
+
+                _loss.HandshakeConfirmed = true;
                 continue;
             }
 
@@ -650,7 +678,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
             || (ulong)data.Length > (ulong)HandshakeFraming.DefaultMaxMessageBytes
             || offset + (ulong)data.Length > (ulong)HandshakeFraming.DefaultMaxMessageBytes)
         {
-            MarkClosed(CryptoError(50), send: true);
+            MarkClosed(QuicFlow.CryptoBufferExceeded, send: true);
             return false;
         }
 
@@ -1041,6 +1069,26 @@ internal sealed partial class QuicConnectionCore : IDisposable
     {
         _retryToken = token.ToArray();
         _retryArmed = true;
+    }
+
+    internal void SendHandshakeDone()
+    {
+        if (_applicationSend is null)
+        {
+            return;
+        }
+
+        Span<byte> frame = stackalloc byte[8];
+        var written = new QuicFrame { Kind = QuicFrameKind.HandshakeDone };
+        int count = QuicFrameWriter.Write(in written, default, frame);
+        if (count > 0)
+        {
+            // Header protection needs four bytes of ciphertext after the packet number.
+            frame[count] = 0;
+            frame[count + 1] = 0;
+            frame[count + 2] = 0;
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..(count + 3)], 0);
+        }
     }
 
     internal void SendNewToken(ReadOnlySpan<byte> token)

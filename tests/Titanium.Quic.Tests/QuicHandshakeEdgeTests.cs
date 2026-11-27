@@ -191,6 +191,50 @@ public sealed class QuicHandshakeEdgeTests
         Assert.AreEqual(QuicFrameReader.ProtocolViolation, server.CloseError);
     }
 
+    [TestMethod]
+    public void ACryptoOffsetPastTheBufferClosesWithTheBufferError()
+    {
+        using X509Certificate2 certificate = Certificate();
+        byte[] serverId = QuicConnectionSession.NewConnectionId();
+        byte[] clientId = QuicConnectionSession.NewConnectionId();
+        using var server = new QuicConnectionCore();
+        server.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        byte[] packet = InitialCrypto(serverId, clientId, (1UL << 20) + 1);
+        server.HandleDatagram(Now, packet, new PathInfo([10, 0, 0, 1], 443, [10, 0, 0, 2], 9));
+        Assert.IsTrue(server.IsClosed);
+        Assert.AreEqual(QuicFlow.CryptoBufferExceeded, server.CloseError);
+    }
+
+    [TestMethod]
+    public void AServerRejectsAClientNewTokenAndHandshakeDone()
+    {
+        using X509Certificate2 certificate = Certificate();
+        var local = new IPEndPoint(IPAddress.Loopback, 9);
+        var remote = new IPEndPoint(IPAddress.Loopback, 10);
+        PathInfo path = QuicConnectionSession.PathOf(local, remote);
+        byte[] clientId = QuicConnectionSession.NewConnectionId();
+        byte[] serverId = QuicConnectionSession.NewConnectionId();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.StartClient(path, clientId, serverId, Limits(clientId, idleMs: 0, server: false));
+        server.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        Pump(client, server);
+        client.SendNewToken([1, 2, 3]);
+        Pump(client, server);
+        Assert.IsTrue(server.IsClosed);
+        Assert.AreEqual(QuicFrameReader.ProtocolViolation, server.CloseError);
+
+        using var again = new QuicConnectionCore();
+        using var other = new QuicConnectionCore();
+        again.StartClient(path, clientId, serverId, Limits(clientId, idleMs: 0, server: false));
+        other.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        Pump(again, other);
+        again.SendHandshakeDone();
+        Pump(again, other);
+        Assert.IsTrue(other.IsClosed);
+        Assert.AreEqual(QuicFrameReader.ProtocolViolation, other.CloseError);
+    }
+
     private static byte[] InitialWithReservedBits(byte[] serverId, byte[] clientId)
     {
         const int headerLength = 26;
@@ -206,6 +250,29 @@ public sealed class QuicHandshakeEdgeTests
         packet[14] = (byte)clientId.Length;
         clientId.CopyTo(packet.AsSpan(15));
         packet[23] = 0;
+        packet[24] = (byte)(1 + plaintext.Length + 16);
+        using QuicPacketProtector protector = QuicPacketProtector.FromInitial(serverId, client: true);
+        int written = protector.Seal(packet, headerLength, packetNumber: 0, plaintext);
+        Assert.IsTrue(written > 0);
+        return packet[..written];
+    }
+
+    private static byte[] InitialCrypto(byte[] serverId, byte[] clientId, ulong offset)
+    {
+        byte[] one = [1];
+        Span<byte> frame = stackalloc byte[32];
+        var crypto = new QuicFrame { Kind = QuicFrameKind.Crypto, Offset = offset, Data = one };
+        int frameLength = QuicFrameWriter.Write(in crypto, default, frame);
+        Assert.IsTrue(frameLength > 0);
+        const int headerLength = 26;
+        byte[] plaintext = frame[..frameLength].ToArray();
+        byte[] packet = new byte[headerLength + plaintext.Length + 16];
+        packet[0] = 0xC0;
+        packet[4] = 1;
+        packet[5] = (byte)serverId.Length;
+        serverId.CopyTo(packet.AsSpan(6));
+        packet[14] = (byte)clientId.Length;
+        clientId.CopyTo(packet.AsSpan(15));
         packet[24] = (byte)(1 + plaintext.Length + 16);
         using QuicPacketProtector protector = QuicPacketProtector.FromInitial(serverId, client: true);
         int written = protector.Seal(packet, headerLength, packetNumber: 0, plaintext);
