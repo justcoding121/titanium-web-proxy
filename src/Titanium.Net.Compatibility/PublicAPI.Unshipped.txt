@@ -1,1 +1,7 @@
 #nullable enable
+Titanium.Net.Compatibility.QuicClientOptionsAdapter
+static Titanium.Net.Compatibility.QuicClientOptionsAdapter.ToManaged(System.Net.Quic.QuicClientConnectionOptions! options) -> Titanium.Quic.ManagedQuicClientConnectionOptions!
+static Titanium.Net.Compatibility.QuicClientOptionsAdapter.UnsupportedSettings(System.Net.Quic.QuicClientConnectionOptions! options) -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Net.Compatibility.QuicListenerOptionsAdapter
+static Titanium.Net.Compatibility.QuicListenerOptionsAdapter.ToManaged(System.Net.Quic.QuicListenerOptions! options, Titanium.Quic.ManagedQuicConnectionOptionsCallback! connectionOptionsCallback) -> Titanium.Quic.ManagedQuicListenerOptions!
+static Titanium.Net.Compatibility.QuicListenerOptionsAdapter.UnsupportedSettings(System.Net.Quic.QuicListenerOptions! options) -> System.Collections.Generic.IReadOnlyList<string!>!

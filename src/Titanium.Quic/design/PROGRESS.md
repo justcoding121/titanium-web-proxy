@@ -86,4 +86,4 @@ The campaign ledger is `BUG-LEDGER.md`. The in-process network can corrupt one d
 
 ## Phase 3
 
-The kickoff is `src/Titanium.Net.Compatibility/design/PHASE-3-SPEC.md`. The read-only proxy survey is `TWP-TOUCH-MAP.md` beside it. Ten creation sites construct `SslStream`, `QuicConnection`, or `QuicListener`. Four sites branch on the platform type. No proxy file was edited. Flags, the HTTP/3 extraction, and `TitaniumHttpHandler` wait until the seam at those creation sites.
+The kickoff is `src/Titanium.Net.Compatibility/design/PHASE-3-SPEC.md`. The read-only proxy survey is `TWP-TOUCH-MAP.md` beside it. Ten creation sites construct `SslStream`, `QuicConnection`, or `QuicListener`. Four sites branch on the platform type. `QuicClientOptionsAdapter` and `QuicListenerOptionsAdapter` copy the platform option objects and refuse a host name, a keepalive, a stream limit, a stream error code, and listener application protocols. No proxy file calls them. Flags, the HTTP/3 extraction, and `TitaniumHttpHandler` wait until the seam at those creation sites.

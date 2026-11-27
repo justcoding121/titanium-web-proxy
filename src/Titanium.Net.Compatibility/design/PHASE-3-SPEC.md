@@ -21,6 +21,12 @@ Done with this kickoff. Every proxy file that constructs `SslStream`, `QuicConne
 
 Exit: the map exists, and `git diff` of `src/Titanium.Web.Proxy` is empty.
 
+### P3.1b Option adapters
+
+`QuicClientOptionsAdapter` and `QuicListenerOptionsAdapter` copy platform option objects onto the managed types. They copy an IP endpoint, the TLS options, the client handshake timeout, and the listen endpoint. They refuse a host name, a keepalive, an idle timeout, a non-default stream limit, a stream error code, a receive window, a stream-capacity callback, listener application protocols, and a listener backlog other than the platform default. The platform listener has no handshake timeout, so the managed listener keeps its 10 second default. No proxy file calls these adapters yet.
+
+Exit: the compatibility tests pass, and a proxy-shaped client options object is refused until the managed client can apply the refused settings.
+
 ### P3.2 Flag-off seam at the creation sites
 
 Add adapters in new files. At each creation site in the map, one branch calls the adapter when the matching flag is on. The other branch is the current call. `HttpStream`'s `is SslStream` check and `Http3Frame`'s `is QuicStream` check learn a capability instead of a renamed field type, so a managed stream can opt in without wrapping the platform object on the flag-off path.
