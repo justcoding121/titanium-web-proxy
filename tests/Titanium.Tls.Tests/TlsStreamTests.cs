@@ -255,10 +255,95 @@ public sealed class TlsStreamTests
         server.GetAwaiter().GetResult();
     }
 
+    [TestMethod]
+    public async Task TheSelectionCallbackSuppliesTheClientCertificate()
+    {
+        using X509Certificate2 serverCertificate = Certificate();
+        using X509Certificate2 clientCertificate = ClientCertificate();
+        string[]? seenIssuers = ["unset"];
+        X509Certificate? seenRemote = null;
+        TcpListener listener = Listen();
+        Task<TlsStream> accepted = AcceptServer(listener, serverCertificate, options =>
+        {
+            options.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
+        }, new TlsStreamOptions { RequestClientCertificate = true });
+        TcpClient clientTcp = Connect(listener);
+        await using var client = new TlsStream(clientTcp.GetStream());
+        var clientOptions = ClientOptions();
+        clientOptions.LocalCertificateSelectionCallback = (_, host, _, remote, issuers) =>
+        {
+            Assert.AreEqual("localhost", host);
+            seenIssuers = issuers;
+            seenRemote = remote;
+            return clientCertificate;
+        };
+        await client.AuthenticateAsClientAsync(clientOptions);
+        await using TlsStream server = await accepted;
+        listener.Stop();
+
+        Assert.AreEqual(0, seenIssuers!.Length);
+        Assert.IsNotNull(seenRemote);
+        Assert.AreEqual(serverCertificate.Subject, seenRemote!.Subject);
+        Assert.IsTrue(server.IsMutuallyAuthenticated);
+        Assert.AreEqual(clientCertificate.Subject, server.RemoteCertificate!.Subject);
+        Assert.AreEqual(clientCertificate.Subject, client.LocalCertificate!.Subject);
+    }
+
+    [TestMethod]
+    public async Task ANullSelectionReplacesTheCertificateCollection()
+    {
+        using X509Certificate2 serverCertificate = Certificate();
+        using X509Certificate2 clientCertificate = ClientCertificate();
+        TcpListener listener = Listen();
+        Task<TlsStream> accepted = AcceptServer(listener, serverCertificate, options =>
+        {
+            options.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
+        }, new TlsStreamOptions { RequestClientCertificate = true });
+        TcpClient clientTcp = Connect(listener);
+        await using var client = new TlsStream(clientTcp.GetStream());
+        var clientOptions = ClientOptions();
+        clientOptions.ClientCertificates = [clientCertificate];
+        clientOptions.LocalCertificateSelectionCallback = static (_, _, _, _, _) => null!;
+        await client.AuthenticateAsClientAsync(clientOptions);
+        await using TlsStream server = await accepted;
+        listener.Stop();
+
+        Assert.IsFalse(server.IsMutuallyAuthenticated);
+        Assert.IsNull(client.LocalCertificate);
+    }
+
+    [TestMethod]
+    public void CertificateAuthoritiesUseTheIssuerString()
+    {
+        using X509Certificate2 certificate = ClientCertificate();
+        byte[] name = certificate.SubjectName.RawData;
+        var body = new byte[2 + 2 + name.Length];
+        body[1] = (byte)(2 + name.Length);
+        body[3] = (byte)name.Length;
+        name.CopyTo(body, 4);
+
+        string[]? issuers = TlsEngine.ReadCertificateAuthorities(Extension(body));
+        Assert.IsNotNull(issuers);
+        Assert.AreEqual(1, issuers!.Length);
+        Assert.AreEqual(certificate.Issuer, issuers[0]);
+        Assert.IsNull(TlsEngine.ReadCertificateAuthorities(ReadOnlySpan<byte>.Empty));
+    }
+
+    private static byte[] Extension(byte[] body)
+    {
+        var encoded = new byte[4 + body.Length];
+        encoded[0] = (byte)(ExtensionType.CertificateAuthorities >> 8);
+        encoded[1] = (byte)ExtensionType.CertificateAuthorities;
+        encoded[2] = (byte)(body.Length >> 8);
+        encoded[3] = (byte)body.Length;
+        body.CopyTo(encoded, 4);
+        return encoded;
+    }
+
     private static async Task<(TlsStream Client, TlsStream Server)> Pair(X509Certificate2 certificate, Action<SslServerAuthenticationOptions>? configure)
     {
         TcpListener listener = Listen();
-        Task<TlsStream> accepted = AcceptServer(listener, certificate, configure);
+        Task<TlsStream> accepted = AcceptServer(listener, certificate, configure, null);
         TcpClient clientTcp = Connect(listener);
         var client = new TlsStream(clientTcp.GetStream());
         await client.AuthenticateAsClientAsync(ClientOptions());
@@ -267,10 +352,10 @@ public sealed class TlsStreamTests
         return (client, server);
     }
 
-    private static async Task<TlsStream> AcceptServer(TcpListener listener, X509Certificate2 certificate, Action<SslServerAuthenticationOptions>? configure)
+    private static async Task<TlsStream> AcceptServer(TcpListener listener, X509Certificate2 certificate, Action<SslServerAuthenticationOptions>? configure, TlsStreamOptions? streamOptions)
     {
         TcpClient accepted = await listener.AcceptTcpClientAsync();
-        var stream = new TlsStream(accepted.GetStream());
+        var stream = new TlsStream(accepted.GetStream(), streamOptions);
         SslServerAuthenticationOptions options = ServerOptions(certificate);
         configure?.Invoke(options);
         await stream.AuthenticateAsServerAsync(options);
@@ -325,6 +410,14 @@ public sealed class TlsStreamTests
         var buffer = new byte[count];
         RandomNumberGenerator.Fill(buffer);
         return buffer;
+    }
+
+    private static X509Certificate2 ClientCertificate()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest("CN=client", key, HashAlgorithmName.SHA256);
+        using X509Certificate2 created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pfx), password: null, X509KeyStorageFlags.Exportable);
     }
 
     private static X509Certificate2 Certificate()

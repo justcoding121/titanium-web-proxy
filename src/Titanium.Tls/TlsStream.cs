@@ -563,6 +563,17 @@ public sealed class TlsStream : Stream
             AlgorithmPolicy = policy,
             DeferSealedAlerts = true,
         };
+        if (options.LocalCertificateSelectionCallback is { } select)
+        {
+            TlsEngine engine = _engine;
+            X509CertificateCollection localCertificates = options.ClientCertificates ?? new X509CertificateCollection();
+            string targetHost = options.TargetHost ?? string.Empty;
+            engine.ChooseLocalCertificate = issuers =>
+            {
+                X509Certificate? chosen = select(this, targetHost, localCertificates, engine.RemoteCertificate, issuers ?? []);
+                return chosen as X509Certificate2;
+            };
+        }
     }
 
     private void PrepareServer(SslServerAuthenticationOptions options)

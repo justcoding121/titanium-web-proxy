@@ -39,6 +39,10 @@ internal sealed partial class TlsEngine
 
     internal X509Certificate2? LocalCertificate { get; set; }
 
+    internal Func<string[]?, X509Certificate2?>? ChooseLocalCertificate { get; set; }
+
+    private string[]? _acceptableIssuers;
+
     internal string[]? ApplicationProtocols { get; set; }
 
     internal bool OfferStatusRequest { get; set; }
@@ -483,6 +487,11 @@ internal sealed partial class TlsEngine
         byte[]? verifyMessage = null;
         if (_certificateRequested)
         {
+            if (ChooseLocalCertificate is not null)
+            {
+                LocalCertificate = ChooseLocalCertificate(_acceptableIssuers);
+            }
+
             if (LocalCertificate is not null && _certificateAllowsP256 && CanSignP256(LocalCertificate))
             {
                 certificateMessage = CertificateMessage(LocalCertificate.RawData);
@@ -1035,6 +1044,7 @@ internal sealed partial class TlsEngine
 
         _certificateRequested = true;
         _certificateAllowsP256 = listed;
+        _acceptableIssuers = ReadCertificateAuthorities(extensions);
         _transcript!.Append(message);
         State = TlsEngineState.WaitCertificate;
     }
@@ -1164,6 +1174,56 @@ internal sealed partial class TlsEngine
 
         group = (ushort)((body[0] << 8) | body[1]);
         return true;
+    }
+
+    internal static string[]? ReadCertificateAuthorities(ReadOnlySpan<byte> extensions)
+    {
+        if (!TryExtension(extensions, ExtensionType.CertificateAuthorities, out ReadOnlySpan<byte> body))
+        {
+            return null;
+        }
+
+        TlsReader reader = new(body);
+        if (!reader.TryReadVector16(out ReadOnlySpan<byte> list) || reader.Remaining != 0)
+        {
+            return null;
+        }
+
+        int count = 0;
+        TlsReader counter = new(list);
+        while (counter.Remaining > 0)
+        {
+            if (!counter.TryReadVector16(out ReadOnlySpan<byte> distinguishedName) || distinguishedName.IsEmpty)
+            {
+                return null;
+            }
+
+            count++;
+        }
+
+        var names = new string[count];
+        int index = 0;
+        TlsReader items = new(list);
+        while (items.Remaining > 0)
+        {
+            if (!items.TryReadVector16(out ReadOnlySpan<byte> distinguishedName))
+            {
+                return null;
+            }
+
+            try
+            {
+                names[index] = new X500DistinguishedName(distinguishedName.ToArray()).Name;
+            }
+            catch (CryptographicException)
+            {
+                return null;
+            }
+
+            index++;
+        }
+
+        return names;
     }
 
     private static bool TryExtension(ReadOnlySpan<byte> extensions, ushort wanted, out ReadOnlySpan<byte> body)

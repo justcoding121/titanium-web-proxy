@@ -31,7 +31,7 @@ Exit: the compatibility tests pass. A proxy-shaped client options object that al
 
 `ProxyServer.UseManagedTlsStack` and `ProxyServer.UseManagedQuicStack` exist. Both default to false. Reading them after `Start` is allowed. Assigning a different value after `Start` throws. No creation site reads them yet, so a running proxy still constructs `SslStream` and `System.Net.Quic`.
 
-The next edit is one creation site at a time. The new branch calls the managed stack. The existing lines stay in the other branch. `HttpStream`'s `is SslStream` check and `Http3Frame`'s `is QuicStream` check learn a capability when that site starts passing a managed stream. The upstream TLS sites wait until `TlsStream` calls `LocalCertificateSelectionCallback`, because those sites choose a client certificate during the handshake.
+`TlsStream` calls `LocalCertificateSelectionCallback` when the server requests a client certificate. The certificate it returns replaces `ClientCertificates`. Issuer names from the request use the same string as `X509Certificate2.Issuer`. The next edit is one creation site at a time. The new branch calls the managed stack. The existing lines stay in the other branch. `HttpStream`'s `is SslStream` check and `Http3Frame`'s `is QuicStream` check learn a capability when that site starts passing a managed stream.
 
 Exit: existing proxy tests stay green and unedited. A flag-off run does not construct `TlsStream` or `ManagedQuicConnection`.
 
