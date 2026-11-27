@@ -191,6 +191,29 @@ internal sealed partial class QuicConnectionCore : IDisposable
         return queued;
     }
 
+    internal void FinishStream(ulong streamId)
+    {
+        if (!HandshakeComplete || IsClosed || !_hasPath || _applicationSend is null || !_flow.TryFinishOffset(streamId, out ulong offset))
+        {
+            return;
+        }
+
+        Span<byte> frame = stackalloc byte[32];
+        var stream = new QuicFrame
+        {
+            Kind = QuicFrameKind.Stream,
+            StreamId = streamId,
+            Offset = offset,
+            HasLength = true,
+            Fin = true,
+        };
+        int count = QuicFrameWriter.Write(in stream, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+        }
+    }
+
     internal void GrantStreamCredit(ulong streamId, ulong limit)
     {
         if (_applicationSend is null)

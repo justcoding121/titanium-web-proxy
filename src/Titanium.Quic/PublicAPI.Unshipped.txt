@@ -40,6 +40,7 @@ Titanium.Quic.ManagedQuicServerConnectionOptions.ManagedQuicServerConnectionOpti
 Titanium.Quic.ManagedQuicServerConnectionOptions.ServerAuthenticationOptions.get -> System.Net.Security.SslServerAuthenticationOptions?
 Titanium.Quic.ManagedQuicServerConnectionOptions.ServerAuthenticationOptions.set -> void
 Titanium.Quic.ManagedQuicStream
+Titanium.Quic.ManagedQuicStream.CompleteWritesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Titanium.Quic.ManagedQuicStream.Id.get -> long
 Titanium.Quic.ManagedQuicStream.Type.get -> System.Net.Quic.QuicStreamType
 override Titanium.Quic.ManagedQuicStream.CanRead.get -> bool

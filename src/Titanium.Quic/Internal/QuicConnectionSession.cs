@@ -139,6 +139,14 @@ internal sealed class QuicConnectionSession : IDisposable
         }
     }
 
+    internal void Finish(ulong streamId)
+    {
+        lock (_gate)
+        {
+            _core.FinishStream(streamId);
+        }
+    }
+
     internal void Send(ulong streamId, ReadOnlySpan<byte> data)
     {
         lock (_gate)

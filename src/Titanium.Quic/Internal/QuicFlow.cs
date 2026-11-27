@@ -278,6 +278,23 @@ internal sealed class QuicFlow
         stream.ReadyOffset = offset;
     }
 
+    internal bool TryFinishOffset(ulong streamId, out ulong offset)
+    {
+        offset = 0;
+        if (!_streams.TryGetValue(streamId, out StreamFlow? stream))
+        {
+            return true;
+        }
+
+        if (stream.Pending.Count > 0 || stream.Ready.Count > 0)
+        {
+            return false;
+        }
+
+        offset = stream.Sent;
+        return true;
+    }
+
     internal IReadOnlyList<Outgoing> TakeReady()
     {
         var ready = new List<Outgoing>();

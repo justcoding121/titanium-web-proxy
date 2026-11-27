@@ -113,6 +113,16 @@ public sealed class ManagedQuicStream : Stream
         await _session.FlushAsync().ConfigureAwait(false);
     }
 
+    /// <summary>Sends the end of the stream.</summary>
+    /// <param name="cancellationToken">A token that cancels the send.</param>
+    /// <returns>A task that completes when the final frame has been sent.</returns>
+    public async ValueTask CompleteWritesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _session.Finish((ulong)Id);
+        await _session.FlushAsync().ConfigureAwait(false);
+    }
+
     internal void Notify()
     {
         TaskCompletionSource<bool> current;

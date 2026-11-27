@@ -193,6 +193,39 @@ public sealed class QuicHandshakeEdgeTests
     }
 
     [TestMethod]
+    public void AFinishedStreamSendsTheBodyAndAFinalFrame()
+    {
+        using X509Certificate2 certificate = Certificate();
+        var local = new IPEndPoint(IPAddress.Loopback, 9);
+        var remote = new IPEndPoint(IPAddress.Loopback, 10);
+        PathInfo path = QuicConnectionSession.PathOf(local, remote);
+        byte[] clientId = QuicConnectionSession.NewConnectionId();
+        byte[] serverId = QuicConnectionSession.NewConnectionId();
+        using var client = new QuicConnectionCore();
+        using var server = new QuicConnectionCore();
+        client.StartClient(path, clientId, serverId, Limits(clientId, idleMs: 0, server: false));
+        server.StartServer(serverId, certificate, Limits(serverId, idleMs: 0, server: true));
+        Pump(client, server);
+        byte[] request = "GET /hello\r\n"u8.ToArray();
+        byte[] body = "hello"u8.ToArray();
+        Assert.AreEqual(request.Length, client.SendStream(0, request));
+        byte[] buffer = new byte[2048];
+        int count = client.PollTransmit(Now, buffer, out PathInfo sent);
+        Assert.IsTrue(count > 0);
+        server.HandleDatagram(Now, buffer.AsSpan(0, count), sent);
+        CollectionAssert.AreEqual(request, server.ReceivedStream);
+        Assert.AreEqual(body.Length, server.SendStream(0, body));
+        server.FinishStream(0);
+        int first = server.PollTransmit(Now, buffer, out sent);
+        Assert.IsTrue(first > 0);
+        client.HandleDatagram(Now, buffer.AsSpan(0, first), sent);
+        int second = server.PollTransmit(Now, buffer, out sent);
+        Assert.IsTrue(second > 0);
+        client.HandleDatagram(Now, buffer.AsSpan(0, second), sent);
+        CollectionAssert.AreEqual(body, client.ReceivedStream);
+    }
+
+    [TestMethod]
     public void ReservedHeaderBitsCloseTheConnection()
     {
         Assert.IsFalse(QuicPacket.ReservedBitsSet(0xC3));
