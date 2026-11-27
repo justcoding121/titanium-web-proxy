@@ -19,7 +19,7 @@ Scaffold committed. `pwsh tools/run-tests.ps1 -Project tls` passed (2 tests). Wo
 
 Key login works for `macmini` (192.168.1.55, Darwin arm64, macOS 26.6.2) and `linuxmini` (192.168.1.2, Ubuntu 26.04.1, x86_64). `sudo -n true` succeeds on both. The password was used once to install the key and is not stored. Both machines have the .NET 10.0.404 SDK under `~/.dotnet`, PowerShell 7.7.0 under `~/opt/powershell`, and a clone at `~/work/twp` on `feat/managed-tls-quic-stack`. macmini also has OpenSSL 3.5.9 under `~/opt/openssl-3.5.9`, with `X25519MLKEM768`. Details are in `REMOTE-MACHINES.md`.
 
-`DESIGN.md` and the C1 checklist in `SELF-REVIEW.md` are written. The harness has `HexVectors`, `OpenSslOracle`, `FixedEntropy`, `AllocationGate`, the traceability guard, and a corpus runner. `TranscriptStore` now keeps an `IncrementalHash`. `TlsRecordProtector.TryUnprotect` returns a `RecordResult` instead of throwing on a bad record. Stage secrets come from a 48-byte pinned pool, and the master secret is wiped once both application traffic secrets, the exporter master, and the resumption master have been derived. A plaintext record reader accepts one ChangeCipherSpec. The X25519 disassembly has no secret-dependent branch. `KeyExchangeGroups` covers X25519, secp256r1, and secp384r1. Next command: the linuxmini timing check, then the hybrid group. S5 key update and the Chrome QUIC capture are still open.
+`DESIGN.md` and the C1 checklist in `SELF-REVIEW.md` are written. The harness has `HexVectors`, `OpenSslOracle`, `FixedEntropy`, `AllocationGate`, the traceability guard, and a corpus runner. `TranscriptStore` now keeps an `IncrementalHash`. `TlsRecordProtector.TryUnprotect` returns a `RecordResult` instead of throwing on a bad record. Stage secrets come from a 48-byte pinned pool, and the master secret is wiped once both application traffic secrets, the exporter master, and the resumption master have been derived. A plaintext record reader accepts one ChangeCipherSpec. The X25519 disassembly has no secret-dependent branch. `KeyExchangeGroups` covers X25519, secp256r1, secp384r1, and X25519MLKEM768. Next command: the linuxmini timing check, then the managed ML-KEM fallback. S5 key update and the Chrome QUIC capture are still open.
 
 ## T1.4
 
@@ -27,7 +27,11 @@ Key login works for `macmini` (192.168.1.55, Darwin arm64, macOS 26.6.2) and `li
 
 ## T1.5
 
-`NamedGroup` carries secp256r1 (`0x0017`), secp384r1 (`0x0018`), x25519 (`0x001D`), and X25519MLKEM768 (`0x11EC`). `KeyExchangeGroups.Create` returns an X25519 share or a NIST share. The NIST share is an uncompressed `04 || X || Y` point and the shared secret is the padded X coordinate. A bad prefix, a short share, and an off-curve point are rejected. Two locally generated sides agree for all three groups. Wycheproof `ecdh_secp256r1_ecpoint_test.json` and `ecdh_secp384r1_ecpoint_test.json` match, including the shared secret. The hybrid code point is refused until T1.6. An OpenSSL derive sample for the NIST groups is still open.
+`NamedGroup` carries secp256r1 (`0x0017`), secp384r1 (`0x0018`), x25519 (`0x001D`), and X25519MLKEM768 (`0x11EC`). `KeyExchangeGroups.Create` returns an X25519 share or a NIST share. The NIST share is an uncompressed `04 || X || Y` point and the shared secret is the padded X coordinate. A bad prefix, a short share, and an off-curve point are rejected. Two locally generated sides agree for all three groups. Wycheproof `ecdh_secp256r1_ecpoint_test.json` and `ecdh_secp384r1_ecpoint_test.json` match, including the shared secret. An OpenSSL derive sample for the NIST groups is still open.
+
+## T1.6
+
+X25519MLKEM768 is asymmetric. The client share is 1184 bytes of ML-KEM-768 encapsulation key followed by 32 bytes of X25519. The server share is 1088 bytes of ciphertext followed by 32 bytes of X25519. The shared secret is the 32-byte ML-KEM secret followed by the 32-byte X25519 secret. Chrome 158 and OpenSSL 3.5.9 both use that order, and Chrome's X25519 half is not the standalone X25519 share (0 of 50). A damaged ciphertext still decapsulates and the secret changes. `TlsFingerprint.Current` is `Full` when `MLKem.IsSupported` is true and `ReducedNoPostQuantum` otherwise. The group throws `PlatformNotSupportedException` when ML-KEM is missing; the managed fallback is T1.6b.
 
 ## T1.3
 

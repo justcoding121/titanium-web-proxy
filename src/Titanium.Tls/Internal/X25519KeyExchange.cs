@@ -17,6 +17,17 @@ internal sealed class X25519KeyExchange : IKeyExchangeGroup
         return new X25519PrivateShare(entropy);
     }
 
+    public bool TryEncapsulate(ReadOnlySpan<byte> clientShare, IEntropySource entropy, Span<byte> serverShare, Span<byte> secret, out int serverWritten, out int secretWritten)
+    {
+        _ = clientShare;
+        _ = entropy;
+        _ = serverShare;
+        _ = secret;
+        serverWritten = 0;
+        secretWritten = 0;
+        return false;
+    }
+
     private sealed class X25519PrivateShare : IPrivateKeyShare
     {
         private readonly SecretBuffer _scalar = new(32);

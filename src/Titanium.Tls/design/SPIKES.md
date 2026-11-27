@@ -64,7 +64,7 @@ What is stable across all 50:
 - Record legacy version `0x0301`, ClientHello legacy version `0x0303`, session id length 32.
 - Cipher list, in order: GREASE `0x5a5a`, `0x1301`, `0x1302`, `0x1303`, `0xc02b`, `0xc02f`, `0xc02c`, `0xc030`, `0xcca9`, `0xcca8`, `0xc013`, `0xc014`, `0x009c`, `0x009d`, `0x002f`, `0x0035`.
 - Supported groups: GREASE `0x0a0a`, `0x11ec` (X25519MLKEM768), `0x001d`, `0x0017`, `0x0018`.
-- Key shares: GREASE (1 byte), `0x11ec` (1216 bytes), `0x001d` (32 bytes). The X25519 share inside the hybrid did not equal the separate X25519 share in any of the 50 hellos.
+- Key shares: GREASE (1 byte), `0x11ec` (1216 bytes), `0x001d` (32 bytes). The first 1184 bytes of that hybrid share import as an ML-KEM-768 encapsulation key; the last 32 bytes are the X25519 half. That half did not equal the separate X25519 share in any of the 50 hellos. OpenSSL 3.5.9 uses the same order.
 - 19 extensions. Slot 0 and slot 18 are GREASE and those two GREASE values differ. The other slots permute. No `padding` and no `pre_shared_key` on a fresh profile (the hybrid share already makes the hello large, and there is no ticket).
 - Present: `server_name`, ALPN, ECH (`0xfe0d`), `compress_certificate`, `supported_versions`, `key_share`, `signature_algorithms`, `signed_certificate_timestamp`, `extended_master_secret`, `session_ticket`, `psk_key_exchange_modes`, `status_request`, `ec_point_formats`, `renegotiation_info` (`0xff01`), and codepoint `0x44cd` (17613, one per hello; `0x4469` / 17513 is absent). Codepoint `0xca34` is also one per hello and is not named here.
 - A QUIC Initial was not captured. `--enable-quic --origin-to-force-quic-on=localhost:<port>` produced no UDP datagram.

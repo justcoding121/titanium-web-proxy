@@ -11,6 +11,8 @@ internal interface IKeyExchangeGroup
     int SharedSecretLength { get; }
 
     IPrivateKeyShare GenerateKeyShare(IEntropySource entropy);
+
+    bool TryEncapsulate(ReadOnlySpan<byte> clientShare, IEntropySource entropy, Span<byte> serverShare, Span<byte> secret, out int serverWritten, out int secretWritten);
 }
 
 internal interface IPrivateKeyShare : IDisposable
@@ -29,6 +31,7 @@ internal static class KeyExchangeGroups
             NamedGroup.X25519 => new X25519KeyExchange(),
             NamedGroup.Secp256r1 => new NistKeyExchange(group, ECCurveNamed.P256),
             NamedGroup.Secp384r1 => new NistKeyExchange(group, ECCurveNamed.P384),
+            NamedGroup.X25519MlKem768 => new HybridKeyExchange(),
             _ => throw new ArgumentOutOfRangeException(nameof(group)),
         };
     }

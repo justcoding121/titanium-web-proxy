@@ -67,12 +67,6 @@ public sealed class KeyExchangeTests
         MatchWycheproof(NamedGroup.Secp384r1, "ecdh_secp384r1_ecpoint_test.json", "secp384r1");
     }
 
-    [TestMethod]
-    public void HybridGroupIsNotImplementedYet()
-    {
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => KeyExchangeGroups.Create(NamedGroup.X25519MlKem768));
-    }
-
     private static void Agree(NamedGroup name)
     {
         IKeyExchangeGroup group = KeyExchangeGroups.Create(name);

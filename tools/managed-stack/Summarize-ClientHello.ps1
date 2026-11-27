@@ -110,7 +110,7 @@ foreach ($hello in $parsed) {
         $group = Read-U16 $share.Body $i
         $klen = Read-U16 $share.Body ($i + 2)
         if ($group -eq 0x11ec -and $klen -ge 32) {
-            $xInHybrid = [Convert]::ToHexString($share.Body, $i + 4, 32)
+            $xInHybrid = [Convert]::ToHexString($share.Body, $i + 4 + $klen - 32, 32)
         }
         if ($group -eq 0x001d -and $klen -eq 32) {
             $xAlone = [Convert]::ToHexString($share.Body, $i + 4, 32)

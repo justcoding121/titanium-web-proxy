@@ -31,6 +31,17 @@ internal sealed class NistKeyExchange : IKeyExchangeGroup
         return new NistPrivateShare(Curve(), FieldSize);
     }
 
+    public bool TryEncapsulate(ReadOnlySpan<byte> clientShare, IEntropySource entropy, Span<byte> serverShare, Span<byte> secret, out int serverWritten, out int secretWritten)
+    {
+        _ = clientShare;
+        _ = entropy;
+        _ = serverShare;
+        _ = secret;
+        serverWritten = 0;
+        secretWritten = 0;
+        return false;
+    }
+
     internal IPrivateKeyShare Import(ReadOnlySpan<byte> scalar, ReadOnlySpan<byte> uncompressedPublic)
     {
         return new NistPrivateShare(Curve(), FieldSize, scalar, uncompressedPublic);
