@@ -21,6 +21,11 @@ Non-interactive SSH does not source the shell profile. Call `$HOME/.dotnet/dotne
 - PowerShell 7.7.0 at `~/opt/powershell/pwsh` on both machines, from the official release archive. It is not on the default `PATH`. Non-interactive SSH still calls `$HOME/.dotnet/dotnet` and `$HOME/opt/powershell/pwsh` by full path.
 - A clone of the public repository is at `~/work/twp` on both, checked out at `feat/managed-tls-quic-stack`. Sync is a git bundle copied with `scp` (`git fetch ~/twp-managed.bundle HEAD:feat/managed-tls-quic-stack`). Nothing is pushed from these machines.
 
+## Installed for the QUIC interop leg
+
+- linuxmini: Docker Engine 29.1.3 from the Ubuntu package `docker.io` (29.1.3-0ubuntu4.1), with containerd 2.2.2 and runc 1.4.0. `docker.service` is enabled. The install is for the QUIC interop runner and h3spec. No extra firewall rule was added.
+- linuxmini: `h3spec` 0.1.15, the Linux x86_64 release binary, at `/tmp/h3spec-linux-x86_64`. The release page did not publish a checksum file. The SHA-256 of the downloaded file is `c3c5f497153f4ba81f82023791ba7f9a4bc46d4141211e614196f141c5996830`.
+
 ## Still to install
 
-Docker and libmsquic on linuxmini when Phase 2 and Phase 4 need them. `QuicConnection.IsSupported` is false on both remotes until libmsquic is present.
+`libmsquic` on linuxmini as a package. A copy was extracted earlier for the platform listener and is not a system package. `QuicConnection.IsSupported` stays false until that library is on the loader path.
