@@ -23,6 +23,12 @@ eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee  other.zip
 EOF
   bash "$root/bump-formula-from-sums.sh" "9.9.9-beta" "$tmp/SHA256SUMS" "$formula"
   grep -q 'version "9.9.9-beta"' "$formula"
+  ver_line="$(grep -n 'version "9.9.9-beta"' "$formula" | head -1 | cut -d: -f1)"
+  lic_line="$(grep -n 'license ' "$formula" | head -1 | cut -d: -f1)"
+  if [[ -n "$lic_line" && "$ver_line" -gt "$lic_line" ]]; then
+    echo "ASSERT: version stanza follows license" >&2
+    exit 1
+  fi
   grep -q '/v9.9.9-beta/Titanium.Cli-osx-arm64.zip' "$formula"
   grep -q 'sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' "$formula"
   grep -q 'sha256 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' "$formula"
@@ -97,13 +103,13 @@ if prerelease:
     if re.search(r'^[ \t]*license\s+', text, flags=re.M):
         text, n = re.subn(
             r'(^[ \t]*license\s+"[^"]+"\s*\n)',
-            rf'\1  version "{version}"\n',
+            rf'  version "{version}"\n\1',
             text,
             count=1,
             flags=re.M,
         )
         if n != 1:
-            raise SystemExit("could not insert version after license")
+            raise SystemExit("could not insert version before license")
     elif re.search(r'^[ \t]*homepage\s+', text, flags=re.M):
         text, n = re.subn(
             r'(^[ \t]*homepage\s+"[^"]+"\s*\n)',

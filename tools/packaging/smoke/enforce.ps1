@@ -88,32 +88,47 @@ function Invoke-Enforce {
 }
 
 function Invoke-EnforceSelfTest {
-    Remove-Item Env:LIFECYCLE_ENFORCE -ErrorAction SilentlyContinue
-    $soft = Invoke-Enforce -StepName 'self-test-soft' -Command @('cmd.exe', '/c', 'exit 1')
-    if ($soft -ne 0) { throw 'self-test: soft mode should swallow false exit' }
-
+    # Same in-process hazard as invoke-leg.ps1: this file is sometimes called
+    # from a step that still needs LIFECYCLE_ENFORCE after the self-test.
+    $callerEnforce = $env:LIFECYCLE_ENFORCE
     $env:LIFECYCLE_ENFORCE = 'true'
-    $hard = Invoke-Enforce -StepName 'self-test-hard' -Command @('cmd.exe', '/c', 'exit 1')
-    if ($hard -eq 0) { throw 'self-test: hard mode should fail on false exit' }
-
-    $ok = Invoke-Enforce -StepName 'self-test-hard-ok' -Command @('cmd.exe', '/c', 'exit 0')
-    if ($ok -ne 0) { throw 'self-test: hard mode should pass a zero exit' }
-
-    . (Join-Path $PSScriptRoot 'invoke-leg.ps1')
-    $threw = $false
     try {
-        Invoke-SmokeLeg { & $PSCommandPath 'caller-guard' -- cmd.exe /c exit 1 }
-    } catch {
-        $threw = $true
+        Remove-Item Env:LIFECYCLE_ENFORCE -ErrorAction SilentlyContinue
+        $soft = Invoke-Enforce -StepName 'self-test-soft' -Command @('cmd.exe', '/c', 'exit 1')
+        if ($soft -ne 0) { throw 'self-test: soft mode should swallow false exit' }
+
+        $env:LIFECYCLE_ENFORCE = 'true'
+        $hard = Invoke-Enforce -StepName 'self-test-hard' -Command @('cmd.exe', '/c', 'exit 1')
+        if ($hard -eq 0) { throw 'self-test: hard mode should fail on false exit' }
+
+        $ok = Invoke-Enforce -StepName 'self-test-hard-ok' -Command @('cmd.exe', '/c', 'exit 0')
+        if ($ok -ne 0) { throw 'self-test: hard mode should pass a zero exit' }
+
+        . (Join-Path $PSScriptRoot 'invoke-leg.ps1')
+        $threw = $false
+        try {
+            Invoke-SmokeLeg { & $PSCommandPath 'caller-guard' -- cmd.exe /c exit 1 }
+        } catch {
+            $threw = $true
+        }
+        if (-not $threw) { throw 'self-test: failing enforce leg left the step green' }
+
+        $root = Get-SmokeLogRoot
+        $hardLog = Join-Path $root 'logs\self-test-hard.log'
+        if (-not (Test-Path $hardLog)) { throw 'self-test: expected persisted hard-fail log' }
+
+        Write-Host 'enforce self-test ok'
+    } finally {
+        $env:LIFECYCLE_ENFORCE = 'true'
     }
-    if (-not $threw) { throw 'self-test: failing enforce leg left the step green' }
-
-    $root = Get-SmokeLogRoot
-    $hardLog = Join-Path $root 'logs\self-test-hard.log'
-    if (-not (Test-Path $hardLog)) { throw 'self-test: expected persisted hard-fail log' }
-
-    Remove-Item Env:LIFECYCLE_ENFORCE -ErrorAction SilentlyContinue
-    Write-Host 'enforce self-test ok'
+    if ($env:LIFECYCLE_ENFORCE -ne 'true') {
+        throw 'self-test: cleared LIFECYCLE_ENFORCE for the caller'
+    }
+    if ([string]::IsNullOrEmpty($callerEnforce)) {
+        Remove-Item Env:LIFECYCLE_ENFORCE -ErrorAction SilentlyContinue
+    } else {
+        $env:LIFECYCLE_ENFORCE = $callerEnforce
+    }
 }
 
 $argv = @($args)
