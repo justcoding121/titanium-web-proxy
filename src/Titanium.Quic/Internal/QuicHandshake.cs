@@ -923,7 +923,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         }
     }
 
-    private void Retransmit(QuicPacketKind kind, byte[] payload)
+    private void Retransmit(QuicPacketKind kind, byte[] payload, bool countCongestion = true)
     {
         if (kind == QuicPacketKind.Handshake && _loss.HandshakeConfirmed)
         {
@@ -936,7 +936,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
             return;
         }
 
-        SealAndStage(kind, protector, payload, 0, probe: true);
+        SealAndStage(kind, protector, payload, 0, probe: true, countCongestion: countCongestion);
     }
 
     private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram, bool probe = false, PathInfo? path = null, bool pmtu = false, bool countCongestion = true)
@@ -1586,7 +1586,9 @@ internal sealed partial class QuicConnectionCore : IDisposable
         // Waiting for the doubled probe timeout lets a 5s idle timer win.
         if (kind == QuicPacketKind.Initial && _loss.TryOldestPayload(0, out QuicPacketKind carried, out byte[] flight))
         {
-            Retransmit(carried, flight);
+            // Another copy on every repeated Initial. It must not occupy the congestion window,
+            // or the file stays queued behind copies the peer will never acknowledge.
+            Retransmit(carried, flight, countCongestion: false);
         }
     }
 
