@@ -925,6 +925,11 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     private void Retransmit(QuicPacketKind kind, byte[] payload)
     {
+        if (kind == QuicPacketKind.Handshake && _loss.HandshakeConfirmed)
+        {
+            return;
+        }
+
         QuicPacketProtector? protector = Protector(kind, send: true);
         if (protector is null || payload.Length == 0 || !_hasPath || IsClosed)
         {

@@ -176,6 +176,12 @@ internal sealed class QuicLossRecovery
     internal void OnTimeout(DateTimeOffset now)
     {
         Pending.Clear();
+        if (HandshakeConfirmed)
+        {
+            // The peer has dropped handshake keys, so another copy only fills the window.
+            DiscardHandshake();
+        }
+
         if (EarliestLoss() is int space)
         {
             DeclareLost(space, now);
@@ -186,6 +192,11 @@ internal sealed class QuicLossRecovery
         // A lost Handshake packet must be resent even while an Initial packet is still in flight.
         for (int probe = 0; probe < 3; probe++)
         {
+            if (HandshakeConfirmed && probe == 1)
+            {
+                continue;
+            }
+
             if (Oldest(probe) is not Flight packet)
             {
                 continue;

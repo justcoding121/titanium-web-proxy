@@ -146,7 +146,9 @@ static async Task<int> ReadWithPingsAsync(ManagedQuicConnection connection, Mana
     Task<int> pending = read.AsTask();
     while (!pending.IsCompleted)
     {
-        Task delay = Task.Delay(200, token);
+        // Often enough to stay inside a 5s idle timeout, and sparse enough that keepalives
+        // do not force a key update while a lost file is still in flight.
+        Task delay = Task.Delay(1000, token);
         if (await Task.WhenAny(pending, delay).ConfigureAwait(false) == pending)
         {
             break;

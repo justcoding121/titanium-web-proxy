@@ -366,11 +366,56 @@ internal sealed partial class QuicConnectionCore
         // Stream bytes refused by the congestion window stay queued until a later poll.
         StageReady();
 
+        int chosen = SelectStaged(destination.Length, data: true);
+        if (chosen < 0)
+        {
+            chosen = SelectStaged(destination.Length, data: false);
+        }
+
+        if (chosen < 0)
+        {
+            return 0;
+        }
+
+        Staged staged = _staged[chosen];
+        if (!Fits(staged.Path, staged.Length, out int pathIndex))
+        {
+            return 0;
+        }
+
+        staged.Buffer.AsSpan(0, staged.Length).CopyTo(destination);
+        ArrayPool<byte>.Shared.Return(staged.Buffer, clearArray: true);
+        _staged.RemoveAt(chosen);
+        PathState state = _paths[pathIndex];
+        state.Sent += staged.Length;
+        _paths[pathIndex] = state;
+        path = staged.Path;
+        _ids.MarkUsed(DestinationId());
+        if (staged.Track && staged.Payload is not null)
+        {
+            int accounted = staged.Exempt ? 0 : staged.Length;
+            _loss.OnPacketSent(staged.Kind, staged.Number, accounted, now, staged.Payload, staged.Pmtu);
+            if (staged.Kind == QuicPacketKind.OneRtt)
+            {
+                LastSentApplication = staged.Number;
+            }
+
+            if (!staged.Pmtu && !staged.Exempt)
+            {
+                NoteAckElicitingSend();
+            }
+        }
+
+        return staged.Length;
+    }
+
+    private int SelectStaged(int destinationLength, bool data)
+    {
         bool deferData = false;
         for (int i = 0; i < _staged.Count; i++)
         {
             Staged staged = _staged[i];
-            if (destination.Length < staged.Length || !Fits(staged.Path, staged.Length, out int pathIndex))
+            if (destinationLength < staged.Length || !Fits(staged.Path, staged.Length, out _))
             {
                 continue;
             }
@@ -381,39 +426,28 @@ internal sealed partial class QuicConnectionCore
             }
 
             bool counts = staged.Track && !staged.Probe && !staged.Exempt;
-            if (counts && (deferData || !_loss.Allows(staged.Length)))
+            if (data)
             {
-                deferData = true;
-                continue;
-            }
-
-            staged.Buffer.AsSpan(0, staged.Length).CopyTo(destination);
-            ArrayPool<byte>.Shared.Return(staged.Buffer, clearArray: true);
-            _staged.RemoveAt(i);
-            PathState state = _paths[pathIndex];
-            state.Sent += staged.Length;
-            _paths[pathIndex] = state;
-            path = staged.Path;
-            _ids.MarkUsed(DestinationId());
-            if (staged.Track && staged.Payload is not null)
-            {
-                int accounted = staged.Exempt ? 0 : staged.Length;
-                _loss.OnPacketSent(staged.Kind, staged.Number, accounted, now, staged.Payload, staged.Pmtu);
-                if (staged.Kind == QuicPacketKind.OneRtt)
+                if (!counts || deferData || !_loss.Allows(staged.Length))
                 {
-                    LastSentApplication = staged.Number;
+                    if (counts)
+                    {
+                        deferData = true;
+                    }
+
+                    continue;
                 }
 
-                if (!staged.Pmtu && !staged.Exempt)
-                {
-                    NoteAckElicitingSend();
-                }
+                return i;
             }
 
-            return staged.Length;
+            if (!counts)
+            {
+                return i;
+            }
         }
 
-        return 0;
+        return -1;
     }
 
     private DateTimeOffset? PaceDeadline()
