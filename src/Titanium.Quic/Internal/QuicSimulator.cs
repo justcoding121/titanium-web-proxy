@@ -34,7 +34,11 @@ internal sealed class QuicSimulator
 
     internal TimeSpan Delay { get; set; }
 
+    internal int LossEvery { get; set; }
+
     internal QuicQlog? Qlog { get; set; }
+
+    private int _lossCount;
 
     internal void Submit(bool toServer, ReadOnlySpan<byte> datagram, DateTimeOffset now)
     {
@@ -51,11 +55,35 @@ internal sealed class QuicSimulator
             return;
         }
 
+        if (LossEvery > 0)
+        {
+            _lossCount++;
+            if (_lossCount % LossEvery == 0)
+            {
+                Qlog?.Write("packet_dropped");
+                return;
+            }
+        }
+
         Add(toServer, datagram.ToArray(), now + Delay);
         if (Duplicate)
         {
             Add(toServer, datagram.ToArray(), now + Delay);
         }
+    }
+
+    internal DateTimeOffset? NextDelivery()
+    {
+        DateTimeOffset? next = null;
+        for (int i = 0; i < _items.Count; i++)
+        {
+            if (next is null || _items[i].At < next)
+            {
+                next = _items[i].At;
+            }
+        }
+
+        return next;
     }
 
     internal void Deliver(QuicConnectionCore core, bool toServer, DateTimeOffset now, in PathInfo path)

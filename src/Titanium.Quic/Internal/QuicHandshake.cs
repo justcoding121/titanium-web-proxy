@@ -12,7 +12,18 @@ internal sealed partial class QuicConnectionCore : IDisposable
 {
     private readonly byte[] _secretScratch = new byte[32];
 
-    private readonly QuicLossRecovery _loss = new(new QuicNewReno());
+    private readonly QuicLossRecovery _loss;
+
+    internal QuicConnectionCore()
+        : this(new QuicNewReno())
+    {
+    }
+
+    internal QuicConnectionCore(ICongestionController controller)
+    {
+        ArgumentNullException.ThrowIfNull(controller);
+        _loss = new QuicLossRecovery(controller);
+    }
 
     private DateTimeOffset _now;
 

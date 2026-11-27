@@ -95,6 +95,24 @@ public sealed class QuicSimulatorTests
     }
 
     [TestMethod]
+    public void EveryEighthDatagramIsDropped()
+    {
+        var sim = new QuicSimulator { LossEvery = 8 };
+        var qlog = new QuicQlog { Enabled = true };
+        sim.Qlog = qlog;
+        byte[] datagram = new byte[1200];
+        for (int i = 0; i < 8; i++)
+        {
+            sim.Submit(toServer: true, datagram, Now);
+        }
+
+        using var server = new QuicConnectionCore();
+        sim.Deliver(server, toServer: true, Now, Path);
+        Assert.AreEqual(1, qlog.Events.FindAll(static name => name == "packet_dropped").Count);
+        Assert.AreEqual(7, qlog.Events.FindAll(static name => name == "packet_received").Count);
+    }
+
+    [TestMethod]
     public void AnMtuOf1400DropsTheOversizedDatagram()
     {
         var sim = new QuicSimulator { Mtu = 1400 };

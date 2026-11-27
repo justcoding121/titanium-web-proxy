@@ -116,7 +116,7 @@ internal sealed class QuicNewReno : ICongestionController
 /// <summary>
 /// CUBIC from RFC 9438. The window is in bytes and one segment is <see cref="QuicNewReno.MaxDatagramSize"/>.
 /// Slow start follows Reno. Fast convergence stays off because a connection is one flow.
-/// This controller is not the one a connection uses.
+/// A connection uses it only when the caller passes it in. The parameterless constructor stays on NewReno.
 /// </summary>
 internal sealed class QuicCubic : ICongestionController
 {

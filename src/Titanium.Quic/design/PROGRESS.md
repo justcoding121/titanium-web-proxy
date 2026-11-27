@@ -74,4 +74,4 @@ BenchmarkDotNet on linuxmini compared this stack with System.Net.Quic. The hands
 
 ## CUBIC
 
-`QuicCubic` follows RFC 9438 with the window in bytes. A loss keeps 70 percent of the bytes in flight, and the cubic increase is capped at one and a half times the current window. The connection still constructs `QuicNewReno`. CUBIC is not the default: it has not been shown to be faster on the simulator or on a loopback or delay run. Fast convergence stays off because a connection is one flow.
+`QuicCubic` follows RFC 9438 with the window in bytes. A loss keeps 70 percent of the bytes in flight, and the cubic increase is capped at one and a half times the current window. Fast convergence stays off because a connection is one flow. The parameterless connection still constructs `QuicNewReno`. On the in-process network a 64 KiB transfer took the same simulated time for both controllers: 5 ms with no delay, and 720 ms with an 80 ms delay. One dropped datagram at that delay closes the receiver with flow-control error 0x03 for both, because the following flight passes the 16384-byte reassembly cap. CUBIC was not faster, so it is not the default.
