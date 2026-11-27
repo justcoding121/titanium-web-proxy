@@ -8,7 +8,7 @@ if [ "${ROLE:-server}" = "client" ]; then
   exit 127
 fi
 case "${TESTCASE:-handshake}" in
-  handshake|multiconnect) ;;
+  handshake|handshakeloss) ;;
   *)
     echo "unsupported test case: ${TESTCASE}" >&2
     echo "exit status 127" >&2
