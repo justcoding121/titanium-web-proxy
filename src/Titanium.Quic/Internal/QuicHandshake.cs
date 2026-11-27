@@ -309,7 +309,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
             }
 
             bool eliciting = TakePayload(kind, plain.AsSpan(0, plainLength));
-            if (eliciting && kind == QuicPacketKind.OneRtt && !IsClosed)
+            if (eliciting && !IsClosed)
             {
                 StageAck(kind, packetNumber);
             }
@@ -789,7 +789,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         SealAndStage(kind, protector, payload, 0, probe: true);
     }
 
-    private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram, bool probe = false, PathInfo? path = null, bool pmtu = false)
+    private int SealAndStage(QuicPacketKind kind, QuicPacketProtector protector, ReadOnlySpan<byte> payload, int minimumDatagram, bool probe = false, PathInfo? path = null, bool pmtu = false, bool countCongestion = true)
     {
         byte[] packet = ArrayPool<byte>.Shared.Rent(Math.Max(minimumDatagram, payload.Length) + 128 + _initialToken.Length);
         try
@@ -804,7 +804,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 ? QuicPackets.SealShort(packet, DestinationId(), number, payload, protector)
                 : QuicPackets.SealLong(packet, kind, DestinationId(), _localId, number, payload, protector, minimumDatagram, _initialToken);
             byte[] copy = payload.ToArray();
-            if (written == 0 || !TryStageTransmit(path ?? _path, packet.AsSpan(0, written), track: true, kind, number, copy, probe, pmtu))
+            if (written == 0 || !TryStageTransmit(path ?? _path, packet.AsSpan(0, written), track: true, kind, number, copy, probe, pmtu, exempt: !countCongestion))
             {
                 return 0;
             }
@@ -1331,7 +1331,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         int written = QuicFrameWriter.Write(in ack, ranges, frame);
         if (written > 0)
         {
-            SealAndStage(kind, protector, frame[..written], 0);
+            SealAndStage(kind, protector, frame[..written], 0, countCongestion: false);
         }
     }
 

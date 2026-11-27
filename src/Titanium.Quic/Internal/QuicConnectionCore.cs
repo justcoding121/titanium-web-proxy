@@ -308,7 +308,8 @@ internal sealed partial class QuicConnectionCore
         ulong number = 0,
         byte[]? payload = null,
         bool probe = false,
-        bool pmtu = false)
+        bool pmtu = false,
+        bool exempt = false)
     {
         if (datagram.IsEmpty || datagram.Length > 65535)
         {
@@ -328,6 +329,7 @@ internal sealed partial class QuicConnectionCore
             Payload = payload,
             Probe = probe,
             Pmtu = pmtu,
+            Exempt = exempt,
         });
         return true;
     }
@@ -361,6 +363,7 @@ internal sealed partial class QuicConnectionCore
             return 0;
         }
 
+        bool deferData = false;
         for (int i = 0; i < _staged.Count; i++)
         {
             Staged staged = _staged[i];
@@ -374,9 +377,11 @@ internal sealed partial class QuicConnectionCore
                 continue;
             }
 
-            if (staged.Track && !staged.Probe && !_loss.Allows(staged.Length))
+            bool counts = staged.Track && !staged.Probe && !staged.Exempt;
+            if (counts && (deferData || !_loss.Allows(staged.Length)))
             {
-                return 0;
+                deferData = true;
+                continue;
             }
 
             staged.Buffer.AsSpan(0, staged.Length).CopyTo(destination);
@@ -389,13 +394,14 @@ internal sealed partial class QuicConnectionCore
             _ids.MarkUsed(DestinationId());
             if (staged.Track && staged.Payload is not null)
             {
-                _loss.OnPacketSent(staged.Kind, staged.Number, staged.Length, now, staged.Payload, staged.Pmtu);
+                int accounted = staged.Exempt ? 0 : staged.Length;
+                _loss.OnPacketSent(staged.Kind, staged.Number, accounted, now, staged.Payload, staged.Pmtu);
                 if (staged.Kind == QuicPacketKind.OneRtt)
                 {
                     LastSentApplication = staged.Number;
                 }
 
-                if (!staged.Pmtu)
+                if (!staged.Pmtu && !staged.Exempt)
                 {
                     NoteAckElicitingSend();
                 }
@@ -508,5 +514,7 @@ internal sealed partial class QuicConnectionCore
         internal byte[]? Payload;
 
         internal bool Pmtu;
+
+        internal bool Exempt;
     }
 }

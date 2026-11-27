@@ -299,11 +299,16 @@ internal sealed class QuicConnectionSession : IDisposable
                     {
                         Timeout(now);
                         await FlushAsync().ConfigureAwait(false);
-                        await Task.Delay(1, cancellationToken).ConfigureAwait(false);
-                        continue;
+                        if (!_transport.DatagramPending)
+                        {
+                            await Task.Delay(1, cancellationToken).ConfigureAwait(false);
+                            continue;
+                        }
                     }
-
-                    wait.CancelAfter(delay);
+                    else
+                    {
+                        wait.CancelAfter(delay);
+                    }
                 }
 
                 try
@@ -311,6 +316,7 @@ internal sealed class QuicConnectionSession : IDisposable
                     UdpReceived received = await _transport.ReceiveAsync(buffer.AsMemory(0, 65536), wait.Token).ConfigureAwait(false);
                     PathInfo path = PathOf(LocalEndPoint, RemoteEndPoint);
                     Handle(buffer.AsSpan(0, received.Count), path, TimeProvider.System.GetUtcNow());
+                    NotifyStreams();
                     await FlushAsync().ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

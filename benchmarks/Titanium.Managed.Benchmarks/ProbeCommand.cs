@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 using Titanium.Tls;
 
 namespace Titanium.Managed.Benchmarks;
@@ -17,6 +18,12 @@ internal static class ProbeCommand
         if (kind is "ladder")
         {
             PrintLadder();
+            return;
+        }
+
+        if (kind is "quic")
+        {
+            PrintQuic();
             return;
         }
 
@@ -70,6 +77,65 @@ internal static class ProbeCommand
 
         watch.Stop();
         Console.WriteLine($"ladder calls={count} us-per-call={watch.Elapsed.TotalMicroseconds / count:F0} first={output[0]}");
+    }
+
+    private static void PrintQuic()
+    {
+        using X509Certificate2 certificate = TlsBenchHarness.CreateEcdsa();
+        var watch = Stopwatch.StartNew();
+        QuicBenchHarness.Handshake(StackKind.Managed, certificate).GetAwaiter().GetResult();
+        watch.Stop();
+        Console.WriteLine($"managed handshake ms={watch.Elapsed.TotalMilliseconds:F1}");
+        watch.Restart();
+        using var stop = new CancellationTokenSource();
+        QuicBenchHarness.Opened opened = QuicBenchHarness.Open(StackKind.Managed, certificate).GetAwaiter().GetResult();
+        Task echo = QuicBenchHarness.Echo(opened, stop.Token);
+        byte[] payload = new byte[QuicBenchHarness.SmallBytes];
+        for (int i = 0; i < 50; i++)
+        {
+            QuicBenchHarness.Exchange(opened, payload).GetAwaiter().GetResult();
+        }
+
+        stop.Cancel();
+        opened.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        echo.GetAwaiter().GetResult();
+        watch.Stop();
+        Console.WriteLine($"managed small-50 ms={watch.Elapsed.TotalMilliseconds:F1}");
+        watch.Restart();
+        QuicBenchHarness.Opened bulk = QuicBenchHarness.Open(StackKind.Managed, certificate).GetAwaiter().GetResult();
+        QuicBenchHarness.Transfer(bulk, new byte[QuicBenchHarness.ChunkBytes]).GetAwaiter().GetResult();
+        bulk.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        watch.Stop();
+        Console.WriteLine($"managed bulk-1MiB ms={watch.Elapsed.TotalMilliseconds:F1}");
+        if (!QuicBenchHarness.PlatformListenerAllowed)
+        {
+            return;
+        }
+
+        watch.Restart();
+        QuicBenchHarness.Handshake(StackKind.Platform, certificate).GetAwaiter().GetResult();
+        watch.Stop();
+        Console.WriteLine($"platform handshake ms={watch.Elapsed.TotalMilliseconds:F1}");
+        watch.Restart();
+        using var platformStop = new CancellationTokenSource();
+        QuicBenchHarness.Opened platform = QuicBenchHarness.Open(StackKind.Platform, certificate).GetAwaiter().GetResult();
+        Task platformEcho = QuicBenchHarness.Echo(platform, platformStop.Token);
+        for (int i = 0; i < 50; i++)
+        {
+            QuicBenchHarness.Exchange(platform, payload).GetAwaiter().GetResult();
+        }
+
+        platformStop.Cancel();
+        platform.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        platformEcho.GetAwaiter().GetResult();
+        watch.Stop();
+        Console.WriteLine($"platform small-50 ms={watch.Elapsed.TotalMilliseconds:F1}");
+        watch.Restart();
+        QuicBenchHarness.Opened platformBulk = QuicBenchHarness.Open(StackKind.Platform, certificate).GetAwaiter().GetResult();
+        QuicBenchHarness.Transfer(platformBulk, new byte[QuicBenchHarness.ChunkBytes]).GetAwaiter().GetResult();
+        platformBulk.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        watch.Stop();
+        Console.WriteLine($"platform bulk-1MiB ms={watch.Elapsed.TotalMilliseconds:F1}");
     }
 
     private static void PrintMachine()

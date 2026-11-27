@@ -163,15 +163,17 @@ public sealed class ManagedQuicListener : IAsyncDisposable
                 DateTimeOffset now = TimeProvider.System.GetUtcNow();
                 TimeSpan waitFor = NextDelay(now);
                 using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                if (waitFor < TimeSpan.MaxValue)
+                if (waitFor <= TimeSpan.Zero)
                 {
-                    if (waitFor <= TimeSpan.Zero)
+                    await OnTimeoutAsync(now).ConfigureAwait(false);
+                    if (!_transport.DatagramPending)
                     {
-                        await OnTimeoutAsync(now).ConfigureAwait(false);
                         await Task.Delay(1, cancellationToken).ConfigureAwait(false);
                         continue;
                     }
-
+                }
+                else if (waitFor < TimeSpan.MaxValue)
+                {
                     wait.CancelAfter(waitFor);
                 }
 

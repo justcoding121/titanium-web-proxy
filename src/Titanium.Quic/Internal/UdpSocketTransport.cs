@@ -33,6 +33,9 @@ internal interface IUdpPacketTransport : IDisposable
     /// <summary>Largest UDP payload this socket will send.</summary>
     int MaximumDatagramSize { get; }
 
+    /// <summary>True when the socket already has a datagram to read.</summary>
+    bool DatagramPending { get; }
+
     /// <summary>Sends one datagram.</summary>
     ValueTask<int> SendAsync(ReadOnlyMemory<byte> datagram, IPEndPoint destination, CancellationToken cancellationToken);
 
@@ -75,6 +78,8 @@ internal sealed class UdpSocketTransport : IUdpPacketTransport
 
     public int MaximumDatagramSize { get; }
 
+    public bool DatagramPending => _socket.Available > 0;
+
     public async ValueTask<int> SendAsync(ReadOnlyMemory<byte> datagram, IPEndPoint destination, CancellationToken cancellationToken)
     {
         if (datagram.Length > MaximumDatagramSize)
@@ -82,16 +87,10 @@ internal sealed class UdpSocketTransport : IUdpPacketTransport
             throw new ArgumentOutOfRangeException(nameof(datagram));
         }
 
-        SocketAddress address = RentAddress();
-        try
-        {
-            Write(address, destination);
-            return await _socket.SendToAsync(datagram, SocketFlags.None, address, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            ReturnAddress(address);
-        }
+        // A pooled address can be issued again before the send uses it.
+        var address = new SocketAddress(destination.AddressFamily);
+        Write(address, destination);
+        return await _socket.SendToAsync(datagram, SocketFlags.None, address, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<int> SendBatchAsync(ReadOnlyMemory<ReadOnlyMemory<byte>> datagrams, IPEndPoint destination, CancellationToken cancellationToken)

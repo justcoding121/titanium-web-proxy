@@ -88,12 +88,27 @@ internal sealed class QuicLossRecovery
 
     internal List<ulong> LostPmtu { get; } = [];
 
-    internal bool Allows(int bytes) => _controller.BytesInFlight + bytes <= _controller.CongestionWindow;
+    // A gap above the reassembly cap closes the connection, so flight stays inside that cap.
+    internal bool Allows(int bytes)
+    {
+        long window = _controller.CongestionWindow;
+        if (window > QuicFlow.ReassemblyCap)
+        {
+            window = QuicFlow.ReassemblyCap;
+        }
+
+        return _controller.BytesInFlight + bytes <= window;
+    }
 
     internal void OnPacketSent(QuicPacketKind kind, ulong number, int bytes, DateTimeOffset sent, byte[] payload, bool pmtu = false)
     {
         int space = Space(kind);
         _sent[space].Add(number);
+        if (bytes == 0)
+        {
+            return;
+        }
+
         _flight[space].Add(new Flight
         {
             Number = number,

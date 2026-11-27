@@ -9,7 +9,7 @@ public static class Program
     {
         if (args.Length == 0)
         {
-            Console.WriteLine("Pass BenchmarkDotNet arguments, or 'probe' with alloc, rsa, idle, storm, or machine.");
+            Console.WriteLine("Pass BenchmarkDotNet arguments, or 'probe' with alloc, rsa, idle, storm, machine, or quic.");
             return;
         }
 
