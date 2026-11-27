@@ -64,6 +64,8 @@ internal sealed class UdpSocketTransport : IUdpPacketTransport
 
     private readonly object _gate = new();
 
+    private readonly SemaphoreSlim _send = new(1, 1);
+
     internal UdpSocketTransport(IPEndPoint? local = null)
     {
         local ??= new IPEndPoint(IPAddress.Loopback, 0);
@@ -91,7 +93,20 @@ internal sealed class UdpSocketTransport : IUdpPacketTransport
         // A pooled address can be issued again before the send uses it.
         var address = new SocketAddress(destination.AddressFamily);
         Write(address, destination);
-        return await _socket.SendToAsync(datagram, SocketFlags.None, address, cancellationToken).ConfigureAwait(false);
+        await _send.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await _socket.SendToAsync(datagram, SocketFlags.None, address, cancellationToken).ConfigureAwait(false);
+        }
+        catch (NullReferenceException)
+        {
+            // A close that overlaps this send clears the socket handle inside the operation.
+            return 0;
+        }
+        finally
+        {
+            _send.Release();
+        }
     }
 
     public async ValueTask<int> SendBatchAsync(ReadOnlyMemory<ReadOnlyMemory<byte>> datagrams, IPEndPoint destination, CancellationToken cancellationToken)
