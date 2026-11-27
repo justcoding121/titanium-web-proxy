@@ -106,6 +106,7 @@ internal static class ExtensionRules
                 ExtensionType.ApplicationLayerProtocolNegotiation or
                 ExtensionType.ServerCertificateType or
                 ExtensionType.EarlyData or
+                ExtensionType.QuicTransportParameters or
                 ExtensionType.ApplicationSettingsLegacy or
                 ExtensionType.ApplicationSettings,
             HandshakeMessageKind.Certificate => type is ExtensionType.StatusRequest or ExtensionType.SignedCertificateTimestamp,

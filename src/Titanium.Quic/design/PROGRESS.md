@@ -31,3 +31,7 @@ Transport parameters follow RFC 9000 section 18, plus `max_datagram_frame_size` 
 ## T2.8
 
 The core is sans-IO. `HandleDatagram`, `PollTransmit`, `NextTimeout`, and `HandleTimeout` take a time and a datagram. There is no socket and no timer in the core. A datagram whose destination connection ID is not already owned does not allocate a connection. Before the path is validated, bytes sent on that path stay at or below three times the bytes received, including a datagram that is attributed and then discarded. A different path has its own budget. `HandleTimeout` fires the armed deadline with no socket. The one-second deadline is a stand-in until loss recovery supplies the real one.
+
+## T2.9
+
+A client and a server core complete a QUIC v1 handshake by feeding CRYPTO bytes to `TlsEngine` with datagram transport on. That mode writes the handshake without TLS records, skips the change-cipher-spec byte, and leaves the session id empty. Packet protection is AES-128-GCM with the header protection from T2.4. Initial keys come from the client's first destination connection ID. Handshake and 1-RTT keys come from the TLS traffic secrets, expanded with the QUIC labels. Transport parameters ride in extension 57. The client's first Initial is padded so the server flight fits under the three-times limit. Two cores reach the application level and exchange one STREAM byte. A bad Finished closes with a crypto error. A transport-parameter mismatch closes with a transport-parameter error. Handshake bytes above the TLS cap close with a crypto error.

@@ -212,7 +212,7 @@ internal sealed class QuicConnectionTable
 /// <summary>
 /// Sans-IO connection. Time and datagrams come from the caller. There is no socket and no timer here.
 /// </summary>
-internal sealed class QuicConnectionCore
+internal sealed partial class QuicConnectionCore
 {
     /// <summary>Stand-in deadline until loss recovery supplies the real one.</summary>
     internal static readonly TimeSpan ScheduleHook = TimeSpan.FromSeconds(1);
@@ -229,6 +229,12 @@ internal sealed class QuicConnectionCore
     {
         AddReceived(path, datagram.Length);
         _timeout ??= now + ScheduleHook;
+        _path = path;
+        _hasPath = true;
+        if (_engine is not null && !IsClosed)
+        {
+            AcceptDatagram(datagram);
+        }
     }
 
     internal bool HandleTimeout(DateTimeOffset now)
@@ -329,7 +335,7 @@ internal sealed class QuicConnectionCore
         }
 
         PathState state = _paths[pathIndex];
-        if (state.Validated)
+        if (!_limitAmplification || state.Validated)
         {
             return true;
         }

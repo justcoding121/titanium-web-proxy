@@ -155,6 +155,16 @@ internal sealed partial class TlsEngine
 
         _firstHello = message;
         _sessionId = hello.SessionId.ToArray();
+        if (TryExtension(hello.Extensions, ExtensionType.QuicTransportParameters, out ReadOnlySpan<byte> transportParameters))
+        {
+            PeerTransportParameters = transportParameters.ToArray();
+        }
+        else if (DatagramTransport)
+        {
+            Fail(output, AlertMissingExtension);
+            return;
+        }
+
         _clientHelloInfo = new TlsClientHelloInfo(ReadServerName(hello.Extensions), message);
         State = TlsEngineState.WaitClientHelloDecision;
         _paused = true;
@@ -297,7 +307,7 @@ internal sealed partial class TlsEngine
         byte[] message = ServerHelloMessage(random, _sessionId!, _selectedCipher, VersionExtension(), GroupOnly(group), psk: false);
         _transcript!.ReplaceWithMessageHash();
         _transcript.Append(message);
-        WriteServerRecord(output, message);
+        EmitRecord(output, 0, message);
         _hrrSeen = true;
         _requestedGroup = group;
         State = TlsEngineState.WaitClientHello;
@@ -324,7 +334,7 @@ internal sealed partial class TlsEngine
         // Stryker disable once statement: the temporary is not read after the bytes are copied
         CryptographicOperations.ZeroMemory(secret[..secretWritten]);
         InstallServerHandshakeKeys(hash, aead, keyLength, hashLength, transcriptHash);
-        byte[] ee = EncryptedExtensionsMessage(_selectedAlpn);
+        byte[] ee = EncryptedExtensionsMessage(_selectedAlpn, DatagramTransport ? LocalTransportParameters : null);
         _transcript.Append(ee);
         var flight = new System.Collections.Generic.List<byte>(ee.Length + 2048);
         flight.AddRange(ee);
@@ -379,13 +389,13 @@ internal sealed partial class TlsEngine
         _schedule.ApplicationTrafficSecret(true, transcriptHash[..hashLength], _clientApplication.Span);
         _schedule.ApplicationTrafficSecret(false, transcriptHash[..hashLength], _serverApplication.Span);
         _schedule.ExporterMaster(transcriptHash[..hashLength], _exporter.Span);
-        WriteServerRecord(output, serverHello);
+        EmitRecord(output, 0, serverHello);
         if (_sessionId!.Length > 0)
         {
             output.AddBytes([20, 3, 3, 0, 1, 1]);
         }
 
-        ProtectHandshake(output, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(flight));
+        EmitRecord(output, 2, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(flight));
         _alertsEncrypted = true;
         State = _certificateRequested ? TlsEngineState.WaitClientCertificate : TlsEngineState.WaitFinished;
     }
@@ -543,6 +553,11 @@ internal sealed partial class TlsEngine
         _serverHandshakeSecret = new SecretBuffer(hashLength);
         _schedule!.HandshakeTrafficSecret(true, transcriptHash[..hashLength], _clientHandshakeSecret.Span);
         _schedule.HandshakeTrafficSecret(false, transcriptHash[..hashLength], _serverHandshakeSecret.Span);
+        if (DatagramTransport)
+        {
+            return;
+        }
+
         Span<byte> key = stackalloc byte[32];
         Span<byte> iv = stackalloc byte[12];
         TlsKeySchedule.DeriveTrafficKeys(hash, _clientHandshakeSecret.Span, key[..keyLength], iv);
@@ -559,6 +574,11 @@ internal sealed partial class TlsEngine
 
     private void InstallApplicationKeys()
     {
+        if (DatagramTransport)
+        {
+            return;
+        }
+
         HashAlgorithmName hash = HashOf(_selectedCipher);
         Suite(_selectedCipher, out _, out TlsAeadSuite aead, out int keyLength);
         Span<byte> key = stackalloc byte[32];
@@ -575,8 +595,31 @@ internal sealed partial class TlsEngine
         CryptographicOperations.ZeroMemory(iv);
     }
 
+    private void EmitRecord(TlsOutput output, int level, ReadOnlySpan<byte> handshake)
+    {
+        if (DatagramTransport)
+        {
+            output.AddDatagram(level, handshake);
+            return;
+        }
+
+        if (level == 0)
+        {
+            WriteServerRecord(output, handshake);
+            return;
+        }
+
+        ProtectHandshake(output, handshake);
+    }
+
     private void ProtectHandshake(TlsOutput output, ReadOnlySpan<byte> handshake)
     {
+        if (DatagramTransport)
+        {
+            output.AddDatagram(State == TlsEngineState.Connected ? 3 : 2, handshake);
+            return;
+        }
+
         var encrypted = new byte[handshake.Length + 64];
         int written = _write!.Protect(22, handshake, encrypted);
         output.AddBytes(encrypted.AsSpan(0, written));
@@ -1369,20 +1412,29 @@ internal sealed partial class TlsEngine
         return body.ToArray();
     }
 
-    private static byte[] EncryptedExtensionsMessage(string? alpn)
+    private static byte[] EncryptedExtensionsMessage(string? alpn, byte[]? transportParameters)
     {
-        if (alpn is null)
+        var extensions = new System.Collections.Generic.List<byte>();
+        if (alpn is not null)
+        {
+            byte[] name = System.Text.Encoding.ASCII.GetBytes(alpn);
+            var body = new byte[2 + 1 + name.Length];
+            body[1] = (byte)(1 + name.Length);
+            body[2] = (byte)name.Length;
+            name.CopyTo(body.AsSpan(3));
+            AddExtension(extensions, ExtensionType.ApplicationLayerProtocolNegotiation, body);
+        }
+
+        if (transportParameters is not null)
+        {
+            AddExtension(extensions, ExtensionType.QuicTransportParameters, transportParameters);
+        }
+
+        if (extensions.Count == 0)
         {
             return [8, 0, 0, 2, 0, 0];
         }
 
-        byte[] name = System.Text.Encoding.ASCII.GetBytes(alpn);
-        var extensions = new System.Collections.Generic.List<byte>();
-        var body = new byte[2 + 1 + name.Length];
-        body[1] = (byte)(1 + name.Length);
-        body[2] = (byte)name.Length;
-        name.CopyTo(body.AsSpan(3));
-        AddExtension(extensions, ExtensionType.ApplicationLayerProtocolNegotiation, body);
         var message = new System.Collections.Generic.List<byte> { 8, 0, 0, 0 };
         // Stryker disable once bitwise: this byte matches for a non-negative value under the shift width
         message.Add((byte)(extensions.Count >> 8));

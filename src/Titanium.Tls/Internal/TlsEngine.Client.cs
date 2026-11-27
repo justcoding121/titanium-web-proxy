@@ -108,7 +108,11 @@ internal sealed partial class TlsEngine
         if (!_randomReady)
         {
             _entropy.Fill(_clientRandom);
-            _entropy.Fill(_legacySessionId);
+            if (!DatagramTransport)
+            {
+                _entropy.Fill(_legacySessionId);
+            }
+
             _randomReady = true;
         }
 
@@ -135,7 +139,14 @@ internal sealed partial class TlsEngine
         }
 
         _transcript!.Append(hello);
-        WritePlaintextHandshake(output, hello);
+        if (DatagramTransport)
+        {
+            output.AddDatagram(0, hello);
+        }
+        else
+        {
+            WritePlaintextHandshake(output, hello);
+        }
     }
 
     private void HandleClient(HandshakeType type, int bodyLength, TlsOutput output)
@@ -216,7 +227,8 @@ internal sealed partial class TlsEngine
             return;
         }
 
-        if (!hello.SessionId.SequenceEqual(_legacySessionId))
+        ReadOnlySpan<byte> expectedSession = DatagramTransport ? ReadOnlySpan<byte>.Empty : _legacySessionId;
+        if (!hello.SessionId.SequenceEqual(expectedSession))
         {
             Fail(output, AlertIllegalParameter);
             return;
@@ -287,6 +299,12 @@ internal sealed partial class TlsEngine
         _serverHandshakeSecret = new SecretBuffer(32);
         _schedule!.HandshakeTrafficSecret(true, transcriptHash, _clientHandshakeSecret.Span);
         _schedule.HandshakeTrafficSecret(false, transcriptHash, _serverHandshakeSecret.Span);
+        if (DatagramTransport)
+        {
+            _alertsEncrypted = true;
+            return;
+        }
+
         Span<byte> key = stackalloc byte[16];
         Span<byte> iv = stackalloc byte[12];
         TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, _serverHandshakeSecret.Span, key, iv);
@@ -570,6 +588,22 @@ internal sealed partial class TlsEngine
         finished[3] = 32;
         verifyData.CopyTo(finished[4..]);
         _transcript!.Append(finished);
+        if (DatagramTransport)
+        {
+            if (!clientCertificate.IsEmpty)
+            {
+                output.AddDatagram(2, clientCertificate);
+            }
+
+            if (!clientVerify.IsEmpty)
+            {
+                output.AddDatagram(2, clientVerify);
+            }
+
+            output.AddDatagram(2, finished);
+            return;
+        }
+
         Span<byte> key = stackalloc byte[16];
         Span<byte> iv = stackalloc byte[12];
         TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, _clientHandshakeSecret!.Span, key, iv);
@@ -612,6 +646,10 @@ internal sealed partial class TlsEngine
         Span<byte> share = stackalloc byte[128];
         _share!.WritePublicKey(share[.._publicLength]);
         int variable = _publicLength + (_cookie?.Length ?? 0) + (_serverName?.Length ?? 0) + (_ticketIdentity?.Length ?? 0);
+        if (DatagramTransport)
+        {
+            variable += (LocalTransportParameters?.Length ?? 0) + 4;
+        }
         if (ApplicationProtocols is { Length: > 0 } protocols)
         {
             foreach (string protocol in protocols)
@@ -633,9 +671,10 @@ internal sealed partial class TlsEngine
             return null;
         }
 
+        ReadOnlySpan<byte> sessionId = DatagramTransport ? ReadOnlySpan<byte>.Empty : _legacySessionId;
         if (!writer.TryWriteUInt16(0x0303)
             || !writer.TryWrite(_clientRandom)
-            || !writer.TryWriteVector8(_legacySessionId)
+            || !writer.TryWriteVector8(sessionId)
             || !writer.TryWriteVector16([0x13, 0x01])
             || !writer.TryWriteVector8([0])
             || !writer.TryReserveLength(2, out int extensionsLengthAt))
@@ -673,6 +712,13 @@ internal sealed partial class TlsEngine
         }
 
         if (ApplicationProtocols is { Length: > 0 } offered && !WriteAlpn(ref writer, offered))
+        {
+            return null;
+        }
+
+        if (DatagramTransport
+            && (LocalTransportParameters is null
+                || !WriteOffered(ref writer, ExtensionType.QuicTransportParameters, LocalTransportParameters)))
         {
             return null;
         }
@@ -937,6 +983,16 @@ internal sealed partial class TlsEngine
         if (!TryRememberSelectedProtocol(extensions, out byte protocolAlert))
         {
             Fail(output, protocolAlert);
+            return;
+        }
+
+        if (TryExtension(extensions, ExtensionType.QuicTransportParameters, out ReadOnlySpan<byte> transportParameters))
+        {
+            PeerTransportParameters = transportParameters.ToArray();
+        }
+        else if (DatagramTransport)
+        {
+            Fail(output, AlertMissingExtension);
             return;
         }
 

@@ -157,6 +157,20 @@ internal sealed partial class TlsEngine
         output.AddEvent(TlsEventKind.KeyUpdateRequired, request);
     }
 
+    internal bool TryCopyTrafficSecret(bool application, bool client, Span<byte> destination)
+    {
+        SecretBuffer? source = application
+            ? client ? _clientApplication : _serverApplication
+            : client ? _clientHandshakeSecret : _serverHandshakeSecret;
+        if (source is null || destination.Length < source.Length)
+        {
+            return false;
+        }
+
+        source.Span.CopyTo(destination[..source.Length]);
+        return true;
+    }
+
     private void RememberTrafficSecrets(ReadOnlySpan<byte> client, ReadOnlySpan<byte> server, ReadOnlySpan<byte> exporter)
     {
         _clientApplication?.Dispose();

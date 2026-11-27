@@ -52,8 +52,19 @@ internal sealed class TlsOutput
 {
     private readonly byte[] _bytes = new byte[16384];
     private readonly TlsEvent[] _events = new TlsEvent[8];
+    private readonly TlsSegment[] _segments = new TlsSegment[8];
     private int _length;
     private int _eventCount;
+    private int _segmentCount;
+
+    private struct TlsSegment
+    {
+        internal int Level;
+
+        internal int Offset;
+
+        internal int Length;
+    }
 
     internal ReadOnlySpan<byte> Bytes => _bytes.AsSpan(0, _length);
 
@@ -67,6 +78,38 @@ internal sealed class TlsOutput
     {
         _length = 0;
         _eventCount = 0;
+        _segmentCount = 0;
+    }
+
+    internal int SegmentCount => _segmentCount;
+
+    internal (int Level, int Offset, int Length) Segment(int index)
+    {
+        TlsSegment segment = _segments[index];
+        return (segment.Level, segment.Offset, segment.Length);
+    }
+
+    internal void AddDatagram(int level, ReadOnlySpan<byte> bytes)
+    {
+        int start = _length;
+        AddBytes(bytes);
+        if (_segmentCount > 0)
+        {
+            TlsSegment previous = _segments[_segmentCount - 1];
+            if (previous.Level == level && previous.Offset + previous.Length == start)
+            {
+                previous.Length += bytes.Length;
+                _segments[_segmentCount - 1] = previous;
+                return;
+            }
+        }
+
+        if (_segmentCount == _segments.Length)
+        {
+            throw new TlsProtocolViolation("The engine produced more datagram segments than the stub buffer holds.");
+        }
+
+        _segments[_segmentCount++] = new TlsSegment { Level = level, Offset = start, Length = bytes.Length };
     }
 
     internal void AddBytes(ReadOnlySpan<byte> bytes)
@@ -135,6 +178,13 @@ internal sealed partial class TlsEngine : IDisposable
     internal bool SendKeyUpdate;
 
     internal byte LastLocalAlert { get; private set; }
+
+    /// <summary>QUIC carries handshake bytes without TLS records. Packet protection is outside this engine.</summary>
+    internal bool DatagramTransport { get; set; }
+
+    internal byte[]? LocalTransportParameters { get; set; }
+
+    internal byte[]? PeerTransportParameters { get; private set; }
 
     /// <summary>When set, a protected alert is recorded and <see cref="TlsStream"/> writes it under the write lock.</summary>
     internal bool DeferSealedAlerts { get; set; }
@@ -652,11 +702,44 @@ internal sealed partial class TlsEngine : IDisposable
         HandleServer(type, bodyLength, output);
     }
 
+    internal void AdvanceDatagram(ReadOnlySpan<byte> handshake, TlsOutput output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        output.Clear();
+        if (State == TlsEngineState.Closed || _paused)
+        {
+            return;
+        }
+
+        if (_role == TlsRole.Client && State == TlsEngineState.Start)
+        {
+            WriteClientHello(output, helloRetry: false);
+            if (State == TlsEngineState.Closed)
+            {
+                return;
+            }
+
+            State = TlsEngineState.WaitServerHelloOrHrr;
+        }
+
+        if (handshake.IsEmpty || !AppendHandshake(handshake, output))
+        {
+            return;
+        }
+
+        DrainHandshake(output);
+    }
+
     private void Fail(TlsOutput output, byte description)
     {
         State = TlsEngineState.Closed;
         _paused = false;
         LastLocalAlert = description;
+        if (DatagramTransport)
+        {
+            return;
+        }
+
         if (_alertsEncrypted && _write != null)
         {
             if (DeferSealedAlerts)
