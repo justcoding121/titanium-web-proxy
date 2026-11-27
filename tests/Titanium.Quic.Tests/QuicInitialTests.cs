@@ -56,6 +56,24 @@ public sealed class QuicInitialTests
             "c7d1f4c733c068030422aa9ac3d46c4e" +
             "d2826446079faa0914c2d705d98b02a2" +
             "b5129cd1de164eb9cbd083e8a2503c4e"), block);
+
+        var wide = new byte[65];
+        ChaCha20Block.Write(key, counter: 1, nonce, wide);
+        CollectionAssert.AreEqual(block, wide[..64]);
+        Assert.AreEqual(0, wide[64]);
+    }
+
+    [TestMethod]
+    public void ChaCha20BlockRejectsAShortInput()
+    {
+        var key = new byte[32];
+        byte[] nonce = new byte[12];
+        var block = new byte[64];
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ChaCha20Block.Write(key.AsSpan(0, 31), 1, nonce, block));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ChaCha20Block.Write(new byte[33], 1, nonce, block));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ChaCha20Block.Write(key, 1, nonce.AsSpan(0, 11), block));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ChaCha20Block.Write(key, 1, new byte[13], block));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ChaCha20Block.Write(key, 1, nonce, block.AsSpan(0, 63)));
     }
 
     [TestMethod]
