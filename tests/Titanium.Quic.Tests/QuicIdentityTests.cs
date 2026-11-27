@@ -165,6 +165,62 @@ public sealed class QuicIdentityTests
     }
 
     [TestMethod]
+    public void TheHighestSequenceIsTheSendTarget()
+    {
+        var ids = new QuicIdentity();
+        var retire = new System.Collections.Generic.List<ulong>();
+        byte[] older = PeerId(1);
+        byte[] newer = PeerId(3);
+        Assert.IsTrue(ids.TryAddPeer(1, 0, older, ResetToken, retire, out _));
+        Assert.IsTrue(ids.TryAddPeer(3, 0, newer, ResetToken, retire, out _));
+        CollectionAssert.AreEqual(newer, ids.ActivePeer());
+    }
+
+    [TestMethod]
+    public void AnEmptyOrRepeatedPeerIdIsNotStoredTwice()
+    {
+        var ids = new QuicIdentity();
+        ids.AddPeer([]);
+        ids.AddPeer(ServerId);
+        ids.AddPeer(ServerId);
+        Assert.AreEqual(1, ids.PeerActive);
+        CollectionAssert.AreEqual(ServerId, ids.ActivePeer());
+    }
+
+    [TestMethod]
+    public void TheNinthConnectionIdIsRejected()
+    {
+        var ids = new QuicIdentity();
+        var retire = new System.Collections.Generic.List<ulong>();
+        for (ulong sequence = 0; sequence < QuicIdentity.ActiveLimit; sequence++)
+        {
+            Assert.IsTrue(ids.TryAddPeer(sequence, 0, PeerId(sequence), ResetToken, retire, out ulong error));
+            Assert.AreEqual(0UL, error);
+        }
+
+        Assert.IsFalse(ids.TryAddPeer(QuicIdentity.ActiveLimit, 0, PeerId(QuicIdentity.ActiveLimit), ResetToken, retire, out ulong limit));
+        Assert.AreEqual(QuicIdentity.ConnectionIdLimitError, limit);
+        Assert.AreEqual(QuicIdentity.ActiveLimit, ids.PeerActive);
+    }
+
+    [TestMethod]
+    public void AMinimumStatelessResetMatchesOnce()
+    {
+        var ids = new QuicIdentity();
+        var retire = new System.Collections.Generic.List<ulong>();
+        byte[] first = PeerId(1);
+        byte[] second = PeerId(2);
+        Assert.IsTrue(ids.TryAddPeer(1, 0, first, ResetToken, retire, out _));
+        Assert.IsTrue(ids.TryAddPeer(2, 0, second, ResetToken, retire, out _));
+        ids.MarkUsed(first);
+        ids.MarkUsed(second);
+        byte[] datagram = new byte[21];
+        ResetToken.CopyTo(datagram.AsSpan(datagram.Length - 16));
+        Assert.IsTrue(ids.MatchesReset(datagram));
+        Assert.IsFalse(ids.MatchesReset(datagram.AsSpan(0, 20).ToArray()));
+    }
+
+    [TestMethod]
     public void AResetTokenForTheOriginalDestinationIsNotTheSendTarget()
     {
         var ids = new QuicIdentity();
@@ -212,6 +268,13 @@ public sealed class QuicIdentityTests
                 left.HandleDatagram(Now, buffer.AsSpan(0, count), path);
             }
         }
+    }
+
+    private static byte[] PeerId(ulong sequence)
+    {
+        byte[] id = new byte[8];
+        id[0] = (byte)sequence;
+        return id;
     }
 
     private static byte[] Parameters(bool client, bool reset)

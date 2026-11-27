@@ -241,6 +241,7 @@ internal sealed class QuicIdentity
 
         if (PeerActive > ActiveLimit)
         {
+            _peers.RemoveAt(_peers.Count - 1);
             error = ConnectionIdLimitError;
             return false;
         }
