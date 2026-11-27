@@ -71,3 +71,7 @@ The in-process network drops, reorders, duplicates, and delays datagrams, and it
 ## T2.18
 
 BenchmarkDotNet on linuxmini compared this stack with System.Net.Quic. The handshake median ratio is 0.355 and the small-exchange median ratio is 0.306. Both gates are 0.90 and both are missed. The repeated bulk cell is 64 KiB because the stream window is 1 MiB and is not raised; the median ratio is 0.012, and the portable gate is only that the number is recorded. `Titanium.Quic.UdpOffload` does not exist, so the 0.80 Linux offload gate was not measured. The rows are on the local-lab performance page. The proxy still does not call this library.
+
+## CUBIC
+
+`QuicCubic` follows RFC 9438 with the window in bytes. A loss keeps 70 percent of the bytes in flight, and the cubic increase is capped at one and a half times the current window. The connection still constructs `QuicNewReno`. CUBIC is not the default: it has not been shown to be faster on the simulator or on a loopback or delay run. Fast convergence stays off because a connection is one flow.
