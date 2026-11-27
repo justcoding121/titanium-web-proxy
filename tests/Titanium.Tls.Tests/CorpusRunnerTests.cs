@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Tls.Tests.Support;
@@ -11,37 +12,43 @@ public sealed class CorpusRunnerTests
     [TestMethod]
     public void TruncationsAndMutationsStayInsideTheDocumentedResult()
     {
-        string path = Path.Combine(AppContext.BaseDirectory, "fuzz", "corpus", "tls-handshake", "short-handshake.hex");
-        Assert.IsTrue(File.Exists(path), path);
-        CorpusFile file = CorpusFile.Load(path);
-        Assert.IsFalse(HandshakePrefixParser.Accepts(file.Body));
-        for (int length = 0; length < file.Body.Length; length++)
+        string directory = Path.Combine(AppContext.BaseDirectory, "fuzz", "corpus", "tls-handshake");
+        string[] files = Directory.GetFiles(directory, "*.hex");
+        Assert.IsTrue(files.Length > 0, directory);
+        var types = new HashSet<byte>();
+        var random = new Random(8446);
+        foreach (string file in files)
         {
-            HandshakePrefixParser.Accepts(file.Body.AsSpan(0, length));
+            CorpusFile seed = CorpusFile.Load(file);
+            if (seed.Body.Length > 5 && seed.Body[0] == 22)
+            {
+                types.Add(seed.Body[5]);
+            }
+
+            TlsFuzzTarget.Handshake(seed.Body);
+            for (int length = 0; length < seed.Body.Length; length++)
+            {
+                TlsFuzzTarget.Handshake(seed.Body.AsSpan(0, length).ToArray());
+            }
+
+            if (seed.Body.Length == 0)
+            {
+                continue;
+            }
+
+            byte[] mutant = (byte[])seed.Body.Clone();
+            for (int i = 0; i < 16; i++)
+            {
+                mutant[random.Next(mutant.Length)] = (byte)random.Next(256);
+                TlsFuzzTarget.Handshake(mutant);
+            }
         }
 
-        Random random = new(8446);
-        byte[] mutant = (byte[])file.Body.Clone();
-        for (int i = 0; i < 32; i++)
+        byte[] required = [1, 2, 4, 5, 8, 11, 13, 15, 20, 24];
+        foreach (byte type in required)
         {
-            int index = random.Next(mutant.Length);
-            mutant[index] = (byte)random.Next(256);
-            HandshakePrefixParser.Accepts(mutant);
+            Assert.IsTrue(types.Contains(type), type.ToString());
         }
-    }
-}
-
-internal static class HandshakePrefixParser
-{
-    internal static bool Accepts(ReadOnlySpan<byte> record)
-    {
-        if (record.Length < 5 || record[0] != 22)
-        {
-            return false;
-        }
-
-        int length = (record[3] << 8) | record[4];
-        return record.Length == 5 + length && length > 0;
     }
 }
 

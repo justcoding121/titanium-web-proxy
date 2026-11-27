@@ -94,6 +94,8 @@ internal sealed class TlsOutput
 internal sealed partial class TlsEngine : IDisposable
 {
     internal const int MaxEmptyRecords = 32;
+
+    internal const int MaxKeyUpdates = 32;
     internal const int DefaultMaxBufferedBytes = HandshakeFraming.DefaultMaxMessageBytes + TlsRecordProtector.HeaderLength;
 
     private readonly TlsRole _role;
@@ -104,6 +106,8 @@ internal sealed partial class TlsEngine : IDisposable
     private int _stashLength;
     private int _pendingHandshake;
     private int _emptyRecords;
+
+    private int _keyUpdates;
     private int _acceptedChangeCipherSpec;
     private bool _paused;
     private bool _endOfRecord;

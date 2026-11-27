@@ -118,7 +118,9 @@ dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj -c Release --fi
 
 ## TLS handshake corpus (`corpus/tls-handshake`)
 
-`.hex` seeds for the managed TLS parsers. A `# expect:` line says `accept` or `reject`. `CorpusRunnerTests` loads the seed, checks the expectation, then truncates every prefix and applies a fixed-seed mutation. The runner must not throw except for a documented rejection.
+`.hex` seeds for the managed handshake engine. One seed carries each handshake type: ClientHello (1), ServerHello (2), NewSessionTicket (4), EndOfEarlyData (5), EncryptedExtensions (8), Certificate (11), CertificateRequest (13), CertificateVerify (15), Finished (20), and KeyUpdate (24). `CorpusRunnerTests` loads every seed, checks that set, truncates every prefix, and applies a fixed-seed mutation. `TlsFuzzTarget.Handshake` drives a client and a server engine and the handshake readers. A bad input closes or waits. It must not throw.
+
+SharpFuzz is optional and not a dependency. A console project that references the test assembly can call `Fuzzer.OutOfProcess.Run(TlsFuzzTarget.Handshake)` under `afl-fuzz`, with this folder as the corpus after the `.hex` seeds are expanded to raw bytes.
 
 ```powershell
 dotnet test tests/Titanium.Tls.Tests -c Release --filter FullyQualifiedName~CorpusRunnerTests

@@ -1,0 +1,3 @@
+# expect: reject
+# message: CertificateVerify
+16 03 03 00 04 0f 00 00 00

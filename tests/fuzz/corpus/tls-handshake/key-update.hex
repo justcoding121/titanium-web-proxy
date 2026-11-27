@@ -1,0 +1,3 @@
+# expect: reject
+# message: KeyUpdate
+16 03 03 00 04 18 00 00 00

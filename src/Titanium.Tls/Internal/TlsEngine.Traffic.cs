@@ -139,6 +139,13 @@ internal sealed partial class TlsEngine
             return;
         }
 
+        if (_keyUpdates >= MaxKeyUpdates)
+        {
+            Fail(output, (byte)TlsRecordAlert.UnexpectedMessage);
+            return;
+        }
+
+        _keyUpdates++;
         RotateTraffic(read: true);
         if (request == 1)
         {

@@ -283,6 +283,101 @@ public sealed class ClientHandshakeTests
     }
 
     [TestMethod]
+    public void UnsolicitedEncryptedExtensionIsRejected()
+    {
+        using var client = new TlsEngine(TlsRole.Client);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        using var server = ScriptedServer.Accept(output.Bytes.ToArray());
+        client.Advance(server.ServerHelloRecord(), out _, output);
+        client.Advance(server.Encrypted([8, 0, 0, 6, 0, 4, 0, 0, 0, 0]), out _, output);
+        Assert.AreEqual(110, server.ClientAlert(output.Bytes.ToArray(), application: false));
+        Assert.AreEqual(TlsEngineState.Closed, client.State);
+    }
+
+    [TestMethod]
+    public void WrongFinishedIsDecryptError()
+    {
+        using var client = new TlsEngine(TlsRole.Client);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        using var server = ScriptedServer.Accept(output.Bytes.ToArray());
+        client.Advance(server.ServerHelloRecord(), out _, output);
+        client.Advance(server.EncryptedExtensionsMessage(), out _, output);
+        client.Advance(server.EncryptedCertificateMessage(), out _, output);
+        client.Resume(true, output);
+        client.Advance(server.EncryptedCertificateVerifyMessage(), out _, output);
+        client.Advance(server.EncryptedWrongFinished(), out _, output);
+        Assert.AreEqual(51, server.ClientAlert(output.Bytes.ToArray(), application: false));
+        Assert.AreEqual(TlsEngineState.Closed, client.State);
+    }
+
+    [TestMethod]
+    public void SecondChangeCipherSpecIsUnexpected()
+    {
+        using var client = new TlsEngine(TlsRole.Client);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        byte[] change = [20, 3, 3, 0, 1, 1];
+        client.Advance(change, out _, output);
+        Assert.AreEqual(TlsEngineState.WaitServerHelloOrHrr, client.State);
+        client.Advance(change, out _, output);
+        AssertAlert(output, 10);
+        Assert.AreEqual(TlsEngineState.Closed, client.State);
+    }
+
+    [TestMethod]
+    public void KeyUpdateFloodCloses()
+    {
+        (TlsEngine client, ScriptedServer server, TlsOutput output) = Connected();
+        using (client)
+        using (server)
+        {
+            for (int i = 0; i < TlsEngine.MaxKeyUpdates; i++)
+            {
+                client.Advance(server.EncryptedKeyUpdate(), out _, output);
+                Assert.AreEqual(TlsEngineState.Connected, client.State, i.ToString());
+            }
+
+            client.Advance(server.EncryptedKeyUpdate(), out _, output);
+            Assert.AreEqual(10, server.ClientAlert(output.Bytes.ToArray(), application: true));
+            Assert.AreEqual(TlsEngineState.Closed, client.State);
+        }
+    }
+
+    [TestMethod]
+    public void HandshakeAfterCloseNotifyIsIgnored()
+    {
+        (TlsEngine client, ScriptedServer server, TlsOutput output) = Connected();
+        using (client)
+        using (server)
+        {
+            client.Advance(server.EncryptedAlert(1, 0), out _, output);
+            Assert.AreEqual(TlsEngineState.Closed, client.State);
+            client.Advance(server.EncryptedApplication([24, 0, 0, 1, 0]), out int consumed, output);
+            Assert.AreEqual(0, consumed);
+            Assert.AreEqual(TlsEngineState.Closed, client.State);
+            Assert.AreEqual(0, output.Bytes.Length);
+        }
+    }
+
+    private static (TlsEngine Client, ScriptedServer Server, TlsOutput Output) Connected()
+    {
+        var client = new TlsEngine(TlsRole.Client);
+        var output = new TlsOutput();
+        client.Advance([], out _, output);
+        var server = ScriptedServer.Accept(output.Bytes.ToArray());
+        client.Advance(server.ServerHelloRecord(), out _, output);
+        client.Advance(server.EncryptedExtensionsMessage(), out _, output);
+        client.Advance(server.EncryptedCertificateMessage(), out _, output);
+        client.Resume(true, output);
+        client.Advance(server.EncryptedCertificateVerifyMessage(), out _, output);
+        client.Advance(server.EncryptedFinishedMessage(), out _, output);
+        Assert.AreEqual(TlsEngineState.Connected, client.State);
+        return (client, server, output);
+    }
+
+    [TestMethod]
     public void ExpiredTicketIsNotOffered()
     {
         var cache = new MemoryTlsSessionCache();
@@ -546,9 +641,10 @@ internal sealed class ScriptedServer : IDisposable
     private readonly ECDsa _key;
     private readonly X509Certificate2 _certificate;
     private readonly TlsRecordProtector _write;
-    private readonly TlsRecordProtector _application;
+    private TlsRecordProtector _application;
     private readonly byte[] _clientHandshake = new byte[32];
     private readonly byte[] _clientApplication = new byte[32];
+    private readonly byte[] _serverApplicationSecret;
     private readonly byte[] _serverHello;
     private readonly byte[] _payload;
     private readonly byte[] _verify;
@@ -569,12 +665,14 @@ internal sealed class ScriptedServer : IDisposable
         byte[] finished,
         byte[] clientHello,
         byte[] serverHelloMessage,
-        byte[] serverHandshake)
+        byte[] serverHandshake,
+        byte[] serverApplication)
     {
         _key = key;
         _certificate = certificate;
         _write = write;
         _application = application;
+        _serverApplicationSecret = serverApplication;
         _serverHello = serverHello;
         _payload = payload;
         _verify = verify;
@@ -640,11 +738,11 @@ internal sealed class ScriptedServer : IDisposable
         var protector = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
         transcript.CurrentHash(hash);
         schedule.AdvanceToMaster();
-        Span<byte> serverApp = stackalloc byte[32];
-        schedule.ApplicationTrafficSecret(false, hash, serverApp);
+        var serverApplication = new byte[32];
+        schedule.ApplicationTrafficSecret(false, hash, serverApplication);
         var clientApp = new byte[32];
         schedule.ApplicationTrafficSecret(true, hash, clientApp);
-        TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, serverApp, key, iv);
+        TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, serverApplication, key, iv);
         var application = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
         var serverHelloRecord = new byte[5 + serverHello.Length];
         serverHelloRecord[0] = 22;
@@ -653,7 +751,7 @@ internal sealed class ScriptedServer : IDisposable
         serverHelloRecord[3] = (byte)(serverHello.Length >> 8);
         serverHelloRecord[4] = (byte)serverHello.Length;
         serverHello.CopyTo(serverHelloRecord, 5);
-        var server = new ScriptedServer(ecdsa, certificate, protector, application, serverHelloRecord, payload, verify, finished, handshake, serverHello, serverHs);
+        var server = new ScriptedServer(ecdsa, certificate, protector, application, serverHelloRecord, payload, verify, finished, handshake, serverHello, serverHs, serverApplication);
         server._transcript.Dispose();
         transcript.CurrentHash(hash);
         server._transcript.Dispose();
@@ -758,6 +856,34 @@ internal sealed class ScriptedServer : IDisposable
         var encrypted = new byte[handshake.Length + 64];
         int written = _application.Protect(22, handshake, encrypted);
         return encrypted.AsSpan(0, written).ToArray();
+    }
+
+    internal byte[] EncryptedWrongFinished()
+    {
+        byte[] finished = (byte[])_finished.Clone();
+        finished[^1] ^= 0xFF;
+        return Encrypted(finished);
+    }
+
+    internal byte[] EncryptedAlert(byte level, byte description)
+    {
+        var encrypted = new byte[64];
+        int written = _application.Protect(21, [level, description], encrypted);
+        return encrypted.AsSpan(0, written).ToArray();
+    }
+
+    internal byte[] EncryptedKeyUpdate()
+    {
+        byte[] record = EncryptedApplication([24, 0, 0, 1, 0]);
+        Span<byte> next = stackalloc byte[32];
+        TlsKeySchedule.NextTrafficSecret(HashAlgorithmName.SHA256, _serverApplicationSecret, next);
+        next.CopyTo(_serverApplicationSecret);
+        Span<byte> key = stackalloc byte[16];
+        Span<byte> iv = stackalloc byte[12];
+        TlsKeySchedule.DeriveTrafficKeys(HashAlgorithmName.SHA256, _serverApplicationSecret, key, iv);
+        _application.Dispose();
+        _application = new TlsRecordProtector(TlsAeadSuite.Aes128Gcm, key, iv);
+        return record;
     }
 
     internal byte ClientAlert(byte[] record, bool application)
