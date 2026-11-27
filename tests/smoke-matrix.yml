@@ -170,3 +170,69 @@ entries:
     status: covered
     test: .github/workflows/inspector-install-smoke.yml
     job: install-smoke
+
+  - id: inspector-update-under-decrypt
+    capability: Inspector startup update check under Decrypt HTTPS + system proxy (loopback bypass)
+    status: covered
+    test: InspectorInstallSmoke update-under-decrypt (advisory until three clean runs)
+    job: install-smoke
+
+  - id: inspector-uninstall-proxy-clear
+    capability: Uninstall while capturing clears loopback system proxy (MSI / deb / uninstall-app.sh)
+    status: covered
+    test: .github/workflows/inspector-install-smoke.yml
+    job: install-smoke
+
+  - id: cli-update-ignores-proxy
+    capability: CLI and Plus update bypass loopback HTTPS_PROXY
+    status: covered
+    test: tools/packaging/smoke/cli-update-ignores-proxy.sh
+    job: release-smoke
+
+  - id: cli-upgrade-from-published
+    capability: Published stable CLI upgrades to candidate zip via local feed
+    status: covered
+    test: tools/packaging/smoke/cli-upgrade-from-published.sh
+    job: release-smoke
+
+  - id: inspector-in-app-apply
+    capability: Inspector in-app apply under Decrypt via loopback-gated TITANIUM_UPDATE_AUTO_APPLY
+    status: covered
+    test: InspectorInstallSmoke in-app-apply (advisory until three clean runs)
+    job: install-smoke
+
+  - id: inspector-package-lifecycle
+    capability: Inspector deb/rpm/AppImage/musl zip package upgrade and uninstall
+    status: covered
+    test: tools/packaging/smoke/inspector-package-lifecycle.sh
+    job: release-smoke
+
+  - id: cli-package-lifecycle
+    capability: CLI deb/rpm package upgrade and uninstall
+    status: covered
+    test: tools/packaging/smoke/cli-package-lifecycle.sh
+    job: release-smoke
+
+  - id: cli-service-lifecycle
+    capability: titanium service install start stop uninstall (Windows/Linux/macOS user)
+    status: covered
+    test: tools/packaging/smoke/cli-service-lifecycle.sh
+    job: release-smoke
+
+  - id: plus-lifecycle
+    capability: Plus apply, upgrade (stale file prune), and --remove-plus
+    status: covered
+    test: tools/packaging/smoke/plus-lifecycle.sh
+    job: release-smoke
+
+  - id: chart-lifecycle
+    capability: Helm chart upgrade from published OCI, rollback, uninstall hygiene
+    status: covered
+    test: tools/packaging/smoke/kind-chart-lifecycle.sh
+    job: release-smoke
+
+  - id: release-asset-gate
+    capability: Expected release assets and release-manifest verification
+    status: covered
+    test: tools/ci/assert-release-assets.ps1 / verify-release-manifest.py
+    job: release-smoke

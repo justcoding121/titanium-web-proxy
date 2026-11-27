@@ -344,6 +344,7 @@ public class Http2TranslationBridgeAcceptanceTests
 
         var sawMutatedHeader = false;
         var sawOriginalHeader = false;
+        var chunked = false;
         string? line;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
         {
@@ -351,12 +352,19 @@ public class Http2TranslationBridgeAcceptanceTests
                 sawMutatedHeader = true;
             if (line.StartsWith("X-Original:", StringComparison.OrdinalIgnoreCase))
                 sawOriginalHeader = true;
+            if (line.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                && line.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                chunked = true;
         }
 
         Assert.IsTrue(sawMutatedHeader, "BeforeResponse header additions must be relayed to the HTTP/1.1 client.");
         Assert.IsFalse(sawOriginalHeader, "BeforeResponse header removals must be honored before relaying.");
 
+        // Origin body may already be complete (Content-Length) or still open (chunked) depending on
+        // scheduling after BeforeResponse. Either framing is correct; decode before comparing bytes.
         var body = await reader.ReadToEndAsync();
+        if (chunked)
+            body = DecodeChunkedAscii(body);
         Assert.AreEqual("h11-to-h2-header-mutation-ok", body);
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised: {exceptionCapture.LastException}");
     }

@@ -1,0 +1,5 @@
+{
+  "conclusion": "failure",
+  "expect_rerun": false,
+  "description": "One infra cancel plus one real unit failure — must not rerun"
+}

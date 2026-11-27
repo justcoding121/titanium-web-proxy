@@ -195,6 +195,44 @@ public class VersionAndUpdateCommandBehaviorTests
         StringAssert.Contains(stderr, "Update feed network error");
     }
 
+    // Bug class: musl HttpClient still routes loopback TITANIUM_UPDATE_FEED through HTTPS_PROXY
+    // (recording proxy black-holes the request → "Update feed network error").
+    [TestMethod]
+    [Timeout(30000)]
+    public async Task Version_Check_LoopbackFeed_IgnoresHttpsProxyEnv()
+    {
+        var priorHttp = Environment.GetEnvironmentVariable("HTTP_PROXY");
+        var priorHttps = Environment.GetEnvironmentVariable("HTTPS_PROXY");
+        var priorNo = Environment.GetEnvironmentVariable("NO_PROXY");
+        try
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("NO_PROXY", "");
+
+            await using var feed = await FeedServer.StartAsync();
+            feed.Json("/feed.json", """{"version":"99.0.0-smoke","channel":"beta","products":{"cli":{"assets":{}}}}""");
+            Environment.SetEnvironmentVariable(FeedEnv, feed.Url("/feed.json"));
+
+            var (code, stdout, stderr) = await RunAsync(
+                () => VersionCommand.ExecuteAsync(["version", "--check", "--channel", "beta"]));
+
+            Assert.AreNotEqual(1, code, stderr);
+            Assert.IsFalse(
+                stderr.Contains("Update feed network error", StringComparison.OrdinalIgnoreCase),
+                stderr);
+            Assert.IsTrue(
+                stdout.Length > 0 || code is 0 or 2,
+                $"unexpected empty output code={code} stderr={stderr}");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", priorHttp);
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", priorHttps);
+            Environment.SetEnvironmentVariable("NO_PROXY", priorNo);
+        }
+    }
+
     // Bug class: a malformed or null manifest crashes with a stack trace instead of a one-line error.
     [TestMethod]
     [DataRow("{not json", "Update feed JSON error")]
@@ -309,17 +347,34 @@ public class VersionAndUpdateCommandBehaviorTests
     [Timeout(30000)]
     public async Task Update_WhenCliDownloadChecksumDiffers_AbortsWithoutInstalling()
     {
-        await using var feed = await FeedServer.StartAsync();
-        feed.Bytes("/cli.zip", "application/zip", Encoding.UTF8.GetBytes("not the advertised zip"));
-        feed.Json("/feed.json", ManifestWithCli(feed.Url("/cli.zip"), new string('0', 64)));
-        Environment.SetEnvironmentVariable(FeedEnv, feed.Url("/feed.json"));
+        var priorHttp = Environment.GetEnvironmentVariable("HTTP_PROXY");
+        var priorHttps = Environment.GetEnvironmentVariable("HTTPS_PROXY");
+        var priorNo = Environment.GetEnvironmentVariable("NO_PROXY");
+        try
+        {
+            // Closed proxy: download must still reach the loopback asset (UseProxy=false).
+            Environment.SetEnvironmentVariable("HTTP_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", "http://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("NO_PROXY", "");
 
-        var (code, stdout, stderr) = await RunAsync(() => UpdateCommand.ExecuteAsync(["update"]));
+            await using var feed = await FeedServer.StartAsync();
+            feed.Bytes("/cli.zip", "application/zip", Encoding.UTF8.GetBytes("not the advertised zip"));
+            feed.Json("/feed.json", ManifestWithCli(feed.Url("/cli.zip"), new string('0', 64)));
+            Environment.SetEnvironmentVariable(FeedEnv, feed.Url("/feed.json"));
 
-        Assert.AreEqual(1, code);
-        StringAssert.Contains(stderr, "SHA256 mismatch — aborting update.");
-        StringAssert.Contains(stdout, "Verifying SHA256");
-        Assert.IsFalse(stdout.Contains("Restarting updater", StringComparison.Ordinal), stdout);
+            var (code, stdout, stderr) = await RunAsync(() => UpdateCommand.ExecuteAsync(["update"]));
+
+            Assert.AreEqual(1, code);
+            StringAssert.Contains(stderr, "SHA256 mismatch — aborting update.");
+            StringAssert.Contains(stdout, "Verifying SHA256");
+            Assert.IsFalse(stdout.Contains("Restarting updater", StringComparison.Ordinal), stdout);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HTTP_PROXY", priorHttp);
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", priorHttps);
+            Environment.SetEnvironmentVariable("NO_PROXY", priorNo);
+        }
     }
 
     // Bug class: a 404 on the asset URL surfaces as an unhandled exception.

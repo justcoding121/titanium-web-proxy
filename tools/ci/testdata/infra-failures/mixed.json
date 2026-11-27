@@ -1,0 +1,24 @@
+{
+  "run_conclusion": "failure",
+  "jobs": [
+    {
+      "id": 10,
+      "name": "unit",
+      "conclusion": "failure",
+      "steps": [
+        { "name": "Set up job", "conclusion": "success" },
+        { "name": "Test", "conclusion": "failure" }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "integration (0)",
+      "conclusion": "cancelled",
+      "steps": []
+    }
+  ],
+  "annotations": {
+    "10": [{ "message": "Assert.AreEqual failed" }],
+    "11": [{ "message": "The hosted runner was not acquired by Runner." }]
+  }
+}

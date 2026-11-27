@@ -1,0 +1,333 @@
+#!/usr/bin/env bash
+# Prove titanium update (CLI zip or --plus) does not use a loopback HTTPS_PROXY.
+# Seeds an older install identity, serves a local candidate feed on an ephemeral
+# port, points HTTPS_PROXY at a recording listener, runs update, asserts zero hits.
+#
+# Usage:
+#   cli-update-ignores-proxy.sh [--plus] <cli-dir> <asset-zip> <titanium-bin> [version]
+#   cli-update-ignores-proxy.sh --self-test
+set -euo pipefail
+
+self_test() {
+  # Dry parse + ephemeral bind (no titanium binary, no update network).
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ASSERT: python3 required for cli-update-ignores-proxy self-test" >&2
+    exit 1
+  fi
+  local ports
+  ports="$(python3 - <<'PY'
+import socket
+ports = []
+for _ in range(2):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("127.0.0.1", 0))
+    ports.append(str(s.getsockname()[1]))
+    s.close()
+print(" ".join(ports))
+PY
+)"
+  # shellcheck disable=SC2086
+  set -- $ports
+  local feed_port="$1" proxy_port="$2"
+  [[ -n "$feed_port" && -n "$proxy_port" ]] || {
+    echo "ASSERT: self-test ports missing" >&2
+    exit 1
+  }
+  echo "cli-update-ignores-proxy self-test ok (feed=$feed_port proxy=$proxy_port)"
+}
+
+if [[ "${1:-}" == "--self-test" ]]; then
+  self_test
+  exit 0
+fi
+
+plus=0
+if [[ "${1:-}" == "--plus" ]]; then
+  plus=1
+  shift
+fi
+
+cli_dir="${1:?cli dir}"
+asset_zip="${2:?asset zip}"
+bin="${3:?titanium}"
+version="${4:-99.0.0-smoke}"
+cli_dir="$(cd "$cli_dir" && pwd)"
+asset_zip="$(cd "$(dirname "$asset_zip")" && pwd)/$(basename "$asset_zip")"
+bin="$(cd "$(dirname "$bin")" && pwd)/$(basename "$bin")"
+
+if [[ ! -f "$asset_zip" || ! -x "$bin" && ! -f "$bin" ]]; then
+  echo "ASSERT: asset zip or binary missing" >&2
+  exit 1
+fi
+chmod +x "$bin" || true
+
+# Prior machine-service update (sudo) can leave root-owned workdirs that make
+# this user-mode update fail with "Access to the path … is denied".
+if [[ "$(uname -s)" == Linux ]]; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    rm -rf /tmp/TitaniumCli-update 2>/dev/null || true
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo rm -rf /tmp/TitaniumCli-update 2>/dev/null || true
+  fi
+else
+  rm -rf "${TMPDIR:-/tmp}/TitaniumCli-update" /tmp/TitaniumCli-update 2>/dev/null || true
+fi
+
+echo "cli-update-ignores-proxy candidate zip=${asset_zip} bytes=$(wc -c <"$asset_zip" | tr -d ' ') plus=${plus}"
+echo "cli-update-ignores-proxy candidate version:"
+"$bin" version || true
+
+feed="$(mktemp -d)"
+proxy_dir="$(mktemp -d)"
+# Marker proves the detached apply overlay actually ran (identity alone is
+# vacuous if written by the parent before StartDetached).
+marker_name="smoke-marker.txt"
+marker_value="cli-update-ignores-proxy-${version}"
+if [[ "$plus" -eq 1 ]]; then
+  asset_name="plus.zip"
+  cp "$asset_zip" "$feed/$asset_name"
+else
+  asset_name="cli.zip"
+  cp "$asset_zip" "$feed/$asset_name"
+  printf '%s\n' "$marker_value" >"$feed/$marker_name"
+  # Prefer zip(1); fall back to Python (Ubuntu product-smoke images may omit zip).
+  if command -v zip >/dev/null 2>&1; then
+    (cd "$feed" && zip -q "$asset_name" "$marker_name")
+  else
+    python3 - "$feed/$asset_name" "$feed/$marker_name" "$marker_name" <<'PY'
+import sys, zipfile
+zpath, src, arc = sys.argv[1:4]
+with zipfile.ZipFile(zpath, "a", compression=zipfile.ZIP_DEFLATED) as zf:
+    zf.write(src, arcname=arc)
+PY
+  fi
+  rm -f "$feed/$marker_name"
+fi
+size="$(wc -c < "$feed/$asset_name" | tr -d ' ')"
+sha="$(sha256sum "$feed/$asset_name" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$feed/$asset_name" | awk '{print $1}')"
+
+hits="$proxy_dir/hits"
+: >"$hits"
+# Proxy: raw socket (works on macOS intel). Feed: python -m http.server like the
+# other green smoke legs — HTTPServer((127.0.0.1,0)) hung on intel 3.14 before
+# writing feed-port.
+cat >"$proxy_dir/proxy_helper.py" <<'PY'
+import socket, sys, pathlib, threading
+root = pathlib.Path(sys.argv[1])
+hits = root / "hits"
+port_file = root / "port"
+srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+srv.bind(("127.0.0.1", 0))
+srv.listen(32)
+port_file.write_text(str(srv.getsockname()[1]), encoding="utf-8")
+
+def one(conn):
+    try:
+        hits.write_text(str(int((hits.read_text() or "0").strip() or "0") + 1), encoding="utf-8")
+    except Exception:
+        hits.write_text("1", encoding="utf-8")
+    try:
+        conn.recv(64)
+    finally:
+        conn.close()
+
+while True:
+    c, _ = srv.accept()
+    threading.Thread(target=one, args=(c,), daemon=True).start()
+PY
+python3 "$proxy_dir/proxy_helper.py" "$proxy_dir" >/tmp/update-proxy.log 2>&1 &
+proxy_py=$!
+feed_port="$(python3 - <<'PY'
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)"
+printf '%s' "$feed_port" >"$feed/feed-port"
+python3 -m http.server "$feed_port" --bind 127.0.0.1 --directory "$feed" >/tmp/update-feed.log 2>&1 &
+httpd=$!
+
+cleanup() {
+  kill "$httpd" "$proxy_py" 2>/dev/null || true
+  wait "$httpd" "$proxy_py" 2>/dev/null || true
+  rm -rf "$feed" "$proxy_dir"
+}
+trap cleanup EXIT
+
+for _ in $(seq 1 100); do
+  [[ -f "$proxy_dir/port" && -f "$feed/feed-port" ]] && break
+  sleep 0.2
+done
+if [[ ! -f "$proxy_dir/port" || ! -f "$feed/feed-port" ]]; then
+  echo "ASSERT: feed or proxy port file missing" >&2
+  echo "---- dirs ----" >&2
+  ls -la "$proxy_dir" "$feed" >&2 || true
+  echo "---- update-proxy.log ----" >&2
+  cat /tmp/update-proxy.log >&2 || true
+  echo "---- update-feed.log ----" >&2
+  cat /tmp/update-feed.log >&2 || true
+  ps -ef 2>/dev/null | grep -E 'python|titanium' | grep -v grep >&2 || true
+  exit 1
+fi
+proxy_port="$(cat "$proxy_dir/port")"
+feed_port="$(cat "$feed/feed-port")"
+
+for _ in $(seq 1 50); do
+  if curl -fsS --max-time 1 "http://127.0.0.1:$feed_port/" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.1
+done
+
+if [[ "$plus" -eq 1 ]]; then
+  python3 - "$feed/release-manifest.json" "$feed_port" "$size" "$sha" "$version" <<'PY'
+import json, sys
+path, port, size, sha, version = sys.argv[1:]
+url = f"http://127.0.0.1:{port}/plus.zip"
+manifest = {
+  "version": version,
+  "channel": "beta",
+  "products": {
+    "plus": {
+      "version": version,
+      "bundle": {"url": url, "sha256": sha, "size": int(size)},
+    }
+  },
+}
+open(path, "w", encoding="utf-8").write(json.dumps(manifest))
+PY
+else
+  python3 - "$feed" "$size" "$sha" "$version" "$feed_port" <<'PY'
+import json, sys
+feed, size, sha, version, port = sys.argv[1:]
+url = f"http://127.0.0.1:{port}/cli.zip"
+asset = {"url": url, "sha256": sha, "size": int(size)}
+rids = ["linux-x64", "linux-arm64", "osx-arm64", "osx-x64", "win-x64",
+        "linux-musl-x64", "linux-musl-arm64"]
+manifest = {
+  "version": version,
+  "channel": "beta",
+  "products": {
+    "cli": {
+      "assets": {rid: dict(asset) for rid in rids},
+    }
+  },
+}
+open(feed + "/release-manifest.json", "w", encoding="utf-8").write(json.dumps(manifest))
+PY
+fi
+
+# Seed an older installed identity so the feed is offered (CLI path only).
+# Must match SpecialFolder.LocalApplicationData used by the apply script:
+# Windows LOCALAPPDATA, macOS ~/Library/Application Support, Linux XDG.
+if [[ "$plus" -eq 0 ]]; then
+  if [[ -n "${LOCALAPPDATA:-}" ]]; then
+    identity_dir="$LOCALAPPDATA/TitaniumCli"
+  elif [[ "$(uname -s)" == Darwin ]]; then
+    identity_dir="$HOME/Library/Application Support/TitaniumCli"
+  else
+    identity_dir="${XDG_DATA_HOME:-$HOME/.local/share}/TitaniumCli"
+  fi
+  mkdir -p "$identity_dir"
+  printf '%s\n' '{"tag":"0.0.1","channel":"Beta"}' >"$identity_dir/installed-release.json"
+fi
+
+export HTTP_PROXY="http://127.0.0.1:$proxy_port"
+export HTTPS_PROXY="http://127.0.0.1:$proxy_port"
+export http_proxy="$HTTP_PROXY"
+export https_proxy="$HTTPS_PROXY"
+export NO_PROXY=""
+export no_proxy=""
+
+update_cmd=("$bin" update --channel beta)
+if [[ "$plus" -eq 1 ]]; then
+  update_cmd=("$bin" update --plus --channel beta)
+fi
+
+# Prove the loopback feed answers before blaming titanium / proxy bypass.
+# Must bypass HTTP(S)_PROXY — the recording listener black-holes curl otherwise.
+if ! curl --noproxy '*' -fsS --max-time 2 "http://127.0.0.1:$feed_port/release-manifest.json" >/dev/null; then
+  echo "ASSERT: loopback update feed not reachable before titanium update" >&2
+  exit 1
+fi
+
+set +e
+if command -v timeout >/dev/null 2>&1; then
+  TITANIUM_UPDATE_FEED="http://127.0.0.1:$feed_port/release-manifest.json" \
+    timeout 120 "${update_cmd[@]}"
+  update_rc=$?
+else
+  TITANIUM_UPDATE_FEED="http://127.0.0.1:$feed_port/release-manifest.json" \
+    "${update_cmd[@]}"
+  update_rc=$?
+fi
+set -e
+if [[ "$update_rc" -ne 0 ]]; then
+  echo "ASSERT: titanium update exited $update_rc" >&2
+  echo "feed-port=$feed_port proxy-port=$proxy_port" >&2
+  curl --noproxy '*' -fsS --max-time 2 "http://127.0.0.1:$feed_port/release-manifest.json" >&2 || true
+  exit 1
+fi
+
+assert_update_applied() {
+  local target="$1"
+  local tries=0
+  local apply_done="${TMPDIR:-/tmp}/TitaniumCli-update/apply.done"
+  # Windows TEMP may differ from TMPDIR; also check LOCALAPPDATA-relative workdir.
+  local apply_done_win=""
+  if [[ -n "${LOCALAPPDATA:-}${TEMP:-}${TMP:-}" ]]; then
+    apply_done_win="${TEMP:-${TMP:-${LOCALAPPDATA}/../Temp}}/TitaniumCli-update/apply.done"
+  fi
+  while [[ "$tries" -lt 90 ]]; do
+    tries=$((tries + 1))
+    local done_file=""
+    if [[ -f "$apply_done" ]]; then
+      done_file="$apply_done"
+    elif [[ -n "$apply_done_win" && -f "$apply_done_win" ]]; then
+      done_file="$apply_done_win"
+    fi
+    if [[ -n "$done_file" ]] \
+      && grep -qF "ok version=$target" "$done_file" 2>/dev/null \
+      && [[ -f "$cli_dir/$marker_name" ]] \
+      && grep -qF "$marker_value" "$cli_dir/$marker_name" 2>/dev/null \
+      && [[ -f "$identity_dir/installed-release.json" ]] \
+      && grep -qF "$target" "$identity_dir/installed-release.json" 2>/dev/null; then
+      # Overlay + identity + done file are present; binary must still run.
+      if ! "$bin" version >/dev/null 2>&1; then
+        echo "ASSERT: titanium version failed after overlay (possible SIGKILL)" >&2
+        "$bin" version >&2 || true
+        return 1
+      fi
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ASSERT: update did not apply (marker/done/identity) to $target" >&2
+  ls -la "$cli_dir/$marker_name" "$apply_done" "$apply_done_win" 2>&1 || true
+  "$bin" version >&2 || true
+  cat "$identity_dir/installed-release.json" >&2 2>/dev/null || true
+  cat "$apply_done" "$apply_done_win" >&2 2>/dev/null || true
+  return 1
+}
+
+if [[ "$plus" -eq 0 ]]; then
+  assert_update_applied "$version"
+fi
+
+hit_count="$(tr -d ' \r\n' <"$hits" 2>/dev/null || echo 0)"
+hit_count="${hit_count:-0}"
+if [[ "$hit_count" != "0" ]]; then
+  echo "ASSERT: update used loopback HTTPS_PROXY ($hit_count hits) — expected direct egress" >&2
+  exit 1
+fi
+
+if [[ "$plus" -eq 1 ]]; then
+  echo "plus update ignored loopback proxy ok (hits=0 version=$version)"
+else
+  echo "cli update ignored loopback proxy ok (hits=0 version=$version identity=$version)"
+fi

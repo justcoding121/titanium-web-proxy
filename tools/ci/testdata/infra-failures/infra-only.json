@@ -1,0 +1,27 @@
+{
+  "run_conclusion": "failure",
+  "jobs": [
+    {
+      "id": 1,
+      "name": "merge-gate",
+      "conclusion": "failure",
+      "steps": [{ "name": "Require", "conclusion": "failure" }]
+    },
+    {
+      "id": 2,
+      "name": "unit",
+      "conclusion": "cancelled",
+      "steps": []
+    },
+    {
+      "id": 3,
+      "name": "ui-portable (macos-latest)",
+      "conclusion": "cancelled",
+      "steps": [{ "name": "Set up job", "conclusion": null }]
+    }
+  ],
+  "annotations": {
+    "2": [{ "message": "The hosted runner was not acquired by Runner within the allotted time." }],
+    "3": [{ "message": "The runner has received a shutdown signal." }]
+  }
+}

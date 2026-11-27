@@ -38,9 +38,17 @@ for chart_yaml in deploy/helm/titanium/Chart.yaml \
     exit 1
   fi
 done
+# Stable reuses the beta chart semver (8.0.N → 1.0.N). Ignore prerelease
+# releases so a GA dry-run/cut does not fail on the beta's titanium-1.0.N.tgz.
+# Beta cuts still scan every non-draft release so a missed bump cannot overwrite.
 if [[ -n "${GH_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+  if [[ "$version" == *-* ]]; then
+    jq_filter='[.[] | select(.draft==false) | .assets[].name | select(test("^titanium-[0-9]+\\.[0-9]+\\.[0-9]+\\.tgz$"))][0]'
+  else
+    jq_filter='[.[] | select(.draft==false and .prerelease==false) | .assets[].name | select(test("^titanium-[0-9]+\\.[0-9]+\\.[0-9]+\\.tgz$"))][0]'
+  fi
   published="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=20" \
-    --jq '[.[] | select(.draft==false) | .assets[].name | select(test("^titanium-[0-9]+\\.[0-9]+\\.[0-9]+\\.tgz$"))][0]' 2>/dev/null || true)"
+    --jq "$jq_filter" 2>/dev/null || true)"
   if [[ -n "$published" ]]; then
     published_ver="${published#titanium-}"
     published_ver="${published_ver%.tgz}"

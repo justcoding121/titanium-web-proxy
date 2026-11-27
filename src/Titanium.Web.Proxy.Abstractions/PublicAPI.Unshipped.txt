@@ -14,6 +14,8 @@ static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ResolveLocalReleas
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.StripPrerelease(string? tag) -> string!
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ToComparable(System.Version? version) -> System.Version!
 Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion
+static Titanium.Web.Proxy.Abstractions.Updates.UnixOverlayScript.AppendUnixRemoveThenCopy(System.Text.StringBuilder! sb, string! src, string! dest, bool stopOnError) -> void
+Titanium.Web.Proxy.Abstractions.Updates.UnixOverlayScript
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.AffinityCookie.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.AffinityCookie.init -> void
@@ -1285,3 +1287,9 @@ Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Serve.init -> void
 Titanium.Web.Proxy.Abstractions.Caching.ResponseCacheItems
 const Titanium.Web.Proxy.Abstractions.Caching.ResponseCacheItems.StateKey = "twp.cache.state" -> string!
 
+Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.CreateClient(System.TimeSpan timeout, System.Func<System.Uri?, bool>? bypassResolvedProxy = null) -> System.Net.Http.HttpClient!
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.CreateClientForUrl(System.TimeSpan timeout, string? url, System.Func<System.Uri?, bool>? bypassResolvedProxy = null) -> System.Net.Http.HttpClient!
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.FormatFailure(System.Exception! ex, bool updateTrafficMayBeCaptured) -> string!
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.IsLoopbackProxy(System.Uri? proxyUri) -> bool
+static Titanium.Web.Proxy.Abstractions.Updates.UpdateHttp.IsOwnLoopbackProxy(System.Uri? proxyUri, int boundPort, bool active) -> bool

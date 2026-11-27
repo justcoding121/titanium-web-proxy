@@ -27,6 +27,10 @@ on:
         description: 'required or extended'
         type: string
         default: required
+      artifact_run_id:
+        description: 'Optional Actions run id whose artifacts to download (reuse a prior dry-run)'
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       source:
@@ -55,12 +59,17 @@ on:
         options:
           - required
           - extended
+      artifact_run_id:
+        description: 'Reuse artifacts from this Actions run id (with source=run-artifacts)'
+        type: string
+        default: ''
   schedule:
     - cron: '41 5 * * *'
 
 permissions:
   contents: read
   packages: read
+  actions: read
   issues: write
 
 concurrency:
@@ -72,6 +81,8 @@ env:
   RELEASE_TAG: ${{ github.event_name == 'schedule' && '' || inputs.tag }}
   RELEASE_VERSION: ${{ github.event_name == 'schedule' && '' || inputs.version }}
   BROWSERS: ${{ github.event_name == 'schedule' && 'extended' || inputs.browsers }}
+  LIFECYCLE_ENFORCE: ${{ vars.LIFECYCLE_ENFORCE }}
+  ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
 
 jobs:
   self-test:
@@ -95,6 +106,22 @@ jobs:
         run: |
           chmod +x tools/packaging/homebrew/bump-formula-from-sums.sh
           bash tools/packaging/homebrew/bump-formula-from-sums.sh --self-test
+      - name: CLI update and upgrade smoke self-tests
+        run: |
+          chmod +x tools/packaging/smoke/cli-update-ignores-proxy.sh tools/packaging/smoke/cli-upgrade-from-published.sh \
+            tools/packaging/smoke/cli-package-lifecycle.sh tools/packaging/smoke/cli-update-package-managed.sh \
+            tools/packaging/smoke/enforce.sh
+          bash tools/packaging/smoke/cli-update-ignores-proxy.sh --self-test
+          bash tools/packaging/smoke/cli-upgrade-from-published.sh --self-test
+          bash tools/packaging/smoke/cli-package-lifecycle.sh --self-test
+          bash tools/packaging/smoke/cli-update-package-managed.sh --self-test
+          bash tools/packaging/smoke/cli-service-lifecycle.sh --self-test
+          bash tools/packaging/smoke/plus-lifecycle.sh --self-test
+          pwsh -NoProfile -File tools/packaging/smoke/cli-service-lifecycle.ps1 -SelfTest
+          pwsh -NoProfile -File tools/packaging/smoke/plus-lifecycle.ps1 -SelfTest
+          bash -n tools/packaging/smoke/kind-chart-common.sh
+          bash -n tools/packaging/smoke/kind-chart-lifecycle.sh
+          bash -n tools/packaging/smoke/manager-state-volume.sh
 
   packages-windows:
     name: packages (windows-2025)
@@ -111,16 +138,22 @@ jobs:
         with:
           name: inspector-win-x64
           path: dist/inspector-win-x64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: cli-win-x64
           path: dist/cli-win-x64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: plus
           path: dist/plus
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -140,21 +173,28 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          LIFECYCLE_PROOF: ${{ runner.temp }}/lifecycle-proof-win-x64.json
         run: |
           $ErrorActionPreference = 'Stop'
+          # exit from a called .ps1 only sets $LASTEXITCODE. Stop does not see it,
+          # so a failed retry/enforce leg used to leave this step green.
+          . ./tools/packaging/smoke/invoke-leg.ps1
+          ./tools/packaging/smoke/invoke-leg.ps1 --self-test
+          $env:LIFECYCLE_PROOF = $env:LIFECYCLE_PROOF
           $msi = Get-ChildItem -Recurse dist -Filter 'TitaniumInspector-win-x64.msi' | Select-Object -First 1
           $zip = Get-ChildItem -Recurse dist -Filter 'Titanium.Cli-win-x64.zip' | Select-Object -First 1
           $plus = Get-ChildItem -Recurse dist -Filter 'Titanium.Plus-*.zip' | Select-Object -First 1
           if (-not $msi -or -not $zip -or -not $plus) { throw 'ASSERT: windows artifacts missing' }
           Write-Host "windows-smoke: install inspector"
           $log = Join-Path $env:RUNNER_TEMP 'product-smoke'
+          New-Item -ItemType Directory -Force -Path (Join-Path $log 'logs') | Out-Null
           $exe = ./tools/packaging/smoke/install-inspector.ps1 -Msi $msi.FullName -LogDir $log
           Write-Host "windows-smoke: prove inspector $exe"
           $env:SMOKE_EXE = "$exe"
           $env:SMOKE_BROWSERS = 'chrome,firefox,edge'
           if ($env:BROWSERS -eq 'extended') { $env:SMOKE_BROWSERS = 'chrome,edge,brave,firefox,opera' }
           $env:SMOKE_OUT = Join-Path $log 'gui'
-          ./tools/packaging/smoke/retry.ps1 -Leg gui -Command { ./tools/packaging/smoke/prove-inspector.ps1 -Exe $env:SMOKE_EXE -Browsers $env:SMOKE_BROWSERS -Out $env:SMOKE_OUT }
+          Invoke-SmokeLeg { ./tools/packaging/smoke/retry.ps1 -Leg gui -Command { ./tools/packaging/smoke/prove-inspector.ps1 -Exe $env:SMOKE_EXE -Browsers $env:SMOKE_BROWSERS -Out $env:SMOKE_OUT } }
           Write-Host "windows-smoke: cli, plus, chocolatey"
           $cli = Join-Path $env:RUNNER_TEMP 'cli'
           Expand-Archive $zip.FullName $cli -Force
@@ -166,9 +206,43 @@ jobs:
           ./tools/packaging/winget/test-links-symlink.ps1 -Zip $zip.FullName
           ./tools/packaging/smoke/cli-mitm.ps1 -Titanium (Join-Path $cli 'titanium.exe') -Out (Join-Path $log 'cli')
           ./tools/packaging/smoke/apply-plus.ps1 -CliDir $cli -PlusZip $plus.FullName -Titanium (Join-Path $cli 'titanium.exe')
+          Invoke-SmokeLeg { ./tools/packaging/smoke/enforce.ps1 plus-lifecycle -- pwsh -NoProfile -File ./tools/packaging/smoke/plus-lifecycle.ps1 -CliDir $cli -PlusZip $plus.FullName -Titanium (Join-Path $cli 'titanium.exe') }
+          Invoke-SmokeLeg { ./tools/packaging/smoke/enforce.ps1 cli-service-lifecycle -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-service-lifecycle.ps1 -Titanium (Join-Path $cli 'titanium.exe') -CliZip $zip.FullName }
+          $env:SMOKE_CLI = $cli
+          $env:SMOKE_ZIP = $zip.FullName
+          $env:SMOKE_PLUS = $plus.FullName
+          Invoke-SmokeLeg {
+            ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
+              ./tools/packaging/smoke/enforce.ps1 cli-update-ignores-proxy -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-update-ignores-proxy.ps1 -CliDir $env:SMOKE_CLI -CliZip $env:SMOKE_ZIP -Titanium (Join-Path $env:SMOKE_CLI 'titanium.exe')
+            }
+          }
+          Invoke-SmokeLeg {
+            ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
+              ./tools/packaging/smoke/enforce.ps1 cli-update-ignores-proxy-plus -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-update-ignores-proxy.ps1 -Plus -CliDir $env:SMOKE_CLI -PlusZip $env:SMOKE_PLUS -Titanium (Join-Path $env:SMOKE_CLI 'titanium.exe')
+            }
+          }
+          $pubDir = Join-Path $env:RUNNER_TEMP 'published-cli'
+          New-Item -ItemType Directory -Force -Path $pubDir | Out-Null
+          $pubTag = gh api "repos/$env:GITHUB_REPOSITORY/releases" --jq '[.[] | select(.draft==false and .prerelease==false)][0].tag_name'
+          if ($pubTag) {
+            gh release download $pubTag --pattern 'Titanium.Cli-win-x64.zip' --dir $pubDir --clobber
+            $pubZip = Get-ChildItem $pubDir -Filter 'Titanium.Cli-win-x64.zip' | Select-Object -First 1
+            if ($pubZip) {
+              $env:SMOKE_PUB = $pubZip.FullName
+              $env:SMOKE_UPG = Join-Path $env:RUNNER_TEMP 'cli-upgrade'
+              Invoke-SmokeLeg {
+                ./tools/packaging/smoke/retry.ps1 -Leg assert -Command {
+                  ./tools/packaging/smoke/enforce.ps1 cli-upgrade-from-published -- pwsh -NoProfile -File ./tools/packaging/smoke/cli-upgrade-from-published.ps1 -PublishedZip $env:SMOKE_PUB -CandidateZip $env:SMOKE_ZIP -WorkDir $env:SMOKE_UPG
+                }
+              }
+              $fromVer = $pubTag.TrimStart('v')
+              $candVer = if ($env:RELEASE_VERSION) { $env:RELEASE_VERSION } else { 'candidate' }
+              bash tools/packaging/smoke/append-lifecycle-proof.sh $env:LIFECYCLE_PROOF cli win-x64 zip upgrade $fromVer $candVer $candVer false
+            }
+          }
           $tag = $env:RELEASE_TAG
           if (-not $tag) { $tag = 'v8.0.7-beta' }
-          ./tools/packaging/smoke/pre-immutable-choco.ps1 -CliZip $zip.FullName -InspectorMsi $msi.FullName -Tag $tag
+          Invoke-SmokeLeg { ./tools/packaging/smoke/enforce.ps1 pre-immutable-choco -- pwsh -NoProfile -File ./tools/packaging/smoke/pre-immutable-choco.ps1 -CliZip $zip.FullName -InspectorMsi $msi.FullName -Tag $tag }
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -195,24 +269,40 @@ jobs:
         with:
           name: inspector-osx-arm64
           path: dist/inspector-osx-arm64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: cli-osx-arm64
           path: dist/cli-osx-arm64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v8
+        if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
+        with:
+          name: plus
+          path: dist/plus
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash tools/packaging/smoke/fetch-release.sh 'TitaniumInspector-osx-arm64.dmg' 'Titanium.Cli-osx-arm64.zip' 'SHA256SUMS'
+        run: bash tools/packaging/smoke/fetch-release.sh 'TitaniumInspector-osx-arm64.dmg' 'Titanium.Cli-osx-arm64.zip' 'Titanium.Plus-*.zip' 'SHA256SUMS'
       - name: Inspector DMG, CLI, Homebrew
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIFECYCLE_PROOF: ${{ runner.temp }}/lifecycle-proof-macos-arm64.json
         run: |
           set -euo pipefail
+          export LIFECYCLE_PROOF="${LIFECYCLE_PROOF}"
           bash tools/packaging/smoke/install-required-browsers.sh
           dmg="$(find dist -name 'TitaniumInspector-osx-arm64.dmg' | head -1)"
           zip="$(find dist -name 'Titanium.Cli-osx-arm64.zip' | head -1)"
           test -n "$dmg" && test -n "$zip"
           log="${RUNNER_TEMP}/product-smoke"
+          mkdir -p "$log/logs"
           exe="$(bash tools/packaging/smoke/install-inspector.sh "$dmg" "$log")"
           browsers=chrome,firefox,safari
           [[ "${BROWSERS}" == "extended" ]] && browsers=chrome,firefox,safari,edge
@@ -220,8 +310,37 @@ jobs:
           cli="${RUNNER_TEMP}/cli"
           bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
           codesign --verify --verbose "$bin" || { echo "ASSERT: CLI codesign verify failed" >&2; exit 1; }
+          echo "product-smoke macos-arm64 candidate CLI:"; "$bin" version || true
           bash tools/packaging/smoke/cli-mitm.sh "$bin" "$log/cli"
-          bash tools/packaging/smoke/pre-immutable-brew.sh "$zip"
+          SMOKE_CLI_ZIP="$zip" bash tools/packaging/smoke/enforce.sh cli-service-lifecycle -- \
+            bash tools/packaging/smoke/cli-service-lifecycle.sh "$bin"
+          plus="$(find dist -name 'Titanium.Plus-*.zip' 2>/dev/null | head -1 || true)"
+          if [[ -n "${plus:-}" ]]; then
+            bash tools/packaging/smoke/apply-plus.sh "$cli" "$plus" "$bin"
+            bash tools/packaging/smoke/enforce.sh plus-lifecycle -- \
+              bash tools/packaging/smoke/plus-lifecycle.sh "$cli" "$plus" "$bin"
+          fi
+          bash tools/packaging/smoke/retry.sh --leg assert -- \
+            bash tools/packaging/smoke/enforce.sh cli-update-ignores-proxy -- \
+              bash tools/packaging/smoke/cli-update-ignores-proxy.sh "$cli" "$zip" "$bin"
+          pub_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft==false and .prerelease==false)][0].tag_name' || true)"
+          if [[ -n "$pub_tag" && "$pub_tag" != "null" ]]; then
+            pub_dir="${RUNNER_TEMP}/published-cli"
+            mkdir -p "$pub_dir"
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-osx-arm64.zip' --dir "$pub_dir" --clobber
+            pub_zip="$(find "$pub_dir" -name 'Titanium.Cli-osx-arm64.zip' | head -1)"
+            if [[ -n "$pub_zip" ]]; then
+              cand_ver="${RELEASE_VERSION:-candidate}"
+              from_ver="${pub_tag#v}"
+              bash tools/packaging/smoke/retry.sh --leg assert -- \
+                bash tools/packaging/smoke/enforce.sh cli-upgrade-from-published -- \
+                  bash tools/packaging/smoke/cli-upgrade-from-published.sh "$pub_zip" "$zip" "${RUNNER_TEMP}/cli-upgrade"
+              bash tools/packaging/smoke/append-lifecycle-proof.sh "$LIFECYCLE_PROOF" cli osx-arm64 zip upgrade \
+                "$from_ver" "$cand_ver" "$cand_ver" false
+            fi
+          fi
+          bash tools/packaging/smoke/enforce.sh pre-immutable-brew -- \
+            bash tools/packaging/smoke/pre-immutable-brew.sh "$zip"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -247,29 +366,60 @@ jobs:
         with:
           name: inspector-osx-x64
           path: dist/inspector-osx-x64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: cli-osx-x64
           path: dist/cli-osx-x64
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/packaging/smoke/fetch-release.sh 'TitaniumInspector-osx-x64.dmg' 'Titanium.Cli-osx-x64.zip' 'SHA256SUMS'
       - name: Inspector DMG and CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIFECYCLE_PROOF: ${{ runner.temp }}/lifecycle-proof-macos-x64.json
         run: |
           set -euo pipefail
+          export LIFECYCLE_PROOF="${LIFECYCLE_PROOF}"
           bash tools/packaging/smoke/install-required-browsers.sh
           dmg="$(find dist -name 'TitaniumInspector-osx-x64.dmg' | head -1)"
           zip="$(find dist -name 'Titanium.Cli-osx-x64.zip' | head -1)"
           test -n "$dmg" && test -n "$zip"
           log="${RUNNER_TEMP}/product-smoke"
+          mkdir -p "$log/logs"
           exe="$(bash tools/packaging/smoke/install-inspector.sh "$dmg" "$log")"
           bash tools/packaging/smoke/retry.sh --leg gui -- bash tools/packaging/smoke/prove-inspector.sh "$exe" "chrome,firefox,safari" "$log/gui"
           cli="${RUNNER_TEMP}/cli"
           bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
+          echo "product-smoke macos-x64 candidate CLI:"; "$bin" version || true
           bash tools/packaging/smoke/cli-mitm.sh "$bin" "$log/cli"
+          SMOKE_CLI_ZIP="$zip" bash tools/packaging/smoke/enforce.sh cli-service-lifecycle -- \
+            bash tools/packaging/smoke/cli-service-lifecycle.sh "$bin"
+          bash tools/packaging/smoke/retry.sh --leg assert -- \
+            bash tools/packaging/smoke/enforce.sh cli-update-ignores-proxy -- \
+              bash tools/packaging/smoke/cli-update-ignores-proxy.sh "$cli" "$zip" "$bin"
+          pub_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft==false and .prerelease==false)][0].tag_name' || true)"
+          if [[ -n "$pub_tag" && "$pub_tag" != "null" ]]; then
+            pub_dir="${RUNNER_TEMP}/published-cli"
+            mkdir -p "$pub_dir"
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-osx-x64.zip' --dir "$pub_dir" --clobber || true
+            pub_zip="$(find "$pub_dir" -name 'Titanium.Cli-osx-x64.zip' | head -1 || true)"
+            if [[ -n "${pub_zip:-}" ]]; then
+              cand_ver="${RELEASE_VERSION:-candidate}"
+              from_ver="${pub_tag#v}"
+              bash tools/packaging/smoke/retry.sh --leg assert -- \
+                bash tools/packaging/smoke/enforce.sh cli-upgrade-from-published -- \
+                  bash tools/packaging/smoke/cli-upgrade-from-published.sh "$pub_zip" "$zip" "${RUNNER_TEMP}/cli-upgrade"
+              bash tools/packaging/smoke/append-lifecycle-proof.sh "$LIFECYCLE_PROOF" cli osx-x64 zip upgrade \
+                "$from_ver" "$cand_ver" "$cand_ver" false
+            fi
+          fi
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -292,16 +442,22 @@ jobs:
         with:
           pattern: inspector-linux-*64
           path: dist/inspector
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           pattern: cli-linux-*64
           path: dist/cli
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           name: plus
           path: dist/plus
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -310,17 +466,77 @@ jobs:
           bash tools/packaging/smoke/fetch-release.sh \
             'Titanium*-linux-x64.*' 'Titanium*-linux-musl-x64.zip' 'Titanium.Plus-*.zip' 'SHA256SUMS'
       - name: deb, AppImage, rpm, musl, Plus
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIFECYCLE_PROOF: ${{ runner.temp }}/lifecycle-proof.json
         run: |
           set -euo pipefail
           chmod +x tools/packaging/smoke/*.sh
-          bash tools/packaging/smoke/linux-package-matrix.sh dist linux-x64
-          bash tools/packaging/smoke/linux-package-matrix.sh dist linux-musl-x64
+          export LIFECYCLE_PROOF="${LIFECYCLE_PROOF}"
+          mkdir -p "${RUNNER_TEMP}/product-smoke/logs"
+          pub_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft==false and .prerelease==false)][0].tag_name' || true)"
+          if [[ -n "$pub_tag" && "$pub_tag" != "null" ]]; then
+            pub_dir="${RUNNER_TEMP}/published-cli"
+            mkdir -p "$pub_dir"
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-x64.deb' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-x64.rpm' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-musl-x64.zip' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'TitaniumInspector-linux-x64.deb' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'TitaniumInspector-linux-x64.rpm' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'TitaniumInspector-linux-x64.AppImage' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'TitaniumInspector-linux-musl-x64.zip' --dir "$pub_dir" --clobber || true
+            export PREV_CLI_DEB="$(find "$pub_dir" -name 'Titanium.Cli-linux-x64.deb' | head -1 || true)"
+            export PREV_CLI_RPM="$(find "$pub_dir" -name 'Titanium.Cli-linux-x64.rpm' | head -1 || true)"
+            export PREV_CLI_ZIP="$(find "$pub_dir" -name 'Titanium.Cli-linux-musl-x64.zip' | head -1 || true)"
+            export PREV_INS_DEB="$(find "$pub_dir" -name 'TitaniumInspector-linux-x64.deb' | head -1 || true)"
+            export PREV_INS_RPM="$(find "$pub_dir" -name 'TitaniumInspector-linux-x64.rpm' | head -1 || true)"
+            export PREV_INS_APPIMAGE="$(find "$pub_dir" -name 'TitaniumInspector-linux-x64.AppImage' | head -1 || true)"
+            export PREV_INS_ZIP="$(find "$pub_dir" -name 'TitaniumInspector-linux-musl-x64.zip' | head -1 || true)"
+          fi
+          bash tools/packaging/smoke/enforce.sh linux-packages-x64 -- \
+            bash tools/packaging/smoke/linux-package-matrix.sh dist linux-x64
+          bash tools/packaging/smoke/enforce.sh linux-packages-musl-x64 -- \
+            bash tools/packaging/smoke/linux-package-matrix.sh dist linux-musl-x64
+          deb="$(find dist -name 'Titanium.Cli-linux-x64.deb' | head -1)"
+          appimg="$(find dist -name 'Titanium.Cli-linux-x64.AppImage' | head -1)"
           zip="$(find dist -name 'Titanium.Cli-linux-x64.zip' | head -1)"
           plus="$(find dist -name 'Titanium.Plus-*.zip' | head -1)"
           test -n "$zip" && test -n "$plus"
+          if [[ -n "${deb:-}" && -n "${appimg:-}" ]]; then
+            bash tools/packaging/smoke/enforce.sh cli-update-package-managed -- \
+              bash tools/packaging/smoke/cli-update-package-managed.sh "$deb" "$zip" "$appimg"
+          fi
           cli="${RUNNER_TEMP}/plus-cli"
           bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
           bash tools/packaging/smoke/apply-plus.sh "$cli" "$plus" "$bin"
+          bash tools/packaging/smoke/enforce.sh plus-lifecycle -- \
+            bash tools/packaging/smoke/plus-lifecycle.sh "$cli" "$plus" "$bin"
+          SMOKE_CLI_ZIP="$zip" bash tools/packaging/smoke/enforce.sh cli-service-lifecycle -- \
+            bash tools/packaging/smoke/cli-service-lifecycle.sh "$bin"
+          bash tools/packaging/smoke/retry.sh --leg assert -- \
+            bash tools/packaging/smoke/enforce.sh cli-update-ignores-proxy -- \
+              bash tools/packaging/smoke/cli-update-ignores-proxy.sh "$cli" "$zip" "$bin"
+          bash tools/packaging/smoke/retry.sh --leg assert -- \
+            bash tools/packaging/smoke/enforce.sh cli-update-ignores-proxy-plus -- \
+              bash tools/packaging/smoke/cli-update-ignores-proxy.sh --plus "$cli" "$plus" "$bin"
+          if [[ -n "$pub_tag" && "$pub_tag" != "null" ]]; then
+            pub_dir="${RUNNER_TEMP}/published-cli"
+            mkdir -p "$pub_dir"
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-x64.zip' --dir "$pub_dir" --clobber || true
+            pub_zip="$(find "$pub_dir" -name 'Titanium.Cli-linux-x64.zip' | head -1 || true)"
+            if [[ -n "${pub_zip:-}" ]]; then
+              cand_ver="${RELEASE_VERSION:-candidate}"
+              from_ver="${pub_tag#v}"
+              bash tools/packaging/smoke/retry.sh --leg assert -- \
+                bash tools/packaging/smoke/enforce.sh cli-upgrade-from-published -- \
+                  bash tools/packaging/smoke/cli-upgrade-from-published.sh "$pub_zip" "$zip" "${RUNNER_TEMP}/cli-upgrade"
+              if [[ -n "${LIFECYCLE_PROOF:-}" ]]; then
+                bash tools/packaging/smoke/append-lifecycle-proof.sh "$LIFECYCLE_PROOF" cli linux-x64 zip upgrade \
+                  "$from_ver" "$cand_ver" "$cand_ver" false
+              fi
+            fi
+          fi
+          echo "lifecycle proof partial for ubuntu x64 (skip assert-lifecycle-proof)"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -343,22 +559,77 @@ jobs:
         with:
           pattern: inspector-linux-*arm64
           path: dist/inspector
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts'
         with:
           pattern: cli-linux-*arm64
           path: dist/cli
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published assets
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/packaging/smoke/fetch-release.sh 'Titanium*-linux-arm64.*' 'Titanium*-linux-musl-arm64.zip' 'SHA256SUMS'
       - name: deb, AppImage, rpm, musl
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIFECYCLE_PROOF: ${{ runner.temp }}/lifecycle-proof-arm.json
         run: |
           set -euo pipefail
           chmod +x tools/packaging/smoke/*.sh
-          bash tools/packaging/smoke/linux-package-matrix.sh dist linux-arm64
-          bash tools/packaging/smoke/linux-package-matrix.sh dist linux-musl-arm64
+          export LIFECYCLE_PROOF="${LIFECYCLE_PROOF}"
+          pub_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft==false and .prerelease==false)][0].tag_name' || true)"
+          if [[ -n "$pub_tag" && "$pub_tag" != "null" ]]; then
+            pub_dir="${RUNNER_TEMP}/published-cli"
+            mkdir -p "$pub_dir"
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-arm64.deb' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-arm64.rpm' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-musl-arm64.zip' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'TitaniumInspector-linux-arm64.deb' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'TitaniumInspector-linux-arm64.rpm' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'TitaniumInspector-linux-arm64.AppImage' --dir "$pub_dir" --clobber || true
+            gh release download "$pub_tag" --pattern 'TitaniumInspector-linux-musl-arm64.zip' --dir "$pub_dir" --clobber || true
+            export PREV_CLI_DEB="$(find "$pub_dir" -name 'Titanium.Cli-linux-arm64.deb' | head -1 || true)"
+            export PREV_CLI_RPM="$(find "$pub_dir" -name 'Titanium.Cli-linux-arm64.rpm' | head -1 || true)"
+            export PREV_CLI_ZIP="$(find "$pub_dir" -name 'Titanium.Cli-linux-musl-arm64.zip' | head -1 || true)"
+            export PREV_INS_DEB="$(find "$pub_dir" -name 'TitaniumInspector-linux-arm64.deb' | head -1 || true)"
+            export PREV_INS_RPM="$(find "$pub_dir" -name 'TitaniumInspector-linux-arm64.rpm' | head -1 || true)"
+            export PREV_INS_APPIMAGE="$(find "$pub_dir" -name 'TitaniumInspector-linux-arm64.AppImage' | head -1 || true)"
+            export PREV_INS_ZIP="$(find "$pub_dir" -name 'TitaniumInspector-linux-musl-arm64.zip' | head -1 || true)"
+          fi
+          bash tools/packaging/smoke/enforce.sh linux-packages-arm64 -- \
+            bash tools/packaging/smoke/linux-package-matrix.sh dist linux-arm64
+          bash tools/packaging/smoke/enforce.sh linux-packages-musl-arm64 -- \
+            bash tools/packaging/smoke/linux-package-matrix.sh dist linux-musl-arm64
+          zip="$(find dist -name 'Titanium.Cli-linux-arm64.zip' | head -1 || true)"
+          if [[ -n "${zip:-}" ]]; then
+            cli="${RUNNER_TEMP}/arm-cli"
+            bin="$(bash tools/packaging/smoke/install-cli.sh "$zip" "$cli")"
+            bash tools/packaging/smoke/retry.sh --leg assert -- \
+              bash tools/packaging/smoke/enforce.sh cli-update-ignores-proxy -- \
+                bash tools/packaging/smoke/cli-update-ignores-proxy.sh "$cli" "$zip" "$bin"
+            if [[ -n "$pub_tag" && "$pub_tag" != "null" ]]; then
+              pub_dir="${RUNNER_TEMP}/published-cli"
+              mkdir -p "$pub_dir"
+              gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-arm64.zip' --dir "$pub_dir" --clobber || true
+              pub_zip="$(find "$pub_dir" -name 'Titanium.Cli-linux-arm64.zip' | head -1 || true)"
+              if [[ -n "${pub_zip:-}" ]]; then
+                cand_ver="${RELEASE_VERSION:-candidate}"
+                from_ver="${pub_tag#v}"
+                bash tools/packaging/smoke/retry.sh --leg assert -- \
+                  bash tools/packaging/smoke/enforce.sh cli-upgrade-from-published -- \
+                    bash tools/packaging/smoke/cli-upgrade-from-published.sh "$pub_zip" "$zip" "${RUNNER_TEMP}/cli-upgrade"
+                if [[ -n "${LIFECYCLE_PROOF:-}" ]]; then
+                  bash tools/packaging/smoke/append-lifecycle-proof.sh "$LIFECYCLE_PROOF" cli linux-arm64 zip upgrade \
+                    "$from_ver" "$cand_ver" "$cand_ver" false
+                fi
+              fi
+            fi
+          fi
+          echo "lifecycle proof partial for ubuntu arm64 (skip assert-lifecycle-proof)"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -391,21 +662,34 @@ jobs:
         with:
           name: cli-linux-x64
           path: dist
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Published zip
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/packaging/smoke/fetch-release.sh 'Titanium.Cli-linux-x64.zip'
       - name: audit and local install
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           zip="$(find dist -name 'Titanium.Cli-linux-x64.zip' | head -1)"
           test -n "$zip"
-          bash tools/packaging/smoke/pre-immutable-brew.sh "$zip"
+          pub_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft==false)][0].tag_name' || true)"
+          if [[ -n "$pub_tag" && "$pub_tag" != "null" ]]; then
+            pub_dir="${RUNNER_TEMP}/published-brew"
+            mkdir -p "$pub_dir"
+            gh release download "$pub_tag" --pattern 'Titanium.Cli-linux-x64.zip' --dir "$pub_dir" --clobber || true
+            export PREV_CLI_ZIP="$(find "$pub_dir" -name 'Titanium.Cli-linux-x64.zip' | head -1 || true)"
+            export PREV_RELEASE_VERSION="${pub_tag#v}"
+          fi
+          bash tools/packaging/smoke/enforce.sh pre-immutable-brew -- \
+            bash tools/packaging/smoke/pre-immutable-brew.sh "$zip"
 
   images:
-    name: control-plane images
-    runs-on: ubuntu-24.04
+    name: control-plane images (${{ matrix.arch || 'amd64' }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
     strategy:
@@ -415,12 +699,33 @@ jobs:
           - name: proxy
             tag: titanium-web-proxy:ci
             kind: proxy
+            runner: ubuntu-24.04
+            arch: amd64
           - name: gateway
             tag: titanium-gateway:ci
             kind: gateway
+            runner: ubuntu-24.04
+            arch: amd64
           - name: manager
             tag: titanium-manager:ci
             kind: manager
+            runner: ubuntu-24.04
+            arch: amd64
+          - name: proxy
+            tag: titanium-web-proxy:ci-arm64
+            kind: proxy
+            runner: ubuntu-24.04-arm
+            arch: arm64
+          - name: gateway
+            tag: titanium-gateway:ci-arm64
+            kind: gateway
+            runner: ubuntu-24.04-arm
+            arch: arm64
+          - name: manager
+            tag: titanium-manager:ci-arm64
+            kind: manager
+            runner: ubuntu-24.04-arm
+            arch: arm64
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -428,6 +733,8 @@ jobs:
         with:
           name: image-oci-${{ matrix.name }}
           path: oci
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Pull the published tag
         if: github.event_name == 'schedule' || inputs.source == 'release-tag'
         env:
@@ -455,10 +762,25 @@ jobs:
           set -euo pipefail
           if [[ "$SOURCE" == "run-artifacts" ]]; then
             sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
-            bash tools/packaging/smoke/image-health.sh oci/image.oci.tar "${{ matrix.tag }}" "${{ matrix.kind }}"
-          else
-            bash tools/packaging/smoke/image-health.sh - "${{ matrix.tag }}" "${{ matrix.kind }}"
           fi
+          oci_arg=-
+          if [[ "$SOURCE" == "run-artifacts" ]]; then
+            oci_arg=oci/image.oci.tar
+          fi
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            bash tools/packaging/smoke/enforce.sh image-${{ matrix.kind }}-arm64 -- \
+              bash tools/packaging/smoke/image-health.sh "$oci_arg" "${{ matrix.tag }}" "${{ matrix.kind }}" "${{ matrix.arch }}"
+          else
+            bash tools/packaging/smoke/image-health.sh "$oci_arg" "${{ matrix.tag }}" "${{ matrix.kind }}" "${{ matrix.arch }}"
+          fi
+      - name: Manager state volume
+        if: matrix.kind == 'manager' && matrix.arch == 'amd64'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash tools/packaging/smoke/enforce.sh manager-state-volume -- \
+            bash tools/packaging/smoke/manager-state-volume.sh "${{ matrix.tag }}"
 
   chart-static:
     name: helm package
@@ -493,7 +815,7 @@ jobs:
   charts-kind:
     name: chart (${{ matrix.chart }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     continue-on-error: ${{ github.event_name != 'schedule' && inputs.advisory == true }}
     strategy:
       fail-fast: false
@@ -509,21 +831,29 @@ jobs:
         with:
           name: charts
           path: charts
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'titanium'
         with:
           name: image-oci-proxy
           path: artifacts/images/image-oci-proxy
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'gateway'
         with:
           pattern: 'image-oci-*'
           path: artifacts/images
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         if: github.event_name != 'schedule' && inputs.source == 'run-artifacts' && matrix.chart == 'manager'
         with:
           name: image-oci-manager
           path: artifacts/images/image-oci-manager
+          run-id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: kind
         uses: helm/kind-action@v1
         with:
@@ -531,8 +861,17 @@ jobs:
       - name: Install the packaged chart
         env:
           GH_TOKEN: ${{ github.token }}
+          CHARTS_DIR: charts
         run: |
           set -euo pipefail
           sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
           chmod +x tools/packaging/smoke/*.sh
           bash tools/packaging/smoke/retry.sh --leg kind -- bash tools/packaging/smoke/kind-chart.sh "${{ matrix.chart }}"
+      - name: Chart lifecycle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHARTS_DIR: charts
+        run: |
+          set -euo pipefail
+          bash tools/packaging/smoke/enforce.sh chart-lifecycle-${{ matrix.chart }} -- \
+            bash tools/packaging/smoke/kind-chart-lifecycle.sh "${{ matrix.chart }}"

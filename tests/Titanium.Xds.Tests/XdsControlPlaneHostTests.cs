@@ -65,7 +65,7 @@ public class XdsControlPlaneHostTests
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         client.Start(cts.Token);
-        await acked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await AdsPhase.Wait(acked.Task, TimeSpan.FromSeconds(15), "bare-host ACK");
         Assert.AreEqual(AdsConnectionState.Synced,
             SpinWait.SpinUntil(() => client.State == AdsConnectionState.Synced, TimeSpan.FromSeconds(5))
                 ? AdsConnectionState.Synced

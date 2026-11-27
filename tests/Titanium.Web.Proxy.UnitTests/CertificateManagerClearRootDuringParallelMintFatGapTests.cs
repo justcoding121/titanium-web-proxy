@@ -83,5 +83,33 @@ public class CertificateManagerClearRootDuringParallelMintFatGapTests
             leaf?.Dispose();
         }
     }
+
+    /// <summary>
+    ///     A leaf already returned to the caller must remain usable across ClearRootCertificate;
+    ///     the manager may only dispose after the eviction grace period (or the caller's Dispose).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task ClearRoot_DoesNotDispose_HandedOutLeaf()
+    {
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false,
+            NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            SaveFakeCertificates = false,
+        };
+        mgr.CreateRootCertificate(false);
+        var leaf = await mgr.CreateServerCertificate("owned.wave40.test").ConfigureAwait(false);
+        Assert.IsNotNull(leaf);
+        var thumb = leaf!.Thumbprint;
+        Assert.IsTrue(leaf.HasPrivateKey);
+
+        mgr.ClearRootCertificate();
+        mgr.CreateRootCertificate(false);
+
+        Assert.AreEqual(thumb, leaf.Thumbprint, "ClearRoot must not dispose a leaf already handed to the caller.");
+        Assert.IsTrue(leaf.HasPrivateKey);
+        leaf.Dispose();
+    }
 }
 #pragma warning restore TWP001

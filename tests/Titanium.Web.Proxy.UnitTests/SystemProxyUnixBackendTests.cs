@@ -290,8 +290,49 @@ public class LinuxSystemProxyBackendTests
         Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress(""));
         Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress("disabled:"));
         Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress("disabled"));
-        Assert.IsFalse(LinuxSystemProxyBackend.IsUnusableDbusAddress(
-            "unix:path=/tmp/dbus-test,guid=abc"));
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress(
+            "unix:path=/tmp/dbus-missing-socket-does-not-exist,guid=abc"));
+
+        var existing = Path.Combine(Path.GetTempPath(), "twp-dbus-addr-test-" + Guid.NewGuid().ToString("N"));
+        File.WriteAllText(existing, "");
+        try
+        {
+            Assert.IsFalse(LinuxSystemProxyBackend.IsUnusableDbusAddress(
+                "unix:path=" + existing + ",guid=abc"));
+        }
+        finally
+        {
+            File.Delete(existing);
+        }
+    }
+
+    [TestMethod]
+    public void ForceClear_AfterPollutedSnapshot_StillClearsLoopbackGnome()
+    {
+        var runner = new FakeProcessRunner { TrackGsettings = true };
+        runner.When("sh", "command -v gsettings", "/usr/bin/gsettings\n");
+        runner.When("gsettings", "list-schemas", "org.gnome.system.proxy\n");
+        runner.SeedGsettings("org.gnome.system.proxy", "mode", "'manual'");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "host", "'127.0.0.1'");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "port", "8866");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "enabled", "true");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "host", "'127.0.0.1'");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "port", "8866");
+        runner.SeedGsettings("org.gnome.system.proxy", "ignore-hosts", "['localhost']");
+        runner.When("sh", "command -v kwriteconfig6", "\n");
+        runner.When("sh", "command -v kwriteconfig5", "\n");
+        runner.When("systemctl", "--user show-environment", "\n");
+        runner.DefaultSuccess = true;
+
+        using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
+        backend.ForceClearInstalledProxy();
+
+        Assert.IsTrue(
+            runner.Commands.Exists(c =>
+                c.Contains("org.gnome.system.proxy", StringComparison.Ordinal) &&
+                c.Contains("mode", StringComparison.Ordinal) &&
+                c.Contains("'none'", StringComparison.Ordinal)),
+            "ForceClear must set mode none when the desktop still points at loopback.");
     }
 
     [TestMethod]

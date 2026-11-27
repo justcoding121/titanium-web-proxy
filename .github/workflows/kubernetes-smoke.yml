@@ -24,6 +24,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Advisory arm64 leg: schedule and push only (keeps labeled-PR runs amd64-only).
+  titanium-arm64:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 35
+    continue-on-error: true
+    env:
+      NS: twp-smoke
+      REL: twp
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the image (arm64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: tools/packaging/docker/Dockerfile
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: titanium-web-proxy:ci
+          build-args: |
+            VERSION=0.0.0-ci
+            COMMIT=${{ github.sha }}
+          # No GHA cache: amd64 layers previously poisoned arm builds.
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: twp-arm
+      - name: Load the image and start a throwaway backend
+        run: |
+          set -euo pipefail
+          kind load docker-image titanium-web-proxy:ci --name twp-arm
+          kubectl create namespace "$NS"
+          kubectl -n "$NS" create deployment backend --image=nginx:1.27-alpine --port=80
+          kubectl -n "$NS" expose deployment backend --port=80
+          kubectl -n "$NS" rollout status deployment/backend --timeout=120s
+      - name: helm install
+        run: |
+          set -euo pipefail
+          helm install "$REL" deploy/helm/titanium -n "$NS" \
+            -f deploy/helm/titanium/ci/smoke-values.yaml \
+            --set serviceMonitor.enabled=false --set admin.service.enabled=true \
+            --wait --timeout 180s
+      - name: Probes, auth, and traffic
+        run: |
+          set -euo pipefail
+          TOKEN="$(kubectl -n "$NS" get secret "${REL}-titanium-admin" -o jsonpath='{.data.admin-token}' | base64 -d)"
+          kubectl -n "$NS" port-forward "svc/${REL}-titanium-admin" 19901:9901 &
+          kubectl -n "$NS" port-forward "svc/${REL}-titanium" 18080:8080 &
+          sleep 3
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:19901/healthz)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:19901/readyz)" = "200"
+          curl -fsS http://127.0.0.1:18080/ | grep -qi nginx
+          kill %1 %2 2>/dev/null || true
+
   titanium:
     # On pull requests, only when the label is present (a later push re-runs it while the label stays).
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'k8s-smoke')

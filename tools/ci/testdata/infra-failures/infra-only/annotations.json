@@ -1,0 +1,21 @@
+{
+  "101": [
+    {
+      "message": "The hosted runner was not acquired by Runner within the allocated time.",
+      "annotation_level": "failure"
+    }
+  ],
+  "102": [
+    {
+      "message": "The runner has received a shutdown signal.",
+      "annotation_level": "failure"
+    }
+  ],
+  "103": [
+    {
+      "message": "No space left on device",
+      "annotation_level": "failure"
+    }
+  ],
+  "104": []
+}

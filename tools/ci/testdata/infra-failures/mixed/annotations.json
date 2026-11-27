@@ -1,0 +1,15 @@
+{
+  "201": [
+    {
+      "message": "The self-hosted runner lost communication with the server.",
+      "annotation_level": "failure"
+    }
+  ],
+  "202": [
+    {
+      "message": "Assert.Equal failed: Expected 0, Actual 1",
+      "annotation_level": "failure"
+    }
+  ],
+  "203": []
+}
