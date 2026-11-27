@@ -116,6 +116,14 @@ dotnet test tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj -c Releas
 dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj -c Release --filter "FullyQualifiedName~AgentConfigCorpusTests"
 ```
 
+## TLS handshake corpus (`corpus/tls-handshake`)
+
+`.hex` seeds for the managed TLS parsers. A `# expect:` line says `accept` or `reject`. `CorpusRunnerTests` loads the seed, checks the expectation, then truncates every prefix and applies a fixed-seed mutation. The runner must not throw except for a documented rejection.
+
+```powershell
+dotnet test tests/Titanium.Tls.Tests -c Release --filter FullyQualifiedName~CorpusRunnerTests
+```
+
 ## Adding a seed
 
 1. Write the `.case` file with the right prefix and a `reason:`.

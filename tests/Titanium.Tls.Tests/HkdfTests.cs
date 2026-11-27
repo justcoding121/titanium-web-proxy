@@ -1,6 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Tls.Tests.Support;
 
 namespace Titanium.Tls.Tests;
 
@@ -68,6 +69,7 @@ public sealed class HkdfTests
     }
 
     [TestMethod]
+    [RfcRequirement("RFC 5869", "2", "HkdfTests.BclHkdfMatchesRfc5869Case1")]
     public void BclHkdfMatchesRfc5869Case1()
     {
         AssertRfc5869(

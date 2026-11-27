@@ -2,6 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Tls.Tests.Support;
 
 namespace Titanium.Tls.Tests;
 
@@ -80,6 +81,7 @@ private static readonly string[] Rfc8448HrrMessages =
 ];
 
     [TestMethod]
+    [RfcRequirement("RFC 8446", "7.1", "HkdfRfc8448Tests.ExpandLabelMatchesEveryRfc8448Section3To5Output")]
     public void ExpandLabelMatchesEveryRfc8448Section3To5Output()
     {
         foreach ((int section, string secretHex, string label, string contextHex, string outputHex) in Rfc8448ExpandLabels)
@@ -94,6 +96,7 @@ private static readonly string[] Rfc8448HrrMessages =
     }
 
     [TestMethod]
+    [RfcRequirement("RFC 8446", "4.4.1", "HkdfRfc8448Tests.ReplaceWithMessageHashMatchesRfc8448Section5Transcript")]
     public void ReplaceWithMessageHashMatchesRfc8448Section5Transcript()
     {
         using var transcript = new TranscriptStore(HashAlgorithmName.SHA256);

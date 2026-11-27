@@ -1,6 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Tls.Tests.Support;
 
 namespace Titanium.Tls.Tests;
 
@@ -46,6 +47,7 @@ public sealed class RecordProtectorTests
     }
 
     [TestMethod]
+    [RfcRequirement("RFC 8446", "5", "RecordProtectorTests.RejectsTamperReplayOverflowAndEmptyInner")]
     public void RejectsTamperReplayOverflowAndEmptyInner()
     {
         byte[] key = new byte[16];

@@ -19,7 +19,7 @@ Scaffold committed. `pwsh tools/run-tests.ps1 -Project tls` passed (2 tests). Wo
 
 Key login works for `macmini` (192.168.1.55, Darwin arm64, macOS 26.6.2) and `linuxmini` (192.168.1.2, Ubuntu 26.04.1, x86_64). `sudo -n true` succeeds on both. The password was used once to install the key and is not stored. Both machines have the .NET 10.0.404 SDK under `~/.dotnet`, PowerShell 7.7.0 under `~/opt/powershell`, and a clone at `~/work/twp` on `feat/managed-tls-quic-stack`. macmini also has OpenSSL 3.5.9 under `~/opt/openssl-3.5.9`, with `X25519MLKEM768`. Details are in `REMOTE-MACHINES.md`.
 
-S2 crypto costs are in `SPIKES.md`. `HexVectors` parses fixture text. Next command: write `DESIGN.md` and the C1 self-review, then finish the T1.0b harness (OpenSSL runner, corpus runner, traceability guard). S5 key update and the Chrome QUIC capture are still open.
+`DESIGN.md` and the C1 checklist in `SELF-REVIEW.md` are written. The harness has `HexVectors`, `OpenSslOracle`, `FixedEntropy`, `AllocationGate`, the traceability guard, and a corpus runner. Next command: switch `TranscriptStore` to `IncrementalHash`, then return a record status instead of throwing on a bad record. S5 key update and the Chrome QUIC capture are still open.
 
 ## T1.4
 

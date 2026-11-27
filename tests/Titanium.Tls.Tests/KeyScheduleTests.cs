@@ -2,6 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Tls.Tests.Support;
 
 namespace Titanium.Tls.Tests;
 
@@ -36,6 +37,7 @@ public sealed class KeyScheduleTests
     }
 
     [TestMethod]
+    [RfcRequirement("RFC 8446", "7", "KeyScheduleTests.MasterTrafficKeysAndResumptionMatchRfc8448Section3")]
     public void MasterTrafficKeysAndResumptionMatchRfc8448Section3()
     {
         using var schedule = new TlsKeySchedule(HashAlgorithmName.SHA256);

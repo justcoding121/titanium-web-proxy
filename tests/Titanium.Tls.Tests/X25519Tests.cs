@@ -1,5 +1,6 @@
 using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Tls.Tests.Support;
 
 namespace Titanium.Tls.Tests;
 
@@ -7,6 +8,7 @@ namespace Titanium.Tls.Tests;
 public sealed class X25519Tests
 {
     [TestMethod]
+    [RfcRequirement("RFC 7748", "5.2", "X25519Tests.ScalarMultMatchesRfc7748Section52")]
     public void ScalarMultMatchesRfc7748Section52()
     {
         byte[] scalar = Hex("a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4");
