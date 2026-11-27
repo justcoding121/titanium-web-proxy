@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -46,6 +47,8 @@ if (port is 8000 or 8866 or 9080 or 9464 || port is < 1 or > 65535)
     return 1;
 }
 
+using var probe = new TcpListener(IPAddress.Any, port);
+probe.Start();
 using X509Certificate2 certificate = certs is null ? Certificate() : X509Certificate2.CreateFromPemFile(Path.Combine(certs, "cert.pem"), Path.Combine(certs, "priv.key"));
 await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
 {
