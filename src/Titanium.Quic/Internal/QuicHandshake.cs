@@ -34,6 +34,8 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     private readonly QuicIdentity _ids = new();
 
+    private readonly QuicFlow _flow = new();
+
     private readonly List<(PathInfo Path, byte[] Data)> _challenges = [];
 
     private byte[] _localId = [];
@@ -120,6 +122,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         _hasPath = true;
         AddReceived(path, 0);
         InstallInitial(remoteId, clientSend: true);
+        RememberLocalLimits(transportParameters, fromServer: false);
         _engine = new TlsEngine(TlsRole.Client, serverName: "localhost")
         {
             DatagramTransport = true,
@@ -143,6 +146,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         _ids.AddIssued(localId);
         _certificate = certificate;
         InstallInitial(localId, clientSend: false);
+        RememberLocalLimits(transportParameters, fromServer: true);
         _engine = new TlsEngine(TlsRole.Server)
         {
             DatagramTransport = true,
@@ -157,20 +161,54 @@ internal sealed partial class QuicConnectionCore : IDisposable
             return;
         }
 
-        Span<byte> data = [value];
-        Span<byte> frame = stackalloc byte[16];
-        var stream = new QuicFrame
+        SendStream(0, [value]);
+    }
+
+    internal int SendStream(ulong streamId, ReadOnlySpan<byte> data)
+    {
+        if (!HandshakeComplete || IsClosed || !_hasPath || _applicationSend is null)
         {
-            Kind = QuicFrameKind.Stream,
-            HasLength = true,
-            Data = data,
-        };
-        int written = QuicFrameWriter.Write(in stream, default, frame);
-        if (written > 0)
+            return 0;
+        }
+
+        int queued = _flow.Queue(streamId, data, out _);
+        StageReady();
+        return queued;
+    }
+
+    internal void GrantStreamCredit(ulong streamId, ulong limit)
+    {
+        if (_applicationSend is null)
         {
-            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..written], 0);
+            return;
+        }
+
+        _flow.Grant(streamId, limit, limit);
+        Span<byte> frame = stackalloc byte[32];
+        var maxData = new QuicFrame { Kind = QuicFrameKind.MaxData, Limit = limit };
+        int count = QuicFrameWriter.Write(in maxData, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+        }
+
+        var maxStream = new QuicFrame { Kind = QuicFrameKind.MaxStreamData, StreamId = streamId, Limit = limit };
+        count = QuicFrameWriter.Write(in maxStream, default, frame);
+        if (count > 0)
+        {
+            SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
         }
     }
+
+    internal void InjectApplicationPayload(ReadOnlySpan<byte> payload) => TakePayload(QuicPacketKind.OneRtt, payload);
+
+    internal bool StreamSendBlocked => _flow.SendBlocked;
+
+    internal byte[] ReceivedStream => _flow.Received;
+
+    internal int ResetsDelivered => _flow.ResetsDelivered;
+
+    internal int StopsDelivered => _flow.StopsDelivered;
 
     public void Dispose()
     {
@@ -424,9 +462,52 @@ internal sealed partial class QuicConnectionCore : IDisposable
                 return;
             }
 
-            if (frame.Kind == QuicFrameKind.Stream && frame.Data.Length > 0 && ReceivedStreamByte is null)
+            if (frame.Kind == QuicFrameKind.Stream)
             {
-                ReceivedStreamByte = frame.Data[0];
+                if (!_flow.AcceptStream(frame.StreamId, frame.Offset, frame.Data, out ulong error))
+                {
+                    MarkClosed(error, send: true);
+                    return;
+                }
+
+                byte[] received = _flow.Received;
+                if (ReceivedStreamByte is null && received.Length > 0)
+                {
+                    ReceivedStreamByte = received[0];
+                }
+
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.ResetStream)
+            {
+                if (!_flow.NoteReset(frame.StreamId, frame.Limit, out ulong error))
+                {
+                    MarkClosed(error, send: true);
+                    return;
+                }
+
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.StopSending)
+            {
+                _flow.NoteStopSending(frame.StreamId);
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.MaxData)
+            {
+                _flow.RaiseSend(frame.Limit, null, null);
+                StageReady();
+                continue;
+            }
+
+            if (frame.Kind == QuicFrameKind.MaxStreamData)
+            {
+                _flow.RaiseSend(null, frame.StreamId, frame.Limit);
+                StageReady();
+                continue;
             }
 
             if (frame.Kind == QuicFrameKind.NewConnectionId)
@@ -502,24 +583,28 @@ internal sealed partial class QuicConnectionCore : IDisposable
             return false;
         }
 
-        int cursor = kind == QuicPacketKind.Initial ? _recvInitial : _recvHandshake;
-        if (offset != (ulong)cursor)
+        if (!_flow.PushCrypto(kind, offset, data, out byte[] ready, out ulong flowError))
         {
-            MarkClosed(QuicFrameReader.ProtocolViolation, send: true);
+            MarkClosed(flowError, send: true);
             return false;
+        }
+
+        if (ready.Length == 0)
+        {
+            return true;
         }
 
         if (kind == QuicPacketKind.Initial)
         {
-            _recvInitial = cursor + data.Length;
+            _recvInitial += ready.Length;
         }
         else
         {
-            _recvHandshake = cursor + data.Length;
+            _recvHandshake += ready.Length;
         }
 
         var output = new TlsOutput();
-        _engine.AdvanceDatagram(data, output);
+        _engine.AdvanceDatagram(ready, output);
         if (_engine.State == TlsEngineState.Closed)
         {
             MarkClosed(CryptoError(_engine.LastLocalAlert), send: true);
@@ -580,6 +665,11 @@ internal sealed partial class QuicConnectionCore : IDisposable
             ? Same(parsed.OriginalDestinationConnectionId, _originalDestinationId) && Same(parsed.InitialSourceConnectionId, _peerSourceId)
             : Same(parsed.InitialSourceConnectionId, _peerSourceId);
         _parametersChecked = true;
+        if (match)
+        {
+            _flow.SetPeer(parsed);
+        }
+
         if (match)
         {
             if (_client && parsed.StatelessResetToken is byte[] token)
@@ -917,6 +1007,40 @@ internal sealed partial class QuicConnectionCore : IDisposable
         byte[] body = new byte[Math.Max(count, 1200 - overhead)];
         frame[..count].CopyTo(body);
         SealAndStage(QuicPacketKind.OneRtt, _applicationSend, body, 1200, probe: true, path);
+    }
+
+    private void RememberLocalLimits(ReadOnlySpan<byte> encoded, bool fromServer)
+    {
+        if (QuicTransportParametersCodec.TryRead(encoded, fromServer, retryReceived: false, out QuicTransportParameters parsed, out _))
+        {
+            _flow.SetLocal(parsed, _client);
+        }
+    }
+
+    private void StageReady()
+    {
+        if (_applicationSend is null || IsClosed)
+        {
+            return;
+        }
+
+        foreach (Outgoing outgoing in _flow.TakeReady())
+        {
+            Span<byte> frame = new byte[outgoing.Data.Length + 32];
+            var stream = new QuicFrame
+            {
+                Kind = QuicFrameKind.Stream,
+                StreamId = outgoing.StreamId,
+                Offset = outgoing.Offset,
+                HasLength = true,
+                Data = outgoing.Data,
+            };
+            int count = QuicFrameWriter.Write(in stream, default, frame);
+            if (count > 0)
+            {
+                SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
+            }
+        }
     }
 
     private void InstallInitial(ReadOnlySpan<byte> destinationId, bool clientSend)

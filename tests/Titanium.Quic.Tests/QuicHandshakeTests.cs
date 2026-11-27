@@ -105,13 +105,19 @@ public sealed class QuicHandshakeTests
         var parameters = new QuicTransportParameters
         {
             InitialSourceConnectionId = client ? ClientId : ServerId,
+            InitialMaxData = 1 << 20,
+            InitialMaxStreamDataBidiLocal = 1 << 20,
+            InitialMaxStreamDataBidiRemote = 1 << 20,
+            InitialMaxStreamDataUni = 1 << 20,
+            InitialMaxStreamsBidi = 16,
+            InitialMaxStreamsUni = 16,
         };
         if (!client)
         {
             parameters.OriginalDestinationConnectionId = match ? ServerId : [0xFF];
         }
 
-        byte[] buffer = new byte[256];
+        byte[] buffer = new byte[512];
         int written = QuicTransportParametersCodec.Write(parameters, buffer);
         return buffer[..written];
     }

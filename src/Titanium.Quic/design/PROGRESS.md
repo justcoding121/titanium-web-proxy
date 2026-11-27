@@ -43,3 +43,7 @@ Loss recovery follows RFC 9002. The initial RTT is 333 ms, so the first probe ti
 ## T2.11
 
 Connection IDs, Retry, stateless reset, and path validation follow RFC 9000 sections 5.1, 8.2, 10.3, and 19.15 through 19.18. The initial connection ID is sequence 0. Retiring the last active one closes with a protocol violation. A Retry with a bad integrity tag is ignored. A good Retry changes the destination connection ID, re-derives the Initial keys from that new connection ID, and the next Initial carries the token. A `NEW_TOKEN` is stored and placed on the next connection's first Initial. A stateless reset is the last 16 bytes of a datagram that does not decrypt, compared with `FixedTimeEquals` against every used token, and it enters draining without a `CONNECTION_CLOSE`. A path challenge fills 8 bytes from `RandomNumberGenerator`, pads the datagram to at least 1200 bytes, and a matching response validates that path.
+
+## T2.12
+
+Streams use the peer's initial credit and later MAX_DATA and MAX_STREAM_DATA values. A send that does not fit waits, then continues when the credit grows. Data past the advertised limit closes with FLOW_CONTROL_ERROR (0x03). CRYPTO and STREAM reassembly buffer at most 16,384 bytes of out-of-order data. A larger gap closes CRYPTO with CRYPTO_BUFFER_EXCEEDED (0x0d) and a stream with FLOW_CONTROL_ERROR. RESET_STREAM and STOP_SENDING are delivered once.
