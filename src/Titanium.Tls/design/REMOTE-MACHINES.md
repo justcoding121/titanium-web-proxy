@@ -11,7 +11,7 @@ The key is `~/.ssh/id_ed25519_twp` on this PC. `~/.ssh/config` has the aliases `
 
 ## Already present
 
-- macmini: Apple Git 2.54.0, Xcode at `/Applications/Xcode.app/Contents/Developer`, system LibreSSL 3.3.6 (not the oracle). No Homebrew. .NET SDK 10.0.202 and 10.0.404 are under `~/.dotnet`. OpenSSL 3.5.9 is at `~/opt/openssl-3.5.9` and does not replace LibreSSL. `openssl list -tls-groups` includes `X25519MLKEM768`, `MLKEM768`, and `x25519`.
+- macmini: Apple Git 2.54.0, Xcode at `/Applications/Xcode.app/Contents/Developer`, system LibreSSL 3.3.6 (not the oracle). No Homebrew. .NET SDK 10.0.202 and 10.0.404 are under `~/.dotnet`. OpenSSL 3.5.9 is at `~/opt/openssl-3.5.9` and does not replace LibreSSL. `openssl list -tls-groups` includes `X25519MLKEM768`, `MLKEM768`, and `x25519`. A restore that contacts `api.nuget.org` fails with `UntrustedRoot`. A tree that is already restored builds with `--no-restore` once a stored `NU1900` log is cleared from `project.assets.json`.
 - linuxmini: Git 2.53.0, OpenSSL 3.5.5. `openssl list -tls-groups` includes `X25519MLKEM768`, `MLKEM768`, and `x25519`, so this build can serve as the oracle. .NET SDK 10.0.404 is under `~/.dotnet`.
 
 Non-interactive SSH does not source the shell profile. Call `$HOME/.dotnet/dotnet` directly. `DOTNET_ROOT` is also appended to `~/.zprofile` on macmini and `~/.bashrc` on linuxmini.

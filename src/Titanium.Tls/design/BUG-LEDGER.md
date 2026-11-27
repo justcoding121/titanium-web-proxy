@@ -13,4 +13,6 @@ One row per bug found by the Part K campaigns. A row stays until the fix commit 
 
 `MutatedClientHelloAgreesWithOpenSsl` compares this server with OpenSSL 3.5.9 `s_server` on an intact ClientHello, a truncated hello, a zero-length application record, 33 of those records, a handshake type of 11, a supported_versions list that contains only TLS 1.2, a duplicated first extension, and an extension length of 0x7FFF. Both sides accept, both reject with the same alert, or both keep the connection open when the record is incomplete. `BoundaryLimitTests` parses certificate lists of 0, 1, and 100 entries. `SequenceNearOverflowRejectsTheNextRecord` rejects the record after `ulong.MaxValue - 1`.
 
-Not run yet: three-machine timing, a mutation score, the 30-minute soak, the nightly 10,000, and the public-host sweep.
+`ScalarMultTimingDoesNotSeparateFixedFromRandom` and the four allocation gates ran on this PC, linuxmini, and macmini. The numbers are in `PROGRESS.md`. Welch's t was 0.31, 0.20, and 0.86.
+
+Not run yet: a mutation score, the 30-minute soak, the nightly 10,000, and the public-host sweep.

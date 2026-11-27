@@ -13,11 +13,11 @@ $bundle = Join-Path $env:TEMP 'twp-managed.bundle'
 git bundle create $bundle 'origin/develop..HEAD'
 scp $bundle "${Machine}:~/twp-managed.bundle"
 $filterArg = ''
-if ($Filter) { $filterArg = "--filter $Filter" }
+if ($Filter) { $filterArg = "--filter '$Filter'" }
 $remote = @"
 set -e
-git -C "`$HOME/work/twp" fetch "`$HOME/twp-managed.bundle" 'HEAD:feat/managed-tls-quic-stack'
-git -C "`$HOME/work/twp" checkout -f feat/managed-tls-quic-stack
+git -C "`$HOME/work/twp" fetch "`$HOME/twp-managed.bundle" HEAD
+git -C "`$HOME/work/twp" checkout -B feat/managed-tls-quic-stack FETCH_HEAD
 "`$HOME/.dotnet/dotnet" test "`$HOME/work/twp/$Project" -c Release --nologo $filterArg
 "@
 $remote = $remote.Replace("`r`n", "`n")
