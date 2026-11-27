@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Titanium.Tls;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -42,6 +43,13 @@ public partial class ProxyServer
         }
 
         var networkStream = clientConnection.GetStream();
+        if (UseManagedTlsStack)
+        {
+            await HandleMasqueManagedClientAsync(endPoint, clientConnection, networkStream, certificate, cancellationTokenSource)
+                .ConfigureAwait(false);
+            return;
+        }
+
         var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
         try
         {
@@ -78,6 +86,56 @@ public partial class ProxyServer
 
         clientConnection.NegotiatedApplicationProtocol = negotiated;
         var clientStream = new HttpClientStream(this, clientConnection, sslStream, BufferPool, cancellationTokenSource.Token);
+        if (negotiated == SslApplicationProtocol.Http2)
+        {
+            await SendMasqueAsync(clientStream, endPoint, cancellationTokenSource).ConfigureAwait(false);
+            return;
+        }
+
+        await HandleMasqueHttp11Async(endPoint, clientConnection, clientStream, cancellationTokenSource).ConfigureAwait(false);
+    }
+
+    private async Task HandleMasqueManagedClientAsync(
+        MasqueProxyEndPoint endPoint,
+        TcpClientConnection clientConnection,
+        Stream networkStream,
+        X509Certificate2 certificate,
+        CancellationTokenSource cancellationTokenSource)
+    {
+        var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+        try
+        {
+            var options = new SslServerAuthenticationOptions
+            {
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                ApplicationProtocols = endPoint.Options.AllowHttp11Upgrade
+                    ? SslExtensions.Http2AndHttp11ProtocolAsList
+                    : SslExtensions.Http2ProtocolAsList,
+            };
+            ApplyListenerTlsPolicy(options);
+            CertificateManager.ConfigureServerCertificate(options, certificate);
+
+            await AwaitPendingClientHelloAsync(clientConnection).ConfigureAwait(false);
+            await managed.AuthenticateAsServerAsync(options, cancellationTokenSource.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            ProxyDiagnostics.ReportBenign(logger, "MASQUE client handshake failed", ex);
+            await managed.DisposeAsync().ConfigureAwait(false);
+            return;
+        }
+
+        var negotiated = managed.NegotiatedApplicationProtocol;
+        var http11Upgrade = endPoint.Options.AllowHttp11Upgrade
+            && (negotiated == SslApplicationProtocol.Http11 || negotiated.Protocol.Length == 0);
+        if (negotiated != SslApplicationProtocol.Http2 && !http11Upgrade)
+        {
+            await managed.DisposeAsync().ConfigureAwait(false);
+            return;
+        }
+
+        clientConnection.NegotiatedApplicationProtocol = negotiated;
+        var clientStream = new HttpClientStream(this, clientConnection, managed, BufferPool, cancellationTokenSource.Token);
         if (negotiated == SslApplicationProtocol.Http2)
         {
             await SendMasqueAsync(clientStream, endPoint, cancellationTokenSource).ConfigureAwait(false);
