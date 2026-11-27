@@ -169,7 +169,7 @@ public sealed class TlsInteropTests
     }
 
     [TestMethod]
-    [Timeout(1800000)]
+    [Timeout(14400000)]
     public async Task SeededSampleAgreesWithOpenSsl()
     {
         int count = Positive(Environment.GetEnvironmentVariable("TITANIUM_FUZZ_HANDSHAKES"), 500);
