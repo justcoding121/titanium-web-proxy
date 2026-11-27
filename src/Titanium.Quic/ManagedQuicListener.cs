@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -188,12 +189,19 @@ public sealed class ManagedQuicListener : IAsyncDisposable
                 {
                     await OnTimeoutAsync(TimeProvider.System.GetUtcNow()).ConfigureAwait(false);
                 }
+                catch (SocketException)
+                {
+                    // An unreachable peer is reported on the next receive. The listener stays up.
+                }
             }
         }
         catch (OperationCanceledException)
         {
         }
         catch (ObjectDisposedException)
+        {
+        }
+        catch (SocketException)
         {
         }
         finally

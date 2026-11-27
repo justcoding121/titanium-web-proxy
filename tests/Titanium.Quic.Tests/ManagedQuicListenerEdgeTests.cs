@@ -185,6 +185,31 @@ public sealed class ManagedQuicListenerEdgeTests
     }
 
     [TestMethod]
+    public async Task AResetPeerDoesNotStopTheListener()
+    {
+        using X509Certificate2 certificate = Certificate();
+        await using ManagedQuicListener listener = await Listen(certificate, TimeSpan.FromSeconds(5));
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var handshake = new CancellationTokenSource();
+        ValueTask<ManagedQuicConnection> connecting = ManagedQuicConnection.ConnectAsync(Client(listener.LocalEndPoint), handshake.Token);
+        handshake.Cancel();
+        try
+        {
+            await using ManagedQuicConnection abandoned = await connecting;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or QuicException)
+        {
+        }
+
+        await Task.Delay(50, cancel.Token);
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        await using ManagedQuicConnection client = await ManagedQuicConnection.ConnectAsync(Client(listener.LocalEndPoint), cancel.Token);
+        await using ManagedQuicConnection server = await accepted;
+        await client.CloseAsync(0, cancel.Token);
+        await server.CloseAsync(0, cancel.Token);
+    }
+
+    [TestMethod]
     public async Task JunkIsIgnoredAndDisposeCancelsTheWait()
     {
         using X509Certificate2 certificate = Certificate();

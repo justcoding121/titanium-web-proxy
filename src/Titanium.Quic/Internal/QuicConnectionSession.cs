@@ -4,6 +4,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Quic;
+using System.Net.Sockets;
 using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -241,6 +242,9 @@ internal sealed class QuicConnectionSession : IDisposable
             catch (ObjectDisposedException)
             {
             }
+            catch (SocketException)
+            {
+            }
         }
     }
 
@@ -341,12 +345,18 @@ internal sealed class QuicConnectionSession : IDisposable
                     Timeout(TimeProvider.System.GetUtcNow());
                     await FlushAsync().ConfigureAwait(false);
                 }
+                catch (SocketException) when (!cancellationToken.IsCancellationRequested)
+                {
+                }
             }
         }
         catch (OperationCanceledException)
         {
         }
         catch (ObjectDisposedException)
+        {
+        }
+        catch (SocketException)
         {
         }
         finally
