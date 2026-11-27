@@ -44,11 +44,29 @@ public sealed class QuicVarIntTests
     }
 
     [TestMethod]
+    public void EncodeFitsTheExactLength()
+    {
+        AssertExact(64, 2);
+        AssertExact(16_384, 4);
+        AssertExact(1_073_741_824, 8);
+    }
+
+    [TestMethod]
     public void ShortDestinationWritesNothing()
     {
         var destination = new byte[1];
         Assert.AreEqual(0, QuicVarInt.Encode(64, destination));
         Assert.AreEqual(0, destination[0]);
+    }
+
+    private static void AssertExact(ulong value, int length)
+    {
+        byte[] exact = new byte[length];
+        Assert.AreEqual(length, QuicVarInt.Encode(value, exact));
+        Assert.AreEqual(0, QuicVarInt.Encode(value, exact.AsSpan(0, length - 1)));
+        Assert.IsTrue(QuicVarInt.TryDecode(exact, out ulong decoded, out int consumed));
+        Assert.AreEqual(value, decoded);
+        Assert.AreEqual(length, consumed);
     }
 
     private static void AssertRoundTrip(ulong value, int expectedLength)
