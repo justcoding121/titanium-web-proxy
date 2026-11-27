@@ -23,4 +23,6 @@ The assertions that killed the rest of the length mutants are `HandshakeCodecTes
 
 The 428 survivors stay for the phase report. They fall into four groups. An unsigned shift of a non-negative length shares its statement with a killed left shift, so that statement stays in the score. Peer parsers for a group id, a selected PSK index, and a ticket timestamp still see a zero high byte in this suite. `Dispose` and the wipes of `_psk` and `ticket.Psk` have no assertion after they run. `TlsEngine.Traffic.cs` (42.34 percent), `TlsEngine.cs` (63.69 percent), and `TlsEngine.Server.cs` (65.34 percent) are the files under 70 percent; the thirteen files together are 70.06 percent.
 
-Still to run: the 30-minute soak, the nightly 10,000, and the public-host sweep.
+`SoakTests.ThirtyMinutesOfHandshakesStayBounded` ran for 30 minutes. Completed exchanges, a one-byte abort, a reset after the ClientHello, and a one-byte-per-second hello all finished without an escaped exception. In flight stayed at or under 200, which is the test's cap: the engine has no handshake limiter to enforce. `ArrayPool.Shared` does not publish a rent count, so the pool balance is not a number in this run. After a forced collection the managed heap was within 32 MiB of the baseline taken once four warm handshakes had completed.
+
+Still to run: the nightly 10,000 and the public-host sweep.
