@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Tls;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -347,6 +348,62 @@ public partial class ProxyServer
                     {
                     try
                     {
+                        if (UseManagedTlsStack)
+                        {
+                            var managed = new TlsStream(clientStream, leaveInnerStreamOpen: false);
+                            try
+                            {
+                                if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch
+                                    && !requiresHttp11Bridge && !requiresH3Bridge && deferredHttp2Negotiation == null)
+                                    prefetchConnectionTask = TcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                        true, http2Supported ? SslExtensions.Http2ProtocolAsList : null, false, true,
+                                        CancellationToken.None);
+
+                                var managedOptions = new SslServerAuthenticationOptions
+                                {
+                                    ApplicationProtocols = http2Supported
+                                        ? SslExtensions.Http2AndHttp11ProtocolAsList
+                                        : SslExtensions.Http11ProtocolAsList,
+                                    ClientCertificateRequired = false,
+                                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                                };
+                                CertificateManager.ConfigureServerCertificate(managedOptions, certificate);
+                                ApplyListenerTlsPolicy(managedOptions);
+
+                                ClientTlsTiming? managedTiming = null;
+                                if (EnableRequestTimingCapture)
+                                {
+                                    managedTiming = new ClientTlsTiming(DateTime.UtcNow);
+                                    connectArgs.ClientTlsTiming = managedTiming;
+                                    connectTiming?.MarkBrowserTlsStarted();
+                                }
+
+                                ProxyLog.BrowserHandshakeStarting(logger, connectHostname, managedOptions.EnabledSslProtocols,
+                                    managedOptions.ApplicationProtocols);
+                                await managed.AuthenticateAsServerAsync(managedOptions, cancellationToken);
+                                managedTiming?.MarkCompleted();
+                                connectTiming?.MarkBrowserTlsCompleted();
+                                ProxyLog.BrowserHandshakeSucceeded(logger, connectHostname,
+                                    managed.NegotiatedApplicationProtocol);
+
+                                clientStream.Connection.NegotiatedApplicationProtocol =
+                                    managed.NegotiatedApplicationProtocol;
+                                clientStream.Connection.SslProtocol = managed.SslProtocol;
+                                clientStream = new HttpClientStream(this, clientStream.Connection, managed, BufferPool,
+                                    cancellationToken);
+                                clientStream.DataRead += (o, args) =>
+                                    connectArgs.OnDecryptedDataSent(args.Buffer, args.Offset, args.Count);
+                                clientStream.DataWrite += (o, args) =>
+                                    connectArgs.OnDecryptedDataReceived(args.Buffer, args.Offset, args.Count);
+                            }
+                            catch
+                            {
+                                await managed.DisposeAsync();
+                                throw;
+                            }
+                        }
+                        else
+                        {
                         sslStream = new SslStream(clientStream, false);
 
                         if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch
@@ -401,6 +458,7 @@ public partial class ProxyServer
                             connectArgs.OnDecryptedDataSent(args.Buffer, args.Offset, args.Count);
                         clientStream.DataWrite += (o, args) =>
                             connectArgs.OnDecryptedDataReceived(args.Buffer, args.Offset, args.Count);
+                        }
                     }
                     catch (Exception e)
                     {
