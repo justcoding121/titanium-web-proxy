@@ -124,6 +124,39 @@ public sealed class QuicTransportParameterTests
     }
 
     [TestMethod]
+    public void NumericAndLengthEdgesStayInsideTheSpec()
+    {
+        Assert.IsFalse(ReadInteger(0x03, 1199, out _));
+        Assert.IsTrue(ReadInteger(0x03, 1200, out QuicTransportParameters read));
+        Assert.AreEqual(1200UL, read.MaxUdpPayloadSize);
+        Assert.IsTrue(ReadInteger(0x0a, 20, out read));
+        Assert.AreEqual(20UL, read.AckDelayExponent);
+        Assert.IsFalse(ReadInteger(0x0a, 21, out _));
+        Assert.IsTrue(ReadInteger(0x0b, (1UL << 14) - 1, out read));
+        Assert.AreEqual((1UL << 14) - 1, read.MaxAckDelay);
+        Assert.IsFalse(ReadInteger(0x0b, 1UL << 14, out _));
+        Assert.IsTrue(ReadInteger(0x0e, 2, out read));
+        Assert.AreEqual(2UL, read.ActiveConnectionIdLimit);
+        Assert.IsFalse(ReadInteger(0x0e, 1, out _));
+        Assert.IsTrue(ReadInteger(0x08, QuicTransportParametersCodec.MaxStreamsLimit, out read));
+        Assert.AreEqual(QuicTransportParametersCodec.MaxStreamsLimit, read.InitialMaxStreamsBidi);
+        Assert.IsFalse(ReadInteger(0x08, QuicTransportParametersCodec.MaxStreamsLimit + 1, out _));
+        Assert.IsFalse(ReadWithSource(Parameter(0x02, new byte[15])));
+        Assert.IsFalse(QuicTransportParametersCodec.TryRead(Parameter(0x0f, new byte[21]), fromServer: false, retryReceived: false, out _, out _));
+        Assert.IsTrue(QuicTransportParametersCodec.TryRead(Parameter(0x0f, new byte[20]), fromServer: false, retryReceived: false, out read, out _));
+        Assert.AreEqual(20, read.InitialSourceConnectionId!.Length);
+        Assert.IsFalse(ReadWithSource(Parameter(0x0c, [0x00])));
+        Assert.IsFalse(ReadWithSource([0x01, 0x02, 0x00]));
+
+        var parameters = new QuicTransportParameters { InitialSourceConnectionId = [0xaa] };
+        byte[] wide = new byte[64];
+        int written = QuicTransportParametersCodec.Write(parameters, wide);
+        Assert.IsTrue(written > 1);
+        Assert.AreEqual(written, QuicTransportParametersCodec.Write(parameters, wide.AsSpan(0, written)));
+        Assert.AreEqual(0, QuicTransportParametersCodec.Write(parameters, wide.AsSpan(0, written - 1)));
+    }
+
+    [TestMethod]
     public void RetrySourceIsRequiredOnlyAfterARetry()
     {
         QuicTransportParameters withRetry = Server(retry: true);
@@ -160,6 +193,27 @@ public sealed class QuicTransportParameterTests
         bool ok = QuicTransportParametersCodec.TryRead(Encode(written), fromServer, retryReceived, out _, out ulong error);
         Assert.AreEqual(QuicTransportParametersCodec.TransportParameterError, error);
         return ok;
+    }
+
+    private static bool ReadInteger(ulong id, ulong value, out QuicTransportParameters read)
+    {
+        byte[] number = new byte[8];
+        int count = QuicVarInt.Encode(value, number);
+        return ReadWithSource(Parameter(id, number[..count]), out read);
+    }
+
+    private static bool ReadWithSource(byte[] parameter)
+    {
+        return ReadWithSource(parameter, out _);
+    }
+
+    private static bool ReadWithSource(byte[] parameter, out QuicTransportParameters read)
+    {
+        byte[] source = Parameter(0x0f, [0xaa]);
+        byte[] combined = new byte[parameter.Length + source.Length];
+        parameter.CopyTo(combined, 0);
+        source.CopyTo(combined, parameter.Length);
+        return QuicTransportParametersCodec.TryRead(combined, fromServer: false, retryReceived: false, out read, out _);
     }
 
     private static byte[] Encode(QuicTransportParameters parameters)
