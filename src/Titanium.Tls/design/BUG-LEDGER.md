@@ -25,4 +25,6 @@ The 428 survivors stay for the phase report. They fall into four groups. An unsi
 
 `SoakTests.ThirtyMinutesOfHandshakesStayBounded` ran for 30 minutes. Completed exchanges, a one-byte abort, a reset after the ClientHello, and a one-byte-per-second hello all finished without an escaped exception. In flight stayed at or under 200, which is the test's cap: the engine has no handshake limiter to enforce. `ArrayPool.Shared` does not publish a rent count, so the pool balance is not a number in this run. After a forced collection the managed heap was within 32 MiB of the baseline taken once four warm handshakes had completed.
 
-Still to run: the public-host sweep, which waits for a host list.
+`RealPeerTests.ManagedClientHandshakesWellKnownHosts`, with `TITANIUM_REAL_PEERS=1`, handshook five hosts on port 443 and no other port. `www.cloudflare.com`, `www.google.com`, `github.com`, and `www.wikipedia.org` completed with `TLS_AES_128_GCM_SHA256` and `http/1.1`. `www.microsoft.com` sent alert 40. OpenSSL 3.5.9 with only `ecdsa_secp256r1_sha256`, X25519, P-256, and AES-128-GCM-SHA256 gets that same alert, and a normal OpenSSL client completes TLS 1.3 there. The failure is the client's existing signature offer, recorded in `PARITY-DIFFS.md`, not a new defect.
+
+Still to run: the three-machine gate with `TITANIUM_REQUIRE_ORACLE=1`.
