@@ -50,6 +50,8 @@ def build_manifest(
         manifest["products"][product]["assets"][key] = entry
 
     for name, meta in assets.items():
+        if name == "Titanium.Cli-linux-arm64.zip":
+            continue
         url = f"https://github.com/{github_repository}/releases/download/{tag}/{name}"
         entry = {"url": url, "sha256": meta["sha256"]}
         if name.startswith("Titanium.Cli-"):
