@@ -4,6 +4,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Quic;
+using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -83,11 +84,11 @@ internal sealed class QuicConnectionSession : IDisposable
         }
     }
 
-    internal bool CompleteHello(X509Certificate2 certificate)
+    internal bool CompleteHello(X509Certificate2 certificate, string[]? applicationProtocols = null)
     {
         lock (_gate)
         {
-            bool completed = _core.CompleteHello(certificate);
+            bool completed = _core.CompleteHello(certificate, applicationProtocols);
             ObserveHandshake();
             return completed;
         }
@@ -364,6 +365,22 @@ internal sealed class QuicConnectionSession : IDisposable
         byte[] id = new byte[ConnectionIdLength];
         RandomNumberGenerator.Fill(id);
         return id;
+    }
+
+    internal static string[]? ProtocolNames(IList<SslApplicationProtocol>? protocols)
+    {
+        if (protocols is null || protocols.Count == 0)
+        {
+            return null;
+        }
+
+        var names = new string[protocols.Count];
+        for (int i = 0; i < protocols.Count; i++)
+        {
+            names[i] = protocols[i].ToString();
+        }
+
+        return names;
     }
 
     internal static void RejectFips(bool allow)

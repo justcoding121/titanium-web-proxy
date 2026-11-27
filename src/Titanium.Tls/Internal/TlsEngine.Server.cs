@@ -789,6 +789,9 @@ internal sealed partial class TlsEngine
         ProtectHandshake(output, message);
     }
 
+    // QUIC packet protection in this library is AES-128-GCM. A datagram server selects only TLS_AES_128_GCM_SHA256.
+    private bool DatagramCipher(ushort cipher) => !DatagramTransport || cipher == 0x1301;
+
     private bool TrySelectCipher(ReadOnlySpan<byte> offered, out ushort cipher, out HashAlgorithmName hash, out TlsAeadSuite aead, out int keyLength)
     {
         cipher = 0;
@@ -800,7 +803,7 @@ internal sealed partial class TlsEngine
         {
             foreach (ushort candidate in supported)
             {
-                if (ContainsCipher(offered, candidate) && TlsAlgorithmSet.AllowsCipher(_algorithmPolicy, candidate) && Suite(candidate, out hash, out aead, out keyLength))
+                if (ContainsCipher(offered, candidate) && DatagramCipher(candidate) && TlsAlgorithmSet.AllowsCipher(_algorithmPolicy, candidate) && Suite(candidate, out hash, out aead, out keyLength))
                 {
                     cipher = candidate;
                     return true;
@@ -813,7 +816,7 @@ internal sealed partial class TlsEngine
         for (int i = 0; i + 1 < offered.Length; i += 2)
         {
             ushort candidate = (ushort)((offered[i] << 8) | offered[i + 1]);
-            if (Contains(supported, candidate) && TlsAlgorithmSet.AllowsCipher(_algorithmPolicy, candidate) && Suite(candidate, out hash, out aead, out keyLength))
+            if (Contains(supported, candidate) && DatagramCipher(candidate) && TlsAlgorithmSet.AllowsCipher(_algorithmPolicy, candidate) && Suite(candidate, out hash, out aead, out keyLength))
             {
                 cipher = candidate;
                 return true;

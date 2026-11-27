@@ -253,7 +253,7 @@ public sealed class ManagedQuicListener : IAsyncDisposable
         var core = new QuicConnectionCore();
         core.StartServer(localId, null, QuicConnectionSession.Parameters(client: false, localId));
         var session = new QuicConnectionSession(core, _transport, LocalEndPoint, remote, ownsTransport: false);
-        return new Tracked(session, new ManagedQuicConnection(session), TimeProvider.System.GetUtcNow() + _handshakeTimeout);
+        return new Tracked(session, new ManagedQuicConnection(session), localId, TimeProvider.System.GetUtcNow() + _handshakeTimeout);
     }
 
     private async Task FinishHelloAsync(Tracked tracked, string serverName, CancellationToken cancellationToken)
@@ -275,7 +275,7 @@ public sealed class ManagedQuicListener : IAsyncDisposable
         {
             QuicConnectionSession.RejectFips(chosen.AllowManagedStackUnderFips);
             X509Certificate2 certificate = Certificate(chosen);
-            if (!tracked.Session.CompleteHello(certificate))
+            if (!tracked.Session.CompleteHello(certificate, QuicConnectionSession.ProtocolNames(chosen.ServerAuthenticationOptions?.ApplicationProtocols)))
             {
                 Fail(tracked, new QuicException(QuicError.ConnectionAborted, null, "The handshake did not continue."));
             }
@@ -403,11 +403,41 @@ public sealed class ManagedQuicListener : IAsyncDisposable
         return concrete;
     }
 
-    private static bool TryDestination(ReadOnlySpan<byte> datagram, out byte[] id, out bool initial)
+    private bool TryDestination(ReadOnlySpan<byte> datagram, out byte[] id, out bool initial)
     {
         id = [];
         initial = false;
-        if (!QuicDatagramReader.TryParse(datagram, QuicConnectionSession.ConnectionIdLength, out QuicPacket packet)
+        if (datagram.IsEmpty)
+        {
+            return false;
+        }
+
+        if ((datagram[0] & 0x80) == 0)
+        {
+            Tracked? match = null;
+            lock (_gate)
+            {
+                foreach (Tracked tracked in _connections.Values)
+                {
+                    if (datagram.Length > 1 + tracked.LocalId.Length
+                        && datagram.Slice(1, tracked.LocalId.Length).SequenceEqual(tracked.LocalId)
+                        && (match is null || tracked.LocalId.Length > match.LocalId.Length))
+                    {
+                        match = tracked;
+                    }
+                }
+            }
+
+            if (match is null)
+            {
+                return false;
+            }
+
+            id = match.LocalId;
+            return true;
+        }
+
+        if (!QuicDatagramReader.TryParse(datagram, 0, out QuicPacket packet)
             || packet.DestinationConnectionId.IsEmpty)
         {
             return false;
@@ -420,12 +450,15 @@ public sealed class ManagedQuicListener : IAsyncDisposable
 
     private sealed class Tracked
     {
-        internal Tracked(QuicConnectionSession session, ManagedQuicConnection connection, DateTimeOffset deadline)
+        internal Tracked(QuicConnectionSession session, ManagedQuicConnection connection, byte[] localId, DateTimeOffset deadline)
         {
             Session = session;
             Connection = connection;
+            LocalId = localId;
             Deadline = deadline;
         }
+
+        internal byte[] LocalId { get; }
 
         internal DateTimeOffset Deadline { get; }
 

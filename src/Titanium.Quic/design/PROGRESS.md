@@ -63,3 +63,7 @@ Path MTU discovery starts at 1200 bytes. Probes are padded datagrams. A probe th
 ## T2.16
 
 `ManagedQuicListener`, `ManagedQuicConnection`, and `ManagedQuicStream` follow the platform connection shape. `QuicException` and `QuicError` are the platform types. The listener callback is `ManagedQuicConnectionOptionsCallback` because the platform connection type is sealed. A loopback listener on an ephemeral port completes a handshake, carries one bidirectional stream, and the payload hash matches after close. The proxy still does not call this library. Unidirectional streams are rejected. FIPS mode refuses the managed stack unless `AllowManagedStackUnderFips` or `TITANIUM_MANAGED_STACK_FIPS_OVERRIDE` is set.
+
+## T2.17
+
+The in-process network drops, reorders, duplicates, and delays datagrams, and it drops a datagram above its MTU. A dropped Initial is sent again after the probe timeout and the handshake still completes. Reordering and duplication do not close the connection. A delayed datagram is delivered when the clock advances. Idle timeout still fires from that clock. qlog records nothing until it is enabled. Packet and frame seeds do not throw. Negative rows are in TRACEABILITY.md. One platform client completes a handshake to the managed listener. The datagram server selects only TLS_AES_128_GCM_SHA256, which is the packet protection this library installs. The proxy still does not call this library.

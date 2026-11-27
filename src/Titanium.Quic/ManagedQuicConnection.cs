@@ -55,7 +55,7 @@ public sealed class ManagedQuicConnection : IAsyncDisposable
             byte[] localId = QuicConnectionSession.NewConnectionId();
             byte[] remoteId = QuicConnectionSession.NewConnectionId();
             PathInfo path = QuicConnectionSession.PathOf(transport.LocalEndpoint, remote);
-            core.StartClient(path, localId, remoteId, QuicConnectionSession.Parameters(client: true, localId), default, serverName);
+            core.StartClient(path, localId, remoteId, QuicConnectionSession.Parameters(client: true, localId), default, serverName, QuicConnectionSession.ProtocolNames(options.ClientAuthenticationOptions?.ApplicationProtocols));
             session.StartClientLoop();
             var connection = new ManagedQuicConnection(session);
             using var timeout = new CancellationTokenSource(budget);

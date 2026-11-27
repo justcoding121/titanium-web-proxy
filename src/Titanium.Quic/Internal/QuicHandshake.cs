@@ -112,7 +112,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     internal bool CorruptNextHandshakePayload { get; set; }
 
-    internal void StartClient(in PathInfo path, ReadOnlySpan<byte> localId, ReadOnlySpan<byte> remoteId, ReadOnlySpan<byte> transportParameters, ReadOnlySpan<byte> token = default, string? serverName = null)
+    internal void StartClient(in PathInfo path, ReadOnlySpan<byte> localId, ReadOnlySpan<byte> remoteId, ReadOnlySpan<byte> transportParameters, ReadOnlySpan<byte> token = default, string? serverName = null, string[]? applicationProtocols = null)
     {
         _client = true;
         _limitAmplification = false;
@@ -131,6 +131,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
         {
             DatagramTransport = true,
             LocalTransportParameters = transportParameters.ToArray(),
+            ApplicationProtocols = applicationProtocols,
         };
         var output = new TlsOutput();
         _engine.AdvanceDatagram([], output);
@@ -855,7 +856,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
     internal string PendingServerName => _engine?.ClientHello?.ServerName ?? string.Empty;
 
-    internal bool CompleteHello(X509Certificate2 certificate)
+    internal bool CompleteHello(X509Certificate2 certificate, string[]? applicationProtocols = null)
     {
         if (!PendingHello || _engine is null)
         {
@@ -865,7 +866,12 @@ internal sealed partial class QuicConnectionCore : IDisposable
         _certificate = certificate;
         PendingHello = false;
         var output = new TlsOutput();
-        _engine.Resume(_ => new TlsServerSelection { Certificate = certificate }, output);
+        _engine.Resume(_ => new TlsServerSelection
+        {
+            Certificate = certificate,
+            ApplicationProtocols = applicationProtocols,
+            RequireApplicationProtocol = applicationProtocols is { Length: > 0 },
+        }, output);
         if (_engine.State == TlsEngineState.Closed)
         {
             MarkClosed(CryptoError(_engine.LastLocalAlert), send: true);
