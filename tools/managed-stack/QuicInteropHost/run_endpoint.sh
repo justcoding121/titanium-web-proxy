@@ -11,6 +11,7 @@ case "${TESTCASE:-handshake}" in
   handshake|multiconnect) ;;
   *)
     echo "unsupported test case: ${TESTCASE}" >&2
+    echo "exit status 127" >&2
     exit 127
     ;;
 esac
