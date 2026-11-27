@@ -22,6 +22,11 @@ internal sealed class TlsKeySchedule : IDisposable
     private readonly SecretBuffer _handshake;
     private readonly SecretBuffer _master;
     private KeyScheduleStage _stage;
+    private bool _clientApplication;
+    private bool _serverApplication;
+    private bool _exporter;
+    private bool _resumption;
+    private bool _completed;
     private bool _disposed;
 
     internal TlsKeySchedule(HashAlgorithmName hash)
@@ -111,18 +116,43 @@ internal sealed class TlsKeySchedule : IDisposable
         EnsureStage(KeyScheduleStage.Master);
         ReadOnlySpan<byte> label = client ? "c ap traffic"u8 : "s ap traffic"u8;
         TlsHkdf.DeriveSecret(_hash, _master.Span, label, transcriptHash, destination);
+        if (client)
+        {
+            _clientApplication = true;
+        }
+        else
+        {
+            _serverApplication = true;
+        }
+
+        MaybeComplete();
     }
 
     internal void ExporterMaster(ReadOnlySpan<byte> transcriptHash, Span<byte> destination)
     {
         EnsureStage(KeyScheduleStage.Master);
         TlsHkdf.DeriveSecret(_hash, _master.Span, "exp master"u8, transcriptHash, destination);
+        _exporter = true;
+        MaybeComplete();
     }
 
     internal void ResumptionMaster(ReadOnlySpan<byte> transcriptHash, Span<byte> destination)
     {
         EnsureStage(KeyScheduleStage.Master);
         TlsHkdf.DeriveSecret(_hash, _master.Span, "res master"u8, transcriptHash, destination);
+        _resumption = true;
+        MaybeComplete();
+    }
+
+    private void MaybeComplete()
+    {
+        if (_completed || !_clientApplication || !_serverApplication || !_exporter || !_resumption)
+        {
+            return;
+        }
+
+        _completed = true;
+        CryptographicOperations.ZeroMemory(_master.Span);
     }
 
     internal static void DeriveTrafficKeys(HashAlgorithmName hash, ReadOnlySpan<byte> secret, Span<byte> key, Span<byte> iv)

@@ -213,6 +213,23 @@ public sealed class KeyScheduleTests
     }
 
     [TestMethod]
+    public void CompleteZeroesTheMasterAfterTheApplicationSecrets()
+    {
+        using var schedule = new TlsKeySchedule(HashAlgorithmName.SHA256);
+        schedule.InitializeEarly(ReadOnlySpan<byte>.Empty);
+        schedule.AdvanceToHandshake(new byte[32]);
+        schedule.AdvanceToMaster();
+        byte[] hash = new byte[32];
+        byte[] destination = new byte[32];
+        schedule.ApplicationTrafficSecret(client: true, hash, destination);
+        schedule.ApplicationTrafficSecret(client: false, hash, destination);
+        schedule.ExporterMaster(hash, destination);
+        Assert.IsFalse(schedule.IsStageZeroed(KeyScheduleStage.Master));
+        schedule.ResumptionMaster(hash, destination);
+        Assert.IsTrue(schedule.IsStageZeroed(KeyScheduleStage.Master));
+    }
+
+    [TestMethod]
     public void OutOfOrderAdvanceThrows()
     {
         using var schedule = new TlsKeySchedule(HashAlgorithmName.SHA256);

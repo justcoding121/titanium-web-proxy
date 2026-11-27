@@ -89,6 +89,19 @@ public sealed class RecordProtectorTests
     }
 
     [TestMethod]
+    public void PlaintextHeaderRejectsOverflowAndAcceptsOneChangeCipherSpec()
+    {
+        byte[] overflow = [22, 3, 3, 0x41, 0x01];
+        Assert.IsFalse(TlsPlaintextRecord.TryReadHeader(overflow, out _, out _, out _, out TlsRecordAlert alert));
+        Assert.AreEqual(TlsRecordAlert.RecordOverflow, alert);
+
+        byte[] ccs = [20, 3, 3, 0, 1, 1];
+        int accepted = 0;
+        Assert.IsTrue(TlsPlaintextRecord.TryAcceptChangeCipherSpec(ccs, ref accepted));
+        Assert.IsFalse(TlsPlaintextRecord.TryAcceptChangeCipherSpec(ccs, ref accepted));
+    }
+
+    [TestMethod]
     public void DisposeZeroesTheIv()
     {
         byte[] iv = new byte[12];

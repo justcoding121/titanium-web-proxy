@@ -1,5 +1,4 @@
 using System;
-using System.Security.Cryptography;
 
 namespace Titanium.Tls;
 
@@ -9,21 +8,25 @@ internal sealed class SecretBuffer : IDisposable
     private byte[] _bytes;
     private bool _disposed;
 
+    private readonly int _length;
+
     internal SecretBuffer(int length)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, SecretBufferPool.SlabLength);
 
-        _bytes = GC.AllocateArray<byte>(length, pinned: true);
+        _bytes = SecretBufferPool.Rent();
+        _length = length;
     }
 
-    internal int Length => _bytes.Length;
+    internal int Length => _length;
 
     internal Span<byte> Span
     {
         get
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return _bytes;
+            return _bytes.AsSpan(0, _length);
         }
     }
 
@@ -31,7 +34,7 @@ internal sealed class SecretBuffer : IDisposable
     {
         get
         {
-            for (int i = 0; i < _bytes.Length; i++)
+            for (int i = 0; i < _length; i++)
             {
                 if (_bytes[i] != 0)
                 {
@@ -56,6 +59,6 @@ internal sealed class SecretBuffer : IDisposable
         }
 
         _disposed = true;
-        CryptographicOperations.ZeroMemory(_bytes);
+        SecretBufferPool.Return(_bytes);
     }
 }
