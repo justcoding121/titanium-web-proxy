@@ -26,7 +26,7 @@ namespace Titanium.Net.Http;
 /// A Cookie header is copied onto an HTTP/3 hop only when UseCookies is false.
 /// Cookies and decompression stay on the inner handler.
 /// Port 443 stays on that URI when the caller used the default HTTPS port.
-/// <c>Host</c> stays the caller's host.
+/// <c>Host</c> stays the caller's host. An HTTP/3 redirect does not send a caller Host, and the next hop's <c>:authority</c> is the URI authority.
 /// The inner handler sends <c>:scheme http</c> on HTTP/2, and there is no hook to change it.
 /// A 400 or 421 on GET, HEAD, OPTIONS, or TRACE is retried once over HTTP/1.1 when the request allows a lower version.
 /// A server that selects HTTP/1.1 during ALPN is retried over HTTP/1.1 before any request bytes, for any method, when a lower version is allowed.

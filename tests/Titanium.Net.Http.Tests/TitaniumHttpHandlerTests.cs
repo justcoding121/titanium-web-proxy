@@ -569,6 +569,44 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RedirectDoesNotCopyTheHostHeader()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        string port = listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture);
+        string expected = "127.0.0.1:" + port;
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + port + "/from");
+        request.Headers.Host = "evil.example";
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        string authority = await ReadRedirectAuthorityAsync(server, expected, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(expected, authority);
+        Assert.AreEqual(expected, await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -2210,6 +2248,54 @@ public sealed class TitaniumHttpHandlerTests
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
         await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task<string> ReadRedirectAuthorityAsync(
+        ManagedQuicConnection server,
+        string expected,
+        CancellationToken cancellationToken)
+    {
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancellationToken);
+        (string path, string authority) = await ReadPathAndAuthorityAsync(hop, cancellationToken);
+        Assert.IsTrue(path.EndsWith("/from", StringComparison.Ordinal));
+        Assert.AreEqual(expected, authority);
+        await WriteRedirectAsync(hop, "302", "/land", cancellationToken);
+        hop = await server.AcceptInboundStreamAsync(cancellationToken);
+        (path, authority) = await ReadPathAndAuthorityAsync(hop, cancellationToken);
+        Assert.IsTrue(path.EndsWith("/land", StringComparison.Ordinal));
+        Assert.AreEqual(expected, authority);
+        await ReplyTextAsync(hop, authority, cancellationToken);
+        return authority;
+    }
+
+    private static async Task<(string Path, string Authority)> ReadPathAndAuthorityAsync(
+        ManagedQuicStream request,
+        CancellationToken cancellationToken)
+    {
+        byte[]? headers = await ReadFrameAsync(request, cancellationToken);
+        Assert.IsNotNull(headers);
+        while (await ReadFrameAsync(request, cancellationToken) is not null)
+        {
+        }
+
+        string path = string.Empty;
+        string authority = string.Empty;
+        foreach ((string name, string value) in QpackDecoder.Decode(headers))
+        {
+            if (name == ":path")
+            {
+                path = value;
+            }
+            else if (name == ":authority")
+            {
+                authority = value;
+            }
+
+            Assert.AreNotEqual("evil.example", value, name);
+            Assert.AreNotEqual("host", name, value);
+        }
+
+        return (path, authority);
     }
 
     private static async Task<string> ReadRedirectCookieAsync(ManagedQuicConnection server, CancellationToken cancellationToken)
