@@ -3507,6 +3507,43 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreSame(request, response.RequestMessage);
     }
 
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11UseCookiesFalseLeavesTheContainerUnused()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/hello", (HttpContext context) =>
+            {
+                string incoming = context.Request.Cookies["session"] ?? "none";
+                context.Response.Cookies.Append("next", "two");
+                return Results.Text(incoming);
+            }),
+            null,
+            HttpProtocols.Http1);
+        Uri uri = new("https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hello");
+        CookieContainer cookies = new();
+        cookies.Add(uri, new Cookie("session", "one"));
+        using TitaniumHttpHandler handler = Handler();
+        handler.CookieContainer = cookies;
+        handler.UseCookies = false;
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, uri)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("none", body);
+        CookieCollection stored = cookies.GetCookies(uri);
+        Assert.AreEqual(1, stored.Count);
+        Assert.AreEqual("one", stored["session"]?.Value);
+        Assert.IsNull(stored["next"]);
+        Assert.AreEqual(1, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
     private static X509Certificate2 CreateClientCertificate() => CreateClientCertificate("client");
 
     private static X509Certificate2 CreateClientCertificate(string commonName)
