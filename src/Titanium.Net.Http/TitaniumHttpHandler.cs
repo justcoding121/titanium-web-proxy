@@ -168,7 +168,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         set => _sockets.MaxConnectionsPerServer = value;
     }
 
-    /// <summary>Gets or sets how long a TCP connect and the managed handshake may take. The default matches the inner handler.</summary>
+    /// <summary>Gets or sets how long a TCP connect, the managed TLS handshake, and an HTTP/3 handshake may take. The default matches the inner handler.</summary>
     public TimeSpan ConnectTimeout
     {
         get => _sockets.ConnectTimeout;

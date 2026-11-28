@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Security.Cryptography;
@@ -674,6 +675,52 @@ public sealed class TitaniumHttpHandlerTests
 
         Assert.AreEqual(downloadHash, Convert.ToHexString(got.GetHashAndReset()));
         Assert.AreSame(request, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(15000)]
+    public async Task ConnectTimeoutStopsASilentTcpHandshake()
+    {
+        using TcpListener listener = new(IPAddress.Loopback, 0);
+        listener.Start();
+        Task<TcpClient> held = listener.AcceptTcpClientAsync();
+        using TitaniumHttpHandler handler = Handler();
+        handler.ConnectTimeout = TimeSpan.FromMilliseconds(400);
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(15) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port.ToString(CultureInfo.InvariantCulture) + "/")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        DateTime started = DateTime.UtcNow;
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await client.SendAsync(request));
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromSeconds(3));
+        listener.Stop();
+        if (held.IsCompletedSuccessfully)
+        {
+            held.Result.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(15000)]
+    public async Task ConnectTimeoutStopsASilentHttp3Handshake()
+    {
+        using Socket udp = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        udp.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        int port = ((IPEndPoint)udp.LocalEndPoint!).Port;
+        using TitaniumHttpHandler handler = Handler();
+        handler.ConnectTimeout = TimeSpan.FromMilliseconds(400);
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(15) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + "/")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        DateTime started = DateTime.UtcNow;
+        Http3ConnectException ex = await Assert.ThrowsExactlyAsync<Http3ConnectException>(async () => await client.SendAsync(request));
+        Assert.IsInstanceOfType<QuicException>(ex.InnerException);
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromSeconds(3));
     }
 
     [TestMethod]
