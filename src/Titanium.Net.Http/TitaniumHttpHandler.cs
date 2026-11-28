@@ -39,7 +39,7 @@ namespace Titanium.Net.Http;
 /// The dynamic table is capped at 4096 bytes. A request inserts a field that is not in the static table when the peer allows a dynamic table and at least one blocked stream. A peer insert is decoded.
 /// A failed HTTP/3 connect, before any request byte, falls back to the adapter when the request allows a lower version, and when an Alt-Svc upgrade fails.
 /// When <see cref="EnableAltSvc"/> is set, a later request that allows a higher version uses HTTP/3 after <c>Alt-Svc: h3</c> from the same origin.
-/// The cache holds 256 origins. An entry ends when its <c>ma</c> elapses. A missing <c>ma</c> lasts 24 hours. <c>ma=0</c> and <c>clear</c> drop the entry.
+/// The cache holds 256 origins. An entry ends when its <c>ma</c> elapses. A missing <c>ma</c> lasts 24 hours. <c>ma=0</c> and <c>clear</c> drop the entry. A different host is ignored.
 /// </remarks>
 public sealed class TitaniumHttpHandler : HttpMessageHandler
 {

@@ -558,6 +558,69 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3AltSvcIgnoresADifferentHost()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        int quicPort = listener.LocalEndPoint.Port;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(app =>
+        {
+            app.MapGet("/tcp", (HttpResponse response) =>
+            {
+                response.Headers.Append(
+                    "Alt-Svc",
+                    "h3=\"other.example:" + quicPort.ToString(CultureInfo.InvariantCulture) + "\"; ma=60");
+                return "tcp";
+            });
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using TitaniumHttpHandler handler = Handler();
+        handler.EnableAltSvc = true;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/tcp";
+        using HttpRequestMessage first = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        using HttpResponseMessage firstResponse = await client.SendAsync(first, cancel.Token);
+        Assert.AreEqual("tcp", await firstResponse.Content.ReadAsStringAsync(cancel.Token));
+        using var late = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
+        Task<ManagedQuicConnection> refused = listener.AcceptConnectionAsync(late.Token).AsTask();
+        using HttpRequestMessage second = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(second, cancel.Token);
+        try
+        {
+            ManagedQuicConnection extra = await refused;
+            await extra.DisposeAsync();
+            Assert.Fail("HTTP/3 was used for a different Alt-Svc host.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        using HttpResponseMessage secondResponse = await pending;
+        Assert.AreEqual("tcp", await secondResponse.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreNotEqual(3, secondResponse.Version.Major);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3AltSvcFallsBackWhenTheUpgradeHandshakeFails()
     {
         using Socket udp = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
