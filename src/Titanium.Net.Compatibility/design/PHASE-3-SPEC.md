@@ -37,7 +37,7 @@ Exit: existing proxy tests stay green and unedited. A flag-off run does not cons
 
 ### P3.3 Flags, defaults, and the FIPS guard
 
-`server.managedStack` sets both proxy flags. `server.managedTls` and `server.managedQuic` override it. Omit all three and the applier leaves the library default, which is off. `titanium run --managed-stack` and `TITANIUM_MANAGED_STACK` override the file. The flag wins over the variable. The proxy and gateway charts write `server.managedStack: false`. Inspector, the FIPS refusal, and the managed-only feature errors are still ahead.
+`server.managedStack` sets both proxy flags. `server.managedTls` and `server.managedQuic` override it. Omit all three and the applier leaves the library default, which is off. `titanium run --managed-stack` and `TITANIUM_MANAGED_STACK` override the file. The flag wins over the variable. The proxy and gateway charts write `server.managedStack: false`. Startup refuses the managed stacks while FIPS mode is on unless `server.managedStackFipsOverride` or `TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1` is set. With the override the handshake uses FIPS-approved algorithms and logs that fingerprint fidelity is reduced. Inspector and the managed-only feature errors are still ahead.
 
 ### P3.4 Managed-mode test run
 

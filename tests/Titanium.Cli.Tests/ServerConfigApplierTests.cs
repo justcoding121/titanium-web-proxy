@@ -145,6 +145,11 @@ public class ServerConfigApplierTests
         ServerConfigApplier.Apply(quicOnly, new ServerConfig { ManagedQuic = true });
         Assert.IsFalse(quicOnly.UseManagedTlsStack);
         Assert.IsTrue(quicOnly.UseManagedQuicStack);
+
+        using var fips = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(fips, new ServerConfig { ManagedStackFipsOverride = true });
+        Assert.IsTrue(fips.AllowManagedStackUnderFips);
+        Assert.IsFalse(fips.UseManagedTlsStack);
     }
 
     [TestMethod]

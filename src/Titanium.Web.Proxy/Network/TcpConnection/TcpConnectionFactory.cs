@@ -1392,7 +1392,7 @@ internal partial class TcpConnectionFactory : IDisposable
                     // HttpServerStream tears down the chain.
                     if (proxyServer.UseManagedTlsStack)
                     {
-                        var managed = new TlsStream(stream, leaveInnerStreamOpen: false);
+                        var managed = proxyServer.CreateManagedTlsStream(stream, leaveInnerStreamOpen: false);
                         stream = new HttpServerStream(proxyServer, managed, proxyServer.BufferPool, cancellationToken);
                         (negotiatedApplicationProtocol, bool usedManagedCertificate) = await AuthenticateManagedClientAsync(
                             proxyServer, managed, sessionArgs, remoteHostName, remotePort, applicationProtocols,
@@ -1437,7 +1437,7 @@ internal partial class TcpConnectionFactory : IDisposable
             {
                 if (proxyServer.UseManagedTlsStack)
                 {
-                    var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+                    var managed = proxyServer.CreateManagedTlsStream(networkStream, leaveInnerStreamOpen: false);
                     stream = new HttpServerStream(proxyServer, managed, proxyServer.BufferPool, cancellationToken);
                     (negotiatedApplicationProtocol, bool usedManagedCertificate) = await AuthenticateManagedClientAsync(
                         proxyServer, managed, sessionArgs, remoteHostName, remotePort, applicationProtocols,

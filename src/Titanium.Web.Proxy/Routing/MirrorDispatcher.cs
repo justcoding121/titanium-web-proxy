@@ -52,6 +52,8 @@ internal sealed class MirrorDispatcher : IDisposable
     /// <summary>Read when a copy opens TLS. Unset keeps the platform handshake.</summary>
     internal Func<bool>? ManagedTls { get; set; }
 
+    internal Func<TlsStreamOptions?>? ManagedTlsOptions { get; set; }
+
     /// <summary>Test sink. When set, nothing is queued.</summary>
     internal Action<string, string, string>? Observed { get; set; }
 
@@ -318,7 +320,7 @@ internal sealed class MirrorDispatcher : IDisposable
             }
             else
             {
-                await SendAsync(work, shutdownToken, ManagedTls?.Invoke() == true).ConfigureAwait(false);
+                await SendAsync(work, shutdownToken, ManagedTls?.Invoke() == true, ManagedTlsOptions?.Invoke()).ConfigureAwait(false);
             }
 
             Interlocked.Increment(ref sent);
@@ -335,7 +337,7 @@ internal sealed class MirrorDispatcher : IDisposable
         }
     }
 
-    private static async Task SendAsync(MirrorWork work, CancellationToken stopping, bool useManagedTls)
+    private static async Task SendAsync(MirrorWork work, CancellationToken stopping, bool useManagedTls, TlsStreamOptions? tlsOptions)
     {
         using var client = new TcpClient();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stopping);
@@ -346,7 +348,7 @@ internal sealed class MirrorDispatcher : IDisposable
         {
             if (useManagedTls)
             {
-                var managed = new TlsStream(stream, leaveInnerStreamOpen: false);
+                var managed = new TlsStream(stream, leaveInnerStreamOpen: false, tlsOptions);
                 stream = managed;
                 await managed.AuthenticateAsClientAsync(
                     new SslClientAuthenticationOptions { TargetHost = work.Host }, timeout.Token).ConfigureAwait(false);

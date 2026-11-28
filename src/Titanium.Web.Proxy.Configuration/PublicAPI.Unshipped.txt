@@ -323,6 +323,8 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedQuic.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedQuic.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedStack.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedStack.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedStackFipsOverride.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedStackFipsOverride.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedTls.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedTls.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttpsSvcbDnsDiscovery.get -> bool?

@@ -102,7 +102,7 @@ public partial class ProxyServer
         X509Certificate2 certificate,
         CancellationTokenSource cancellationTokenSource)
     {
-        var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+        var managed = CreateManagedTlsStream(networkStream, leaveInnerStreamOpen: false);
         try
         {
             var options = new SslServerAuthenticationOptions

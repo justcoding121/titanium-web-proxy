@@ -1811,6 +1811,9 @@
         "managedStack": {
           "type": "boolean"
         },
+        "managedStackFipsOverride": {
+          "type": "boolean"
+        },
         "managedTls": {
           "type": "boolean"
         },

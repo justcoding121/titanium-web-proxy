@@ -700,6 +700,7 @@ server:
   managedStack: null        # umbrella for the managed TLS and QUIC stacks. Default off.
   managedTls: null          # overrides managedStack for TLS
   managedQuic: null         # overrides managedStack for QUIC
+  managedStackFipsOverride: null # allows the managed stacks while FIPS mode is on. The fingerprint will not match.
   enableRfc8441: false
   enableConnectTcp: false   # explicit listeners only; reverse uses listeners[].acceptConnectTcp
   enableWebTransport: false # explicit listeners only; reverse uses listeners[].acceptWebTransport
@@ -837,7 +838,7 @@ server:
   reloadListeners: false       # true reconciles listeners on reload; xDS forces on
 ```
 
-Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3. `managedStack` turns on both managed stacks. `managedTls` and `managedQuic` override it. Omit all three to leave the library default, which is off. `titanium run --managed-stack` and `TITANIUM_MANAGED_STACK` (`1`, `true`, `0`, or `false`) override the file. The flag wins over the variable.
+Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3. `managedStack` turns on both managed stacks. `managedTls` and `managedQuic` override it. Omit all three to leave the library default, which is off. `titanium run --managed-stack` and `TITANIUM_MANAGED_STACK` (`1`, `true`, `0`, or `false`) override the file. The flag wins over the variable. While FIPS mode is on, startup refuses the managed stacks unless `managedStackFipsOverride` is true or `TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1`. With that override the handshake uses FIPS-approved algorithms, so a browser fingerprint will not match, and the stack is not FIPS-validated.
 
 HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, request decompression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
 

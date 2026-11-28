@@ -145,6 +145,7 @@ internal static class ServerConfigApplier
     {
         ApplyBool(server.EnableHttp2, v => proxy.EnableHttp2 = v);
         ApplyManagedStack(proxy, server);
+        ApplyManagedStackFipsOverride(proxy, server);
 
         if (server.EnableHttp3 is bool http3)
         {
@@ -205,6 +206,14 @@ internal static class ServerConfigApplier
 
         proxy.UseManagedTlsStack = server.ManagedTls ?? server.ManagedStack ?? false;
         proxy.UseManagedQuicStack = server.ManagedQuic ?? server.ManagedStack ?? false;
+    }
+
+    private static void ApplyManagedStackFipsOverride(ProxyServer proxy, ServerConfig server)
+    {
+        if (server.ManagedStackFipsOverride is bool allow)
+        {
+            proxy.AllowManagedStackUnderFips = allow;
+        }
     }
 
     private static void ApplyBool(bool? value, Action<bool> apply)

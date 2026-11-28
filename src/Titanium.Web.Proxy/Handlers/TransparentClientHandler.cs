@@ -107,7 +107,7 @@ public partial class ProxyServer
                     {
                         if (UseManagedTlsStack)
                         {
-                            var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+                            var managed = CreateManagedTlsStream(networkStream, leaveInnerStreamOpen: false);
                             try
                             {
                                 var managedBindings = endPoint.SniCertificates;
@@ -406,7 +406,7 @@ public partial class ProxyServer
                     {
                         if (UseManagedTlsStack)
                         {
-                            var managed = new TlsStream(clientStream, leaveInnerStreamOpen: false);
+                            var managed = CreateManagedTlsStream(clientStream, leaveInnerStreamOpen: false);
                             try
                             {
                                 var managedCertMode = endPoint.ClientCertificateMode;

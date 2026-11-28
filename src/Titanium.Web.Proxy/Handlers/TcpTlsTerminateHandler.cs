@@ -47,7 +47,7 @@ public partial class ProxyServer
             await using var networkStream = new NetworkStream(client, ownsSocket: false);
             if (UseManagedTlsStack)
             {
-                await using var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+                await using var managed = CreateManagedTlsStream(networkStream, leaveInnerStreamOpen: false);
                 if (!await TryAuthenticateInboundManagedTlsAsync(managed, endPoint, cancellationToken).ConfigureAwait(false))
                 {
                     result = "handshake_failed";
@@ -433,7 +433,7 @@ public partial class ProxyServer
             {
                 var managedMaterial = UpstreamTlsMaterial.For(cluster.HttpClient);
                 managedMaterial?.ThrowIfFaulted();
-                var managed = new TlsStream(stream, leaveInnerStreamOpen: false);
+                var managed = CreateManagedTlsStream(stream, leaveInnerStreamOpen: false);
                 var managedHost = managedMaterial?.ServerName ?? host;
                 var managedAuth = new SslClientAuthenticationOptions
                 {

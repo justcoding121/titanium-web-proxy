@@ -32,6 +32,7 @@ Titanium.Tls.TlsAlgorithmPolicy
 Titanium.Tls.TlsAlgorithmPolicy.Default = 0 -> Titanium.Tls.TlsAlgorithmPolicy
 Titanium.Tls.TlsAlgorithmPolicy.FipsApprovedOnly = 1 -> Titanium.Tls.TlsAlgorithmPolicy
 static Titanium.Tls.FipsEnvironment.IsEnabled() -> bool
+static Titanium.Tls.FipsEnvironment.ManagedStackRefusal(bool managedRequested, bool configOverride) -> string?
 Titanium.Tls.FipsEnvironment
 Titanium.Tls.TlsStreamOptions.AlgorithmPolicy.get -> Titanium.Tls.TlsAlgorithmPolicy
 Titanium.Tls.TlsStreamOptions.AlgorithmPolicy.set -> void

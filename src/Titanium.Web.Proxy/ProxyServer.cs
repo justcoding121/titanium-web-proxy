@@ -216,7 +216,11 @@ public partial class ProxyServer : IDisposable
                 return existing;
             }
 
-            var created = new Routing.MirrorDispatcher { ManagedTls = () => UseManagedTlsStack };
+            var created = new Routing.MirrorDispatcher
+            {
+                ManagedTls = () => UseManagedTlsStack,
+                ManagedTlsOptions = ManagedTlsOptions,
+            };
             var raced = Interlocked.CompareExchange(ref mirrorDispatcher, created, null);
             if (raced is not null)
             {

@@ -2698,6 +2698,14 @@ public static class TwpConfigValidator
             return;
         }
 
+        bool managedRequested = server.ManagedStack == true || server.ManagedTls == true || server.ManagedQuic == true;
+        string? fipsRefusal = Titanium.Tls.FipsEnvironment.ManagedStackRefusal(
+            managedRequested, server.ManagedStackFipsOverride == true);
+        if (fipsRefusal is not null)
+        {
+            errors.Add(fipsRefusal);
+        }
+
         if (!string.IsNullOrWhiteSpace(server.Profile) && !KnownProfiles.Contains(server.Profile))
         {
             errors.Add($"server.profile '{server.Profile}' is unknown (Balanced, LegacyCompatible, PublicFacing).");

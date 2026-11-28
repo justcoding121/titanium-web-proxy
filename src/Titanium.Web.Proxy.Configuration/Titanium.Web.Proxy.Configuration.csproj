@@ -24,6 +24,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
+    <ProjectReference Include="..\Titanium.Tls\Titanium.Tls.csproj" />
   </ItemGroup>
   <ItemGroup>
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />

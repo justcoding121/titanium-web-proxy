@@ -165,8 +165,14 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
             MaxInboundBidirectionalStreams = clientOptions.MaxInboundBidirectionalStreams,
             MaxInboundUnidirectionalStreams = clientOptions.MaxInboundUnidirectionalStreams,
         };
+        ManagedQuicClientConnectionOptions managedOptions = QuicClientOptionsAdapter.ToManaged(translated);
+        if (_proxyServer.AllowManagedStackUnderFips)
+        {
+            managedOptions.AllowManagedStackUnderFips = true;
+        }
+
         ManagedQuicConnection managed = await ManagedQuicConnection.ConnectAsync(
-            QuicClientOptionsAdapter.ToManaged(translated), cancellationToken).ConfigureAwait(false);
+            managedOptions, cancellationToken).ConfigureAwait(false);
         var serverConnection = new QuicServerConnection(
             _proxyServer, managed, sniHost, port, upStreamProxy, upStreamEndPoint, cacheKey);
         await serverConnection.StartHttp3ClientSessionAsync(cancellationToken).ConfigureAwait(false);

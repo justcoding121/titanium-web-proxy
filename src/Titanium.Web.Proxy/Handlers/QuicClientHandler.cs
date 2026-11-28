@@ -208,6 +208,11 @@ public partial class ProxyServer
             managed.HandshakeTimeout = endPoint.HandshakeTimeout;
         }
 
+        if (AllowManagedStackUnderFips)
+        {
+            managed.AllowManagedStackUnderFips = true;
+        }
+
         return ManagedQuicListener.ListenAsync(managed, cancellationToken).AsTask()
             .GetAwaiter().GetResult();
     }
@@ -427,6 +432,7 @@ public partial class ProxyServer
 
         return new ManagedQuicServerConnectionOptions
         {
+            AllowManagedStackUnderFips = AllowManagedStackUnderFips,
             ServerAuthenticationOptions = new SslServerAuthenticationOptions
             {
                 ServerCertificate = cert,

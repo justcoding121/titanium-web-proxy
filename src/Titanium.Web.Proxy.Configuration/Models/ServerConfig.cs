@@ -54,6 +54,13 @@ public sealed class ServerConfig
     /// <summary>Overrides <see cref="ManagedStack"/> for QUIC. Null inherits the umbrella, then the library default.</summary>
     public bool? ManagedQuic { get; set; }
 
+    /// <summary>
+    ///     Allows the managed stacks to start while FIPS mode is on. The managed stack then uses only FIPS-approved
+    ///     algorithms, so a browser fingerprint will not match, and it is not a FIPS-validated module.
+    ///     <c>TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1</c> is the same switch for library callers.
+    /// </summary>
+    public bool? ManagedStackFipsOverride { get; set; }
+
     public bool? EnableRfc8441 { get; set; }
 
     /// <summary>

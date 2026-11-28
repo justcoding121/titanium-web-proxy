@@ -61,6 +61,26 @@ public sealed class ManagedStackFlagTests
     }
 
     [TestMethod]
+    public async Task TheFipsOverrideFreezesAfterStart()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.AllowManagedStackUnderFips = true;
+        proxy.UseManagedTlsStack = true;
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.Start(changeSystemProxySettings: false);
+        try
+        {
+            Assert.IsTrue(proxy.AllowManagedStackUnderFips);
+            proxy.AllowManagedStackUnderFips = true;
+            Assert.ThrowsExactly<InvalidOperationException>(() => proxy.AllowManagedStackUnderFips = false);
+        }
+        finally
+        {
+            await proxy.StopAsync();
+        }
+    }
+
+    [TestMethod]
     public async Task TheManagedDialResolvesAnAddressLiteral()
     {
         IPEndPoint resolved = await QuicConnectionFactory.ResolveRemoteAsync(

@@ -76,6 +76,29 @@ public sealed class TlsAlgorithmPolicyTests
     }
 
     [TestMethod]
+    public void ManagedStackRefusalNamesTheOverride()
+    {
+        FipsEnvironment.Use(new FakeProbe(windows: true, enabled: 1, linux: null, mac: false));
+        string? previous = Environment.GetEnvironmentVariable("TITANIUM_MANAGED_STACK_FIPS_OVERRIDE");
+        try
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_MANAGED_STACK_FIPS_OVERRIDE", null);
+            string? refused = FipsEnvironment.ManagedStackRefusal(managedRequested: true, configOverride: false);
+            StringAssert.Contains(refused, "TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1");
+            StringAssert.Contains(refused, "managedStackFipsOverride");
+            Assert.IsNull(FipsEnvironment.ManagedStackRefusal(managedRequested: false, configOverride: false));
+            Assert.IsNull(FipsEnvironment.ManagedStackRefusal(managedRequested: true, configOverride: true));
+            Environment.SetEnvironmentVariable("TITANIUM_MANAGED_STACK_FIPS_OVERRIDE", "1");
+            Assert.IsNull(FipsEnvironment.ManagedStackRefusal(managedRequested: true, configOverride: false));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_MANAGED_STACK_FIPS_OVERRIDE", previous);
+            FipsEnvironment.Reset();
+        }
+    }
+
+    [TestMethod]
     public void FipsClientHelloOmitsX25519AndChaCha()
     {
         using var engine = new TlsEngine(TlsRole.Client) { AlgorithmPolicy = TlsAlgorithmPolicy.FipsApprovedOnly };

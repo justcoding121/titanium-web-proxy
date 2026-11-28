@@ -350,7 +350,7 @@ public partial class ProxyServer
                     {
                         if (UseManagedTlsStack)
                         {
-                            var managed = new TlsStream(clientStream, leaveInnerStreamOpen: false);
+                            var managed = CreateManagedTlsStream(clientStream, leaveInnerStreamOpen: false);
                             try
                             {
                                 if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch

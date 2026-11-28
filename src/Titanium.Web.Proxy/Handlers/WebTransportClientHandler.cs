@@ -98,7 +98,7 @@ public partial class ProxyServer
         X509Certificate2 certificate,
         CancellationTokenSource cancellationTokenSource)
     {
-        var managed = new TlsStream(networkStream, leaveInnerStreamOpen: false);
+        var managed = CreateManagedTlsStream(networkStream, leaveInnerStreamOpen: false);
         try
         {
             var options = new SslServerAuthenticationOptions
@@ -213,7 +213,7 @@ public partial class ProxyServer
 
             var opened = await WebTransportOrigin.OpenHttp11Async(
                 endPoint.Options.OriginHost, endPoint.Options.OriginPort, endPoint.Options.OriginHttps,
-                path, ctx.CancellationToken, UseManagedTlsStack).ConfigureAwait(false);
+                path, ctx.CancellationToken, UseManagedTlsStack, ManagedTlsOptions()).ConfigureAwait(false);
             if (opened is null)
             {
                 session.GenericResponse("webtransport origin upgrade failed", HttpStatusCode.BadGateway);
@@ -331,7 +331,7 @@ public partial class ProxyServer
 
         var opened = await WebTransportOrigin.OpenHttp11Async(
             endPoint.Options.OriginHost, endPoint.Options.OriginPort, endPoint.Options.OriginHttps,
-            path, cancellationToken, UseManagedTlsStack).ConfigureAwait(false);
+            path, cancellationToken, UseManagedTlsStack, ManagedTlsOptions()).ConfigureAwait(false);
         if (opened is null)
         {
             await WriteHttp11StatusAsync(clientStream, 502, "Bad Gateway", cancellationToken).ConfigureAwait(false);

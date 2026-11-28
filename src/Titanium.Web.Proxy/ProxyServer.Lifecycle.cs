@@ -47,6 +47,7 @@ public partial class ProxyServer : IDisposable
 
         // Freeze the active logging configuration for the duration of this run.
         ApplyLoggingConfiguration();
+        EnsureManagedStackAllowedUnderFips();
 
         SetThreadPoolMinThread(ThreadPoolWorkerThread);
 

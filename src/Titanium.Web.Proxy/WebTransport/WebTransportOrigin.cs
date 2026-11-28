@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.WebTransport;
 internal static class WebTransportOrigin
 {
     public static async Task<WebTransportOriginSession?> OpenHttp11Async(
-        string host, int port, bool https, string path, CancellationToken cancellationToken, bool useManagedTls = false)
+        string host, int port, bool https, string path, CancellationToken cancellationToken, bool useManagedTls = false, TlsStreamOptions? tlsOptions = null)
     {
         if (HttpHeaderHasDelimiter(path) || HttpHeaderHasDelimiter(host))
         {
@@ -31,7 +31,7 @@ internal static class WebTransportOrigin
             {
                 if (useManagedTls)
                 {
-                    var managed = new TlsStream(stream, leaveInnerStreamOpen: false);
+                    var managed = new TlsStream(stream, leaveInnerStreamOpen: false, tlsOptions);
                     await managed.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
                     {
                         TargetHost = host,

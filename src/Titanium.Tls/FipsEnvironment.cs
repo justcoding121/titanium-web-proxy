@@ -15,6 +15,23 @@ public static class FipsEnvironment
     /// <returns><see langword="true"/> when FIPS mode is on.</returns>
     public static bool IsEnabled() => Evaluate(_probe);
 
+    /// <summary>
+    ///     Returns the startup refusal when FIPS mode is on, the managed stack was requested, and neither
+    ///     <paramref name="configOverride"/> nor <c>TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1</c> is set.
+    /// </summary>
+    /// <param name="managedRequested">True when a managed TLS or QUIC flag is on.</param>
+    /// <param name="configOverride">True when <c>server.managedStackFipsOverride</c> is true.</param>
+    /// <returns>The error text, or null when the stack may run.</returns>
+    public static string? ManagedStackRefusal(bool managedRequested, bool configOverride)
+    {
+        if (!managedRequested || !IsEnabled() || configOverride || OverrideIsSet())
+        {
+            return null;
+        }
+
+        return "FIPS mode is on. The managed TLS and QUIC stacks refuse to start unless server.managedStackFipsOverride is true or TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1. With the override the managed stack is not FIPS-validated and fingerprint fidelity is reduced.";
+    }
+
     internal static bool SystemIsEnabled() => Evaluate(SystemFipsProbe.Instance);
 
     internal static bool Evaluate(IFipsProbe probe)
