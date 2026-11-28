@@ -39,7 +39,7 @@ namespace Titanium.Net.Http;
 /// Another port is remembered on its own and still tries a higher version.
 /// The negotiated protocol is remembered per authority for ten minutes, up to 256 authorities.
 /// HTTP/3 sends <c>:scheme https</c>. <see cref="SendAsync"/> returns after the response headers. The body is read as the caller reads it.
-/// A HEADERS frame after the body is applied to the response trailers while that read runs.
+/// A HEADERS frame after the body is applied to the response trailers while that read runs. A DATA frame before those headers fails the request.
 /// Cancelling that read stops it while it is waiting for the next frame.
 /// Cancelling an HTTP/1.1 body read stops it while the rest of the body is still waiting.
 /// Cancelling an HTTP/1.1 request stops it while the status line is still waiting.
