@@ -744,6 +744,53 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RedirectReturnsToHttp3AfterACleartextHop()
+    {
+        using var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        int clearPort = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        int quicPort = listener.LocalEndPoint.Port;
+        Task<TcpClient> clearAccepted = tcp.AcceptTcpClientAsync(cancel.Token).AsTask();
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.UseProxy = false;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + quicPort.ToString(CultureInfo.InvariantCulture) + "/from");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        string path = await ReadRequestPathAsync(hop, cancel.Token);
+        Assert.IsTrue(path.EndsWith("/from", StringComparison.Ordinal));
+        await WriteRedirectAsync(
+            hop,
+            "302",
+            "http://127.0.0.1:" + clearPort.ToString(CultureInfo.InvariantCulture) + "/mid",
+            cancel.Token);
+        using TcpClient clear = await clearAccepted;
+        await using NetworkStream stream = clear.GetStream();
+        string headers = await ReadHttpHeadersAsync(stream, cancel.Token);
+        Assert.IsTrue(headers.StartsWith("GET /mid HTTP/1.1\r\n", StringComparison.Ordinal), headers);
+        string back = "https://127.0.0.1:" + quicPort.ToString(CultureInfo.InvariantCulture) + "/land";
+        await stream.WriteAsync(
+            System.Text.Encoding.ASCII.GetBytes("HTTP/1.1 302 Found\r\nLocation: " + back + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
+            cancel.Token);
+        hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        path = await ReadRequestPathAsync(hop, cancel.Token);
+        Assert.IsTrue(path.EndsWith("/land", StringComparison.Ordinal), path);
+        await ReplyTextAsync(hop, "landed", cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("landed", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual(new Version(3, 0), response.Version);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3RedirectStopsWhenTheRequestIsCancelled()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
