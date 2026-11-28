@@ -557,6 +557,67 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11LargeUploadAndDownloadMatchTheirHashes()
+    {
+        byte[] upload = Pattern(1024 * 1024);
+        byte[] download = Pattern(1024 * 1024 + 17);
+        string uploadHash = Convert.ToHexString(SHA256.HashData(upload));
+        string downloadHash = Convert.ToHexString(SHA256.HashData(download));
+        await using LoopbackServer server = await LoopbackServer.StartAsync(app =>
+        {
+            app.MapPost("/blob", async context =>
+            {
+                using IncrementalHash received = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                byte[] buffer = new byte[8192];
+                while (true)
+                {
+                    int count = await context.Request.Body.ReadAsync(buffer);
+                    if (count == 0)
+                    {
+                        break;
+                    }
+
+                    received.AppendData(buffer.AsSpan(0, count));
+                }
+
+                context.Response.Headers.Append("X-Upload-Sha256", Convert.ToHexString(received.GetHashAndReset()));
+                context.Response.ContentLength = download.Length;
+                await context.Response.Body.WriteAsync(download);
+            });
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://localhost:" + server.Port.ToString() + "/blob")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new ByteArrayContent(upload),
+        };
+
+        using HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(response.Headers.TryGetValues("X-Upload-Sha256", out IEnumerable<string>? hashes));
+        Assert.AreEqual(uploadHash, hashes!.Single());
+        await using Stream body = await response.Content.ReadAsStreamAsync();
+        using IncrementalHash got = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        byte[] chunk = new byte[8192];
+        while (true)
+        {
+            int count = await body.ReadAsync(chunk);
+            if (count == 0)
+            {
+                break;
+            }
+
+            got.AppendData(chunk.AsSpan(0, count));
+        }
+
+        Assert.AreEqual(downloadHash, Convert.ToHexString(got.GetHashAndReset()));
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http2OrLowerRetriesWhenTheServerRejectsTheScheme()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
@@ -587,6 +648,17 @@ public sealed class TitaniumHttpHandlerTests
         Version = HttpVersion.Version30,
         VersionPolicy = HttpVersionPolicy.RequestVersionExact,
     };
+
+    private static byte[] Pattern(int length)
+    {
+        byte[] data = new byte[length];
+        for (int i = 0; i < data.Length; i++)
+        {
+            data[i] = (byte)((i * 17) + 3);
+        }
+
+        return data;
+    }
 
     private static TitaniumHttpHandler Handler()
     {
