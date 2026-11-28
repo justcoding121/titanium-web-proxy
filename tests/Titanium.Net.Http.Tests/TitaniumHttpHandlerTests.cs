@@ -298,6 +298,123 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3AltSvcUsesTheAdvertisedPort()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        int quicPort = listener.LocalEndPoint.Port;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(app =>
+        {
+            app.MapGet("/tcp", (HttpResponse response) =>
+            {
+                response.Headers.Append("Alt-Svc", "h3=\":" + quicPort.ToString(CultureInfo.InvariantCulture) + "\"; ma=60");
+                return "tcp";
+            });
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using TitaniumHttpHandler handler = Handler();
+        handler.EnableAltSvc = true;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/tcp";
+        using HttpRequestMessage first = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        using HttpResponseMessage firstResponse = await client.SendAsync(first, cancel.Token);
+        Assert.AreEqual("tcp", await firstResponse.Content.ReadAsStringAsync(cancel.Token));
+
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using HttpRequestMessage second = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(second, cancel.Token);
+        ManagedQuicConnection quic = await accepted;
+        await ReplyAsync(quic, cancel.Token);
+        using HttpResponseMessage secondResponse = await pending;
+        Assert.AreEqual(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.AreEqual(new Version(3, 0), secondResponse.Version);
+        Assert.AreEqual("ok", await secondResponse.Content.ReadAsStringAsync(cancel.Token));
+        await quic.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http3AltSvcMaZeroDoesNotUpgrade()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        int quicPort = listener.LocalEndPoint.Port;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(app =>
+        {
+            app.MapGet("/tcp", (HttpResponse response) =>
+            {
+                response.Headers.Append("Alt-Svc", "h3=\":" + quicPort.ToString(CultureInfo.InvariantCulture) + "\"; ma=0");
+                return "tcp";
+            });
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using TitaniumHttpHandler handler = Handler();
+        handler.EnableAltSvc = true;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/tcp";
+        using HttpRequestMessage first = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        using (HttpResponseMessage firstResponse = await client.SendAsync(first, cancel.Token))
+        {
+            Assert.AreEqual("tcp", await firstResponse.Content.ReadAsStringAsync(cancel.Token));
+        }
+
+        using HttpRequestMessage second = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(second, cancel.Token);
+        using var late = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
+        try
+        {
+            ManagedQuicConnection extra = await listener.AcceptConnectionAsync(late.Token);
+            await extra.DisposeAsync();
+            Assert.Fail("HTTP/3 was used after ma=0.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        using HttpResponseMessage secondResponse = await pending;
+        Assert.AreEqual("tcp", await secondResponse.Content.ReadAsStringAsync(cancel.Token));
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3HeadersReturnBeforeTheBody()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();

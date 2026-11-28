@@ -37,14 +37,15 @@ internal sealed class Http3Pool : IDisposable
         TitaniumHttpHandler handler,
         HttpRequestMessage request,
         Uri uri,
+        int port,
         CancellationToken cancellationToken)
     {
-        string authority = Http3Client.Authority(uri);
+        string authority = uri.IdnHost + ":" + port.ToString(System.Globalization.CultureInfo.InvariantCulture);
         int retries = 0;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Entry entry = await RentAsync(handler, uri, authority, cancellationToken).ConfigureAwait(false);
+            Entry entry = await RentAsync(handler, uri, authority, port, cancellationToken).ConfigureAwait(false);
             try
             {
                 return await Http3Client.ExchangeAsync(
@@ -108,6 +109,7 @@ internal sealed class Http3Pool : IDisposable
         TitaniumHttpHandler handler,
         Uri uri,
         string authority,
+        int port,
         CancellationToken cancellationToken)
     {
         while (true)
@@ -127,7 +129,7 @@ internal sealed class Http3Pool : IDisposable
                     }
                     else
                     {
-                        entry = await OpenAsync(handler, uri, authority, cancellationToken).ConfigureAwait(false);
+                        entry = await OpenAsync(handler, uri, authority, port, cancellationToken).ConfigureAwait(false);
                     }
                 }
 
@@ -152,9 +154,10 @@ internal sealed class Http3Pool : IDisposable
         TitaniumHttpHandler handler,
         Uri uri,
         string authority,
+        int port,
         CancellationToken cancellationToken)
     {
-        ManagedQuicConnection connection = await Http3Client.ConnectAsync(handler, uri, cancellationToken).ConfigureAwait(false);
+        ManagedQuicConnection connection = await Http3Client.ConnectAsync(handler, uri, port, cancellationToken).ConfigureAwait(false);
         Entry entry = new(connection, new QpackContext(Http3Client.TableCapacity));
         if (!_byAuthority.TryGetValue(authority, out List<Entry>? list))
         {

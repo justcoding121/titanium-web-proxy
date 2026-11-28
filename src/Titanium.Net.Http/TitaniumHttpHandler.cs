@@ -34,6 +34,8 @@ namespace Titanium.Net.Http;
 /// A GOAWAY on the peer's control stream stops new requests on that connection.
 /// The dynamic table is capped at 4096 bytes. Requests use the static table. A peer insert is decoded.
 /// A failed HTTP/3 connect, before any request byte, falls back to HTTP/2 or HTTP/1.1 when the request allows a lower version.
+/// When <see cref="EnableAltSvc"/> is set, a later request that allows a higher version uses HTTP/3 after <c>Alt-Svc: h3</c> from the same origin.
+/// The cache holds 256 origins. An entry ends when its <c>ma</c> elapses. A missing <c>ma</c> lasts 24 hours. <c>ma=0</c> and <c>clear</c> drop the entry.
 /// </remarks>
 public sealed class TitaniumHttpHandler : HttpMessageHandler
 {
@@ -48,6 +50,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     private readonly HttpMessageInvoker _inner;
     private readonly Http3Pool _pool = new();
     private readonly ConcurrentDictionary<string, AlpnEntry> _alpn = new();
+    private readonly AltSvcCache _alt = new();
     private SslClientAuthenticationOptions _sslOptions = new();
 
     /// <summary>Creates a handler. The inner handler's connect callback owns the managed TLS stream.</summary>
@@ -75,7 +78,10 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     /// <summary>Gets or sets the QUIC options used for an HTTP/3 connection. Null uses the defaults.</summary>
     public ManagedQuicClientConnectionOptions? QuicOptions { get; set; }
 
-    /// <summary>Gets or sets whether a later request may use Alt-Svc. This handler does not read Alt-Svc yet.</summary>
+    /// <summary>
+    /// Gets or sets whether a later request that allows a higher version uses HTTP/3 after <c>Alt-Svc: h3</c> from the same origin.
+    /// The cache holds 256 origins and drops an entry when its <c>ma</c> elapses. A missing <c>ma</c> lasts 24 hours.
+    /// </summary>
     public bool EnableAltSvc { get; set; }
 
     /// <summary>
@@ -212,13 +218,27 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     {
         ArgumentNullException.ThrowIfNull(request);
         RequireFips();
-        if (WantsHttp3(request))
+        bool viaAlt = false;
+        int? altPort = null;
+        if (!WantsHttp3(request)
+            && EnableAltSvc
+            && request.VersionPolicy == HttpVersionPolicy.RequestVersionOrHigher
+            && request.RequestUri is Uri origin
+            && _alt.TryGet(origin, DateTimeOffset.UtcNow, out int cachedPort))
+        {
+            viaAlt = true;
+            altPort = cachedPort;
+        }
+
+        if (WantsHttp3(request) || viaAlt)
         {
             try
             {
-                return await Http3Client.SendAsync(this, request, cancellationToken).ConfigureAwait(false);
+                HttpResponseMessage http3 = await Http3Client.SendAsync(this, request, altPort, cancellationToken).ConfigureAwait(false);
+                NoteAltSvc(request, http3);
+                return http3;
             }
-            catch (Http3ConnectException) when (request.VersionPolicy == HttpVersionPolicy.RequestVersionOrLower)
+            catch (Http3ConnectException) when (viaAlt || request.VersionPolicy == HttpVersionPolicy.RequestVersionOrLower)
             {
             }
         }
@@ -250,7 +270,18 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
             response = await SendCoreAsync(request, HttpVersion.Version11, HttpVersionPolicy.RequestVersionExact, cancellationToken).ConfigureAwait(false);
         }
 
+        NoteAltSvc(request, response);
         return response;
+    }
+
+    private void NoteAltSvc(HttpRequestMessage request, HttpResponseMessage response)
+    {
+        if (!EnableAltSvc || request.RequestUri is null || !response.Headers.TryGetValues("Alt-Svc", out IEnumerable<string>? values))
+        {
+            return;
+        }
+
+        _alt.Note(request.RequestUri, string.Join(",", values), DateTimeOffset.UtcNow);
     }
 
     /// <inheritdoc />

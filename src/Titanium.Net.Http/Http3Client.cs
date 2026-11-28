@@ -26,21 +26,24 @@ internal static class Http3Client
     internal static Task<HttpResponseMessage> SendAsync(
         TitaniumHttpHandler handler,
         HttpRequestMessage request,
+        int? remotePort,
         CancellationToken cancellationToken)
     {
         Uri uri = request.RequestUri ?? throw new InvalidOperationException("The request URI is required.");
-        return handler.Pool.SendAsync(handler, request, uri, cancellationToken);
+        int port = remotePort ?? (uri.IsDefaultPort ? 443 : uri.Port);
+        return handler.Pool.SendAsync(handler, request, uri, port, cancellationToken);
     }
 
     internal static async Task<ManagedQuicConnection> ConnectAsync(
         TitaniumHttpHandler handler,
         Uri uri,
+        int port,
         CancellationToken cancellationToken)
     {
         ManagedQuicConnection connection;
         try
         {
-            connection = await ManagedQuicConnection.ConnectAsync(BuildOptions(handler, uri), cancellationToken).ConfigureAwait(false);
+            connection = await ManagedQuicConnection.ConnectAsync(BuildOptions(handler, uri, port), cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -93,9 +96,9 @@ internal static class Http3Client
     internal static string Authority(Uri uri) =>
         uri.IsDefaultPort ? uri.IdnHost : uri.IdnHost + ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
 
-    private static ManagedQuicClientConnectionOptions BuildOptions(TitaniumHttpHandler handler, Uri uri)
+    private static ManagedQuicClientConnectionOptions BuildOptions(TitaniumHttpHandler handler, Uri uri, int port)
     {
-        IPEndPoint remote = new(Resolve(uri.IdnHost), uri.IsDefaultPort ? 443 : uri.Port);
+        IPEndPoint remote = new(Resolve(uri.IdnHost), port);
         ManagedQuicClientConnectionOptions source = handler.QuicOptions ?? new ManagedQuicClientConnectionOptions();
         TimeSpan budget = handler.ConnectTimeout > TimeSpan.Zero && handler.ConnectTimeout != Timeout.InfiniteTimeSpan
             ? handler.ConnectTimeout
