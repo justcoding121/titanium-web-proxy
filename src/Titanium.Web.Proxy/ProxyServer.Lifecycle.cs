@@ -394,6 +394,7 @@ public partial class ProxyServer : IDisposable
             QuitListenQuic(dual);
         quicListenerCts?.Dispose();
         quicListenerCts = null;
+        DisposeTransparentQuic();
 
         // Keep ProxyEndPoints so Start() can re-bind the same listeners (issue #799).
 
