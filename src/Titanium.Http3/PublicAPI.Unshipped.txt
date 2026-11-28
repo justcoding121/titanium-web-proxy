@@ -42,3 +42,15 @@ const Titanium.Http3.Http3StreamType.Control = 0 -> ulong
 const Titanium.Http3.Http3StreamType.Push = 1 -> ulong
 const Titanium.Http3.Http3StreamType.QpackDecoder = 3 -> ulong
 const Titanium.Http3.Http3StreamType.QpackEncoder = 2 -> ulong
+Titanium.Http3.CapsuleReader
+Titanium.Http3.CapsuleReader.CapsuleReader(int maxCapsuleBytes = 2048, int maxDatagramBytes = 1500) -> void
+const Titanium.Http3.CapsuleReader.DefaultMaxCapsuleBytes = 2048 -> int
+const Titanium.Http3.CapsuleReader.DefaultMaxDatagramBytes = 1500 -> int
+Titanium.Http3.CapsuleReader.Dropped.get -> int
+Titanium.Http3.CapsuleReader.Feed(System.ReadOnlySpan<byte> data, Titanium.Http3.DatagramHandler! onDatagram) -> void
+Titanium.Http3.CapsuleReader.OnUnknownCapsule.get -> System.Action<long, System.ReadOnlyMemory<byte>>?
+Titanium.Http3.CapsuleReader.OnUnknownCapsule.set -> void
+static Titanium.Http3.CapsuleReader.WriteDatagram(System.Span<byte> destination, System.ReadOnlySpan<byte> payload) -> int
+static Titanium.Http3.CapsuleReader.WriteVarint(System.Span<byte> destination, long value) -> int
+Titanium.Http3.DatagramHandler
+virtual Titanium.Http3.DatagramHandler.Invoke(System.ReadOnlySpan<byte> payload) -> void
