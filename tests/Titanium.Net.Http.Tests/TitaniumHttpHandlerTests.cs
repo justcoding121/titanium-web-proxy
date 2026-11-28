@@ -744,6 +744,32 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RedirectStopsWhenTheRequestIsCancelled()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var requestCancel = new CancellationTokenSource();
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/from");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, requestCancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        string path = await ReadRequestPathAsync(hop, cancel.Token);
+        Assert.IsTrue(path.EndsWith("/from", StringComparison.Ordinal));
+        await WriteRedirectAsync(hop, "302", "/land", cancel.Token);
+        hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        DateTime started = DateTime.UtcNow;
+        requestCancel.Cancel();
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await pending);
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromSeconds(2));
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
