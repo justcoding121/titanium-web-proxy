@@ -1273,6 +1273,54 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11MovedPermanentlyTurnsPostIntoGetAndPermanentRedirectKeepsIt()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapPost("/moved", (HttpContext context) =>
+            {
+                context.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+                context.Response.Headers.Location = "/land";
+                return Task.CompletedTask;
+            });
+            app.MapPost("/keep", (HttpContext context) =>
+            {
+                context.Response.StatusCode = StatusCodes.Status308PermanentRedirect;
+                context.Response.Headers.Location = "/land";
+                return Task.CompletedTask;
+            });
+            app.MapMethods("/land", ["GET", "POST"], async context =>
+            {
+                using StreamReader reader = new(context.Request.Body);
+                string body = await reader.ReadToEndAsync();
+                await context.Response.WriteAsync(context.Request.Method + ":" + body);
+            });
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture);
+        using HttpRequestMessage moved = new(HttpMethod.Post, address + "/moved")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        using HttpResponseMessage movedResponse = await client.SendAsync(moved);
+        Assert.AreEqual("GET:", await movedResponse.Content.ReadAsStringAsync());
+        Assert.AreSame(moved, movedResponse.RequestMessage);
+        using HttpRequestMessage keep = new(HttpMethod.Post, address + "/keep")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        using HttpResponseMessage keepResponse = await client.SendAsync(keep);
+        Assert.AreEqual("POST:payload", await keepResponse.Content.ReadAsStringAsync());
+        Assert.AreSame(keep, keepResponse.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11SeeOtherTurnsPostIntoGetAndKeepsHead()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
