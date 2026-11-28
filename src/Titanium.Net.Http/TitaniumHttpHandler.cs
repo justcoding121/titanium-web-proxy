@@ -31,6 +31,7 @@ namespace Titanium.Net.Http;
 /// A server that selects HTTP/1.1 during ALPN is retried over HTTP/1.1 before any request bytes, for any method, when a lower version is allowed.
 /// The negotiated protocol is remembered per authority for ten minutes, up to 256 authorities.
 /// HTTP/3 sends <c>:scheme https</c>. <see cref="SendAsync"/> returns after the response headers. The body is read as the caller reads it.
+/// A HEADERS frame after the body is applied to the response trailers while that read runs.
 /// Cancelling that read stops it while it is waiting for the next frame.
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
 /// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.

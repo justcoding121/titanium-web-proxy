@@ -450,6 +450,44 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3TrailersArriveWhileTheBodyIsRead()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream stream = await HeadersAsync(server, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        await WriteFrameAsync(stream, Http3FrameType.Data, "ok"u8.ToArray(), cancel.Token);
+        byte[] trailer = QpackEncoder.Encode([("x-sum", "2")]);
+        await WriteFrameAsync(stream, Http3FrameType.Headers, trailer, cancel.Token);
+        await stream.CompleteWritesAsync(cancel.Token);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.IsTrue(response.TrailingHeaders.TryGetValues("x-sum", out IEnumerable<string>? values));
+        Assert.AreEqual("2", values!.Single());
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3BodyReadStopsWhenCancelled()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
