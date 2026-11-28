@@ -25,7 +25,7 @@ namespace Titanium.Net.Http;
 /// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream. A caller <c>http</c> URI is sent as cleartext, including when it asks for version 3.
 /// A redirect is followed here, including an HTTP/3 response. AllowAutoRedirect false returns that response. Each hop is rewritten the same way, so an https Location stays on the managed stream. Authorization is dropped when the host changes, including on HTTP/3. The same host keeps it. A 300 or 302 turns POST into GET, including on HTTP/3. An HTTP/3 redirect to an http URL is fetched as HTTP/1.1. A later https hop returns to HTTP/3. Cancelling the request stops an HTTP/3 redirect while the next hop is waiting. A 303 turns POST into GET and leaves HEAD as HEAD, including on HTTP/3. A 307 keeps the method and body, and an HTTP/3 hop sends that body again. A cleartext hop sends it again too. A 301 turns POST into GET, including on HTTP/3. A 308 keeps the method and body, and an HTTP/3 hop sends that body again.
 /// A Cookie header is copied onto an HTTP/3 hop only when UseCookies is false.
-/// Cookies and decompression stay on the inner handler. A cleartext hop from HTTP/3 still decompresses gzip and sends a cookie stored for that http URI. A Set-Cookie on that hop is stored for the next request.
+/// Cookies and decompression stay on the inner handler. A cleartext hop from HTTP/3 still decompresses gzip and sends a cookie stored for that http URI. A Set-Cookie on that hop is stored for the next request. A direct HTTP/3 request leaves <see cref="CookieContainer"/> unchanged.
 /// Port 443 stays on that URI when the caller used the default HTTPS port.
 /// <c>Host</c> stays the caller's host. An HTTP/3 redirect does not send a caller Host, and the next hop's <c>:authority</c> is the URI authority.
 /// The inner handler sends <c>:scheme http</c> on HTTP/2, and there is no hook to change it.
@@ -129,7 +129,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         set => _sockets.UseProxy = value;
     }
 
-    /// <summary>Gets or sets the cookie container forwarded to the inner handler.</summary>
+    /// <summary>Gets or sets the cookie container forwarded to the inner handler. A direct HTTP/3 request leaves it unchanged.</summary>
     public CookieContainer? CookieContainer
     {
         get => _sockets.CookieContainer;

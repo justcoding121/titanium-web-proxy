@@ -230,6 +230,48 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3DirectRequestLeavesTheCookieContainerUnchanged()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        Uri uri = new("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello");
+        CookieContainer cookies = new();
+        cookies.Add(uri, new Cookie("session", "one"));
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.CookieContainer = cookies;
+        handler.UseCookies = true;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, uri)
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
+        (string path, string cookie) = await ReadPathAndCookieAsync(inbound, cancel.Token);
+        Assert.IsTrue(path.EndsWith("/hello", StringComparison.Ordinal), path);
+        Assert.AreEqual(string.Empty, cookie);
+        byte[] block = QpackEncoder.Encode([(":status", "200"), ("set-cookie", "next=two")]);
+        await WriteFrameAsync(inbound, Http3FrameType.Headers, block, cancel.Token);
+        await WriteFrameAsync(inbound, Http3FrameType.Data, "ok"u8.ToArray(), cancel.Token);
+        await inbound.CompleteWritesAsync(cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual(3, response.Version.Major);
+        CookieCollection stored = cookies.GetCookies(uri);
+        Assert.AreEqual(1, stored.Count);
+        Assert.AreEqual("session", stored[0]!.Name);
+        Assert.AreEqual("one", stored[0]!.Value);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3RedirectIsFollowedOnTheSameConnection()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
