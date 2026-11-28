@@ -54,7 +54,7 @@ internal static partial class Http3RequestStream
             try
             {
                 await MasqueTunnel.RelayAsync(admission.Host, inbound.Reader, new FlushingWriteStream(body),
-                    admission.Open.Socket, server.Logger, token).ConfigureAwait(false);
+                    admission.Open.Socket, server.Logger, token, server.ConnectUdpQuicOrNull()).ConfigureAwait(false);
             }
             finally
             {

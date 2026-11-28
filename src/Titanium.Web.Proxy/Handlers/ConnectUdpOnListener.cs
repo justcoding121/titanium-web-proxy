@@ -65,7 +65,7 @@ public partial class ProxyServer
             try
             {
                 await MasqueTunnel.RelayAsync(admission.Host, streamState.InboundTunnelChannel.Reader, body,
-                    admission.Open.Socket, logger, token).ConfigureAwait(false);
+                    admission.Open.Socket, logger, token, ConnectUdpQuicOrNull()).ConfigureAwait(false);
             }
             finally
             {

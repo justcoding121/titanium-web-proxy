@@ -315,11 +315,50 @@ public class MasqueRelayTests
         await WaitUntilAsync(() => proxy.Active == 0);
     }
 
-    private static MasqueSession StartMasque(Action<MasqueOptions> configure)
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task ManagedQuic_AnswersALongHeaderWithoutForwarding()
+    {
+        using var echo = new UdpEcho();
+        using var plain = new UdpEcho();
+        using var proxy = StartMasque(options =>
+        {
+            options.RequireAuth = false;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [echo.Port, plain.Port];
+        }, server =>
+        {
+            server.UseManagedQuicStack = true;
+            server.AllowManagedStackUnderFips = true;
+        });
+
+        using var client = await ConnectAsync(proxy.Port);
+        await OpenTunnelAsync(client, 1, echo.Port);
+        var packet = new byte[1200];
+        packet[0] = 0xC0;
+        packet[4] = 2;
+        packet[5] = 4;
+        var answered = await ExchangeAsync(client, 1, packet);
+        Assert.IsTrue(answered.Length > 4);
+        Assert.AreEqual(0x80, answered[0]);
+        Assert.AreEqual(0, answered[1]);
+        Assert.AreEqual(0, answered[2]);
+        Assert.AreEqual(0, answered[3]);
+        Assert.AreEqual(0, answered[4]);
+        await Task.Delay(200);
+        Assert.AreEqual(0, echo.Received);
+
+        await OpenTunnelAsync(client, 3, plain.Port);
+        var echoed = await ExchangeAsync(client, 3, [4, 5, 6]);
+        CollectionAssert.AreEqual(new byte[] { 4, 5, 6 }, echoed);
+    }
+
+    private static MasqueSession StartMasque(Action<MasqueOptions> configure, Action<ProxyServer>? beforeStart = null)
     {
         var proxy = new ProxyServer(false, false, false);
         proxy.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
         proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+        beforeStart?.Invoke(proxy);
         var endPoint = new MasqueProxyEndPoint(IPAddress.Loopback, 0)
         {
             GenericCertificate = TestCertificateAuthority.ServerCertificate,
@@ -479,6 +518,8 @@ public class MasqueRelayTests
 
         public int Port { get; }
 
+        public int Received { get; private set; }
+
         public void Dispose()
         {
             cancellation.Cancel();
@@ -495,6 +536,7 @@ public class MasqueRelayTests
                 {
                     var received = await socket.ReceiveFromAsync(buffer, SocketFlags.None,
                         new IPEndPoint(IPAddress.Any, 0), cancellation.Token);
+                    Received++;
                     await socket.SendToAsync(buffer.AsMemory(0, received.ReceivedBytes), SocketFlags.None,
                         received.RemoteEndPoint, cancellation.Token);
                 }

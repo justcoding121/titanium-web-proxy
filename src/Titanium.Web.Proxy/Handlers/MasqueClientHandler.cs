@@ -240,7 +240,7 @@ public partial class ProxyServer
             try
             {
                 await MasqueTunnel.RelayAsync(endPoint, inbound.Reader, clientStream, opened.Socket, logger,
-                    relayStop.Token).ConfigureAwait(false);
+                    relayStop.Token, ConnectUdpQuicOrNull()).ConfigureAwait(false);
             }
             finally
             {
@@ -534,7 +534,7 @@ public partial class ProxyServer
         {
             try
             {
-                await MasqueTunnel.RelayAsync(endPoint, inbound.Reader, body, udp, logger, token).ConfigureAwait(false);
+                await MasqueTunnel.RelayAsync(endPoint, inbound.Reader, body, udp, logger, token, ConnectUdpQuicOrNull()).ConfigureAwait(false);
             }
             finally
             {

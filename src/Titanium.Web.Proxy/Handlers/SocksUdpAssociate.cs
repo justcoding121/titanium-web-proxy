@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Quic;
+using Titanium.Web.Proxy.Masque;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy;
@@ -258,7 +259,10 @@ public partial class ProxyServer
         await listener.DriveAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async ValueTask<ManagedQuicServerConnectionOptions> SocksQuicOptionsAsync(
+    internal ConnectUdpQuicSetup? ConnectUdpQuicOrNull() =>
+        UseManagedQuicStack ? new ConnectUdpQuicSetup(AllowManagedStackUnderFips, SocksQuicOptionsAsync) : null;
+
+    internal async ValueTask<ManagedQuicServerConnectionOptions> SocksQuicOptionsAsync(
         string host, SslClientHelloInfo hello, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

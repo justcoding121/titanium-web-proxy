@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Channels;
@@ -40,6 +41,29 @@ internal sealed class CapsuleDatagramChannel : IHttpDatagramChannel
             while (inbound.TryRead(out var chunk))
             {
                 reader.Feed(chunk.Span, payload => send(payload));
+            }
+        }
+    }
+
+    public async ValueTask RunClientToTargetAsync(
+        Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> send, CancellationToken cancellationToken)
+    {
+        var pending = new List<byte[]>();
+        while (await inbound.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (inbound.TryRead(out var chunk))
+            {
+                pending.Clear();
+                reader.Feed(chunk.Span, payload =>
+                {
+                    var copy = new byte[payload.Length];
+                    payload.CopyTo(copy);
+                    pending.Add(copy);
+                });
+                foreach (var payload in pending)
+                {
+                    await send(payload, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
     }

@@ -96,34 +96,39 @@ internal static class MasqueTunnel
     }
 
     public static async Task RelayAsync(MasqueProxyEndPoint endPoint, ChannelReader<ReadOnlyMemory<byte>> inbound,
-        Stream body, Socket udp, ILogger logger, CancellationToken cancellationToken)
+        Stream body, Socket udp, ILogger logger, CancellationToken cancellationToken, ConnectUdpQuicSetup? quic = null)
     {
         using var relay = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var channel = new CapsuleDatagramChannel(inbound, body);
         var budget = new DatagramBudget(endPoint.Options.MaxDatagramsPerSecond, endPoint.Options.MaxBytesPerSecond);
         var idle = new IdleClock();
         var idleMs = (long)endPoint.Options.IdleTimeout.TotalMilliseconds;
-        var toTarget = StartClientToTarget(channel, payload =>
-        {
-            if (!budget.TryTake(payload.Length))
+        ConnectUdpQuic? terminated = quic is not null && udp.RemoteEndPoint is IPEndPoint target
+            ? new ConnectUdpQuic(target, quic)
+            : null;
+        var toTarget = terminated is null
+            ? StartClientToTarget(channel, payload =>
             {
-                endPoint.CountDrop();
-                return;
-            }
+                if (!budget.TryTake(payload.Length))
+                {
+                    endPoint.CountDrop();
+                    return;
+                }
 
-            idle.Touch();
-            try
-            {
-                udp.Send(payload);
-            }
-            catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
-            {
-                endPoint.CountDrop();
-                return;
-            }
+                idle.Touch();
+                try
+                {
+                    udp.Send(payload);
+                }
+                catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+                {
+                    endPoint.CountDrop();
+                    return;
+                }
 
-            endPoint.CountDatagram(fromClient: true);
-        }, relay.Token);
+                endPoint.CountDatagram(fromClient: true);
+            }, relay.Token)
+            : StartTerminating(channel, udp, endPoint, terminated, budget, idle, relay.Token);
         var toClient = ReceiveTargetAsync(endPoint, channel, udp, budget, idle, relay.Token);
         var writer = StartWriter(channel, relay.Token);
         var idleWatch = WatchIdleAsync(endPoint, idle, idleMs, relay);
@@ -138,11 +143,60 @@ internal static class MasqueTunnel
             // Closing the socket unblocks the receive loop.
         }
 
-        await Task.WhenAll(
-            ObserveRelayAsync(toTarget, logger),
-            ObserveRelayAsync(toClient, logger),
-            ObserveRelayAsync(writer, logger)).ConfigureAwait(false);
+        try
+        {
+            await Task.WhenAll(
+                ObserveRelayAsync(toTarget, logger),
+                ObserveRelayAsync(toClient, logger),
+                ObserveRelayAsync(writer, logger)).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (terminated is not null)
+            {
+                await terminated.DisposeAsync().ConfigureAwait(false);
+            }
+        }
     }
+
+    private static Task StartTerminating(CapsuleDatagramChannel channel, Socket udp, MasqueProxyEndPoint endPoint,
+        ConnectUdpQuic quic, DatagramBudget budget, IdleClock idle, CancellationToken cancellationToken) =>
+        channel.RunClientToTargetAsync(async (payload, token) =>
+        {
+            if (!budget.TryTake(payload.Length))
+            {
+                endPoint.CountDrop();
+                return;
+            }
+
+            idle.Touch();
+            if (quic.Owns(payload.Span))
+            {
+                await quic.HandleAsync(payload, reply =>
+                {
+                    if (!channel.TryQueueToClient(reply.Span))
+                    {
+                        endPoint.CountDrop();
+                        return;
+                    }
+
+                    endPoint.CountDatagram(fromClient: false);
+                }, token).ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                udp.Send(payload.Span);
+            }
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+            {
+                endPoint.CountDrop();
+                return;
+            }
+
+            endPoint.CountDatagram(fromClient: true);
+        }, cancellationToken).AsTask();
 
     private static async Task<IPAddress[]> ResolveHostAsync(MasqueProxyEndPoint endPoint, string host, ILogger logger,
         CancellationToken cancellationToken)
