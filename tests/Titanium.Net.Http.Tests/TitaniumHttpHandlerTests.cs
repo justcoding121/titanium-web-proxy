@@ -1485,6 +1485,35 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11RedirectDoesNotCopyTheHostHeader()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/from", (HttpContext context) =>
+            {
+                context.Response.Redirect("/land");
+                return Task.CompletedTask;
+            });
+            app.MapGet("/land", (HttpRequest request) => request.Host.Value);
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        string port = server.Port.ToString(CultureInfo.InvariantCulture);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + port + "/from")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        request.Headers.Host = "evil.example";
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string host = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, host);
+        Assert.AreEqual("127.0.0.1:" + port, host);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11LargeUploadAndDownloadMatchTheirHashes()
     {
         byte[] upload = Pattern(1024 * 1024);
