@@ -58,7 +58,7 @@ namespace Titanium.Net.Http;
 /// The cache holds 256 origins. An entry ends when its <c>ma</c> elapses. A missing <c>ma</c> lasts 24 hours. <c>ma=0</c> and <c>clear</c> drop the entry. A different host is ignored.
 /// <see cref="SslClientAuthenticationOptions.TargetHost"/> is the name sent on the handshake. The connection still goes to the URI host.
 /// <see cref="SslClientAuthenticationOptions.EnabledSslProtocols"/> that omit TLS 1.3 fail the request before it is sent.
-/// <see cref="AutomaticDecompression"/> gzip decodes an HTTPS HTTP/1.1 response.
+/// <see cref="AutomaticDecompression"/> gzip decodes an HTTPS HTTP/1.1 response. An HTTP/3 response with <c>Content-Encoding: gzip</c> stays compressed.
 /// </remarks>
 public sealed class TitaniumHttpHandler : HttpMessageHandler
 {
@@ -160,7 +160,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         set => _sockets.MaxAutomaticRedirections = value;
     }
 
-    /// <summary>Gets or sets the decompression methods forwarded to the inner handler. Gzip decodes an HTTPS HTTP/1.1 response.</summary>
+    /// <summary>Gets or sets the decompression methods forwarded to the inner handler. Gzip decodes an HTTPS HTTP/1.1 response. An HTTP/3 response stays compressed.</summary>
     public DecompressionMethods AutomaticDecompression
     {
         get => _sockets.AutomaticDecompression;

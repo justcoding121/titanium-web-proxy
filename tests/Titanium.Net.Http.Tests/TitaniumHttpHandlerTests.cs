@@ -169,6 +169,67 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3LeavesGzipEncoded()
+    {
+        byte[] payload;
+        using (MemoryStream encoded = new())
+        {
+            using (GZipStream gzip = new(encoded, CompressionLevel.Fastest, leaveOpen: true))
+            {
+                gzip.Write("hello"u8);
+            }
+
+            payload = encoded.ToArray();
+        }
+
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.AutomaticDecompression = DecompressionMethods.GZip;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/gzip")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
+        byte[]? headers = await ReadFrameAsync(inbound, cancel.Token);
+        Assert.IsNotNull(headers);
+        bool askedForGzip = false;
+        foreach ((string name, string value) in QpackDecoder.Decode(headers))
+        {
+            if (string.Equals(name, "accept-encoding", StringComparison.OrdinalIgnoreCase)
+                && value.Contains("gzip", StringComparison.OrdinalIgnoreCase))
+            {
+                askedForGzip = true;
+            }
+        }
+
+        while (await ReadFrameAsync(inbound, cancel.Token) is not null)
+        {
+        }
+
+        byte[] block = QpackEncoder.Encode([(":status", "200"), ("content-encoding", "gzip")]);
+        await WriteFrameAsync(inbound, Http3FrameType.Headers, block, cancel.Token);
+        await WriteFrameAsync(inbound, Http3FrameType.Data, payload, cancel.Token);
+        await inbound.CompleteWritesAsync(cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        byte[] body = await response.Content.ReadAsByteArrayAsync(cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(body.AsSpan().SequenceEqual(payload));
+        Assert.IsFalse(askedForGzip);
+        Assert.AreEqual(3, response.Version.Major);
+        Assert.IsTrue(response.Content.Headers.ContentEncoding.Contains("gzip"));
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3RedirectIsFollowedOnTheSameConnection()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
