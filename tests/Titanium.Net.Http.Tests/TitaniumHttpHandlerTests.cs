@@ -2031,6 +2031,35 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11RequestStopsWhenCancelledBeforeTheStatusLine()
+    {
+        TaskCompletionSource arrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using LoopbackServer server = await LoopbackServer.StartAsync(app =>
+        {
+            app.MapGet("/wait", async context =>
+            {
+                arrived.TrySetResult();
+                await Task.Delay(Timeout.Infinite, context.RequestAborted);
+            });
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/wait")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using var requestCancel = new CancellationTokenSource();
+        Task<HttpResponseMessage> pending = client.SendAsync(request, requestCancel.Token);
+        await arrived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        long started = Environment.TickCount64;
+        requestCancel.Cancel();
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await pending);
+        Assert.IsTrue(Environment.TickCount64 - started < 2000);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11ReusesAConnectionUntilItsLifetime()
     {
         int connections = 0;
