@@ -31,6 +31,7 @@ namespace Titanium.Net.Http;
 /// HTTP/3 sends <c>:scheme https</c>. <see cref="SendAsync"/> returns after the response headers. The body is read as the caller reads it.
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
 /// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.
+/// A GOAWAY on the peer's control stream stops new requests on that connection.
 /// A failed HTTP/3 connect, before any request byte, falls back to HTTP/2 or HTTP/1.1 when the request allows a lower version.
 /// </remarks>
 public sealed class TitaniumHttpHandler : HttpMessageHandler

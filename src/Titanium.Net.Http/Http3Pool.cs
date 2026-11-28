@@ -13,6 +13,7 @@ namespace Titanium.Net.Http;
 /// Keeps one HTTP/3 connection per authority.
 /// A connection accepts 16 request streams, which is the stream limit this stack advertises.
 /// The next request opens another connection, up to <see cref="TitaniumHttpHandler.MaxConnectionsPerServer"/>.
+/// A GOAWAY on the peer's control stream stops new requests on that connection.
 /// </summary>
 internal sealed class Http3Pool : IDisposable
 {
@@ -20,7 +21,11 @@ internal sealed class Http3Pool : IDisposable
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<string, List<Entry>> _byAuthority = new(StringComparer.Ordinal);
+    private readonly TaskCompletionSource _goAway = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _disposed;
+
+    /// <summary>Completes when a peer GOAWAY has been read.</summary>
+    internal Task GoAwayObserved => _goAway.Task;
 
     internal async Task<HttpResponseMessage> SendAsync(
         TitaniumHttpHandler handler,
@@ -150,7 +155,22 @@ internal sealed class Http3Pool : IDisposable
         }
 
         list.Add(entry);
+        _ = Http3Client.WatchControlAsync(connection, () => NoteGoAwayAsync(entry), CancellationToken.None);
         return entry;
+    }
+
+    private async Task NoteGoAwayAsync(Entry entry)
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            entry.Retired = true;
+            _goAway.TrySetResult();
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     private bool MakeRoom(TitaniumHttpHandler handler, string authority)

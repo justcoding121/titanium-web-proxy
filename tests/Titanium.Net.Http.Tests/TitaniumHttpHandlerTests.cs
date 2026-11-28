@@ -1,3 +1,4 @@
+#pragma warning disable CA1416 // QuicStreamType is the BCL name. These tests do not start the platform QUIC stack.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -216,6 +217,49 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3GoAwayOpensAnotherConnection()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello";
+        using HttpRequestMessage first = Request(address);
+        Task<HttpResponseMessage> pending = client.SendAsync(first, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        await ReplyAsync(server, cancel.Token);
+        using HttpResponseMessage firstResponse = await pending;
+        Assert.AreEqual("ok", await firstResponse.Content.ReadAsStringAsync(cancel.Token));
+
+        await SendGoAwayAsync(server, 0, cancel.Token);
+        await handler.Pool.GoAwayObserved.WaitAsync(cancel.Token);
+
+        Task<ManagedQuicConnection> next = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using HttpRequestMessage second = Request(address);
+        Task<HttpResponseMessage> again = client.SendAsync(second, cancel.Token);
+        ManagedQuicConnection server2 = await next;
+        await ReplyAsync(server2, cancel.Token);
+        using HttpResponseMessage secondResponse = await again;
+        Assert.AreEqual("ok", await secondResponse.Content.ReadAsStringAsync(cancel.Token));
+        await server.DisposeAsync();
+        await server2.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3HeadersReturnBeforeTheBody()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -345,6 +389,19 @@ public sealed class TitaniumHttpHandlerTests
         byte[] block = QpackEncoder.Encode([(":status", "200")]);
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         return request;
+    }
+
+    private static async Task SendGoAwayAsync(ManagedQuicConnection server, ulong streamId, CancellationToken cancellationToken)
+    {
+        ManagedQuicStream control = await server.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        byte[] type = new byte[8];
+        int typeLength = Http3VarInt.Write(type, Http3StreamType.Control);
+        await control.WriteAsync(type.AsMemory(0, typeLength), cancellationToken);
+        byte[] id = new byte[8];
+        int idLength = Http3VarInt.Write(id, streamId);
+        byte[] payload = new byte[idLength];
+        id.AsSpan(0, idLength).CopyTo(payload);
+        await WriteFrameAsync(control, Http3FrameType.GoAway, payload, cancellationToken);
     }
 
     private static async Task<byte[]?> ReadFrameAsync(Stream stream, CancellationToken cancellationToken)

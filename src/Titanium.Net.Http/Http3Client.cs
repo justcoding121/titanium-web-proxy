@@ -162,6 +162,49 @@ internal static class Http3Client
         await WriteStreamTypeAsync(connection, Http3StreamType.QpackDecoder, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Reads the peer's control stream. A GOAWAY frame runs <paramref name="onGoAway"/> and that connection is not used for new requests.
+    /// </summary>
+    internal static async Task WatchControlAsync(ManagedQuicConnection connection, Func<Task> onGoAway, CancellationToken cancellationToken)
+    {
+        try
+        {
+            for (int attempt = 0; attempt < 4; attempt++)
+            {
+                ManagedQuicStream stream = await connection.AcceptInboundUnidirectionalStreamAsync(cancellationToken).ConfigureAwait(false);
+                ulong? type = await Http3VarInt.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+                if (type != Http3StreamType.Control)
+                {
+                    continue;
+                }
+
+                while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is Frame frame)
+                {
+                    if (frame.Type != Http3FrameType.GoAway)
+                    {
+                        continue;
+                    }
+
+                    await onGoAway().ConfigureAwait(false);
+                }
+
+                return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (QuicException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+    }
+
     private static ReadOnlyMemory<byte> EmptySettings()
     {
         byte[] payload = new Http3Settings().Serialize();
