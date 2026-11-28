@@ -60,6 +60,7 @@ namespace Titanium.Net.Http;
 /// <see cref="SslClientAuthenticationOptions.EnabledSslProtocols"/> that omit TLS 1.3 fail the request before it is sent.
 /// <see cref="AutomaticDecompression"/> gzip decodes an HTTPS HTTP/1.1 response. An HTTP/3 response with <c>Content-Encoding: gzip</c> stays compressed.
 /// <see cref="QuicOptions"/>.<see cref="ManagedQuicClientConnectionOptions.LocalEndPoint"/> is the local UDP address of an HTTP/3 connection.
+/// When <see cref="ConnectTimeout"/> is infinite, <see cref="ManagedQuicClientConnectionOptions.HandshakeTimeout"/> stops a silent HTTP/3 handshake.
 /// </remarks>
 public sealed class TitaniumHttpHandler : HttpMessageHandler
 {
@@ -101,7 +102,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     /// <summary>Gets or sets the fingerprint profile passed to <see cref="TlsStream"/>. Null uses the built-in hello.</summary>
     public TlsFingerprintProfile? FingerprintProfile { get; set; }
 
-    /// <summary>Gets or sets the QUIC options used for an HTTP/3 connection. Null uses the defaults. <see cref="ManagedQuicClientConnectionOptions.LocalEndPoint"/> is the local UDP address.</summary>
+    /// <summary>Gets or sets the QUIC options used for an HTTP/3 connection. Null uses the defaults. <see cref="ManagedQuicClientConnectionOptions.LocalEndPoint"/> is the local UDP address. When <see cref="ConnectTimeout"/> is infinite, <see cref="ManagedQuicClientConnectionOptions.HandshakeTimeout"/> stops a silent handshake.</summary>
     public ManagedQuicClientConnectionOptions? QuicOptions { get; set; }
 
     /// <summary>

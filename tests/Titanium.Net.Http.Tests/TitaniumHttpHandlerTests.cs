@@ -354,6 +354,31 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3HandshakeTimeoutStopsASilentPeerWhenConnectTimeoutIsInfinite()
+    {
+        using Socket udp = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        udp.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        int port = ((IPEndPoint)udp.LocalEndPoint!).Port;
+        using TitaniumHttpHandler handler = Handler();
+        handler.ConnectTimeout = Timeout.InfiniteTimeSpan;
+        handler.QuicOptions = new ManagedQuicClientConnectionOptions
+        {
+            HandshakeTimeout = TimeSpan.FromMilliseconds(400),
+        };
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(15) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + "/")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        DateTime started = DateTime.UtcNow;
+        Http3ConnectException ex = await Assert.ThrowsExactlyAsync<Http3ConnectException>(async () => await client.SendAsync(request));
+        Assert.IsInstanceOfType<QuicException>(ex.InnerException);
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromSeconds(3));
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3RedirectIsFollowedOnTheSameConnection()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
