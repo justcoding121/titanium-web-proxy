@@ -3462,6 +3462,30 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11SendsTheCallerHost()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/hello", (HttpRequest request) => request.Host.Value),
+            null,
+            HttpProtocols.Http1);
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        request.Headers.Host = "app.example";
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("app.example", body);
+        Assert.AreEqual(1, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11Tls12IsRefusedBeforeTheRequest()
     {
         int seen = 0;
