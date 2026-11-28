@@ -10,6 +10,7 @@ using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.IO;
+using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
@@ -503,6 +504,55 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreEqual("HTTP/1.1", await response.Content.ReadAsStringAsync());
         Assert.AreSame(request, response.RequestMessage);
         Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11RedirectsAcrossSchemesAndKeepsTheCookie()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/from", (HttpContext context) =>
+            {
+                int port = context.Connection.LocalPort;
+                context.Response.Headers.Append("Set-Cookie", "sid=abc; Path=/");
+                context.Response.Redirect("https://localhost:" + port.ToString(CultureInfo.InvariantCulture) + "/land");
+                return Task.CompletedTask;
+            });
+            app.MapGet("/land", async context =>
+            {
+                if (context.Request.Cookies["sid"] != "abc")
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return;
+                }
+
+                byte[] plain = "hello"u8.ToArray();
+                using MemoryStream encoded = new();
+                using (GZipStream gzip = new(encoded, CompressionLevel.Fastest, leaveOpen: true))
+                {
+                    gzip.Write(plain);
+                }
+
+                context.Response.Headers.ContentEncoding = "gzip";
+                context.Response.ContentType = "text/plain";
+                await context.Response.Body.WriteAsync(encoded.ToArray());
+            });
+        });
+        using TitaniumHttpHandler handler = Handler();
+        handler.AutomaticDecompression = DecompressionMethods.GZip;
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://localhost:" + server.Port.ToString() + "/from")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("hello", body);
+        Assert.AreSame(request, response.RequestMessage);
     }
 
     [TestMethod]

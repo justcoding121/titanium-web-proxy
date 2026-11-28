@@ -22,6 +22,8 @@ namespace Titanium.Net.Http;
 /// </summary>
 /// <remarks>
 /// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream.
+/// A redirect is followed here. Each hop is rewritten the same way, so an https Location stays on the managed stream.
+/// Cookies and decompression stay on the inner handler.
 /// Port 443 stays on that URI when the caller used the default HTTPS port.
 /// <c>Host</c> stays the caller's host.
 /// The inner handler sends <c>:scheme http</c> on HTTP/2, and there is no hook to change it.
@@ -53,6 +55,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     private readonly ConcurrentDictionary<string, AlpnEntry> _alpn = new();
     private readonly AltSvcCache _alt = new();
     private SslClientAuthenticationOptions _sslOptions = new();
+    private bool _followRedirects = true;
 
     /// <summary>Creates a handler. The inner handler's connect callback owns the managed TLS stream.</summary>
     public TitaniumHttpHandler()
@@ -60,6 +63,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         // The HTTP/3 codec stays referenced for the client that follows this adapter.
         _ = typeof(Http3FrameCodec).Assembly;
         _sockets.ConnectCallback = ConnectAsync;
+        _sockets.AllowAutoRedirect = false;
         _inner = new HttpMessageInvoker(_sockets, disposeHandler: false);
     }
 
@@ -119,11 +123,14 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         set => _sockets.UseCookies = value;
     }
 
-    /// <summary>Gets or sets whether the inner handler follows redirects.</summary>
+    /// <summary>
+    /// Gets or sets whether a 3xx response is followed.
+    /// Each hop is sent through this handler, so an https Location stays on the managed stream.
+    /// </summary>
     public bool AllowAutoRedirect
     {
-        get => _sockets.AllowAutoRedirect;
-        set => _sockets.AllowAutoRedirect = value;
+        get => _followRedirects;
+        set => _followRedirects = value;
     }
 
     /// <summary>Gets or sets how many redirects the inner handler follows.</summary>
@@ -244,6 +251,108 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
             }
         }
 
+        HttpResponseMessage response = await SendAdapterAsync(request, cancellationToken).ConfigureAwait(false);
+        response = await FollowRedirectsAsync(request, response, cancellationToken).ConfigureAwait(false);
+        NoteAltSvc(request, response);
+        return response;
+    }
+
+    private async Task<HttpResponseMessage> FollowRedirectsAsync(
+        HttpRequestMessage original,
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (!_followRedirects || original.RequestUri is null)
+        {
+            return response;
+        }
+
+        HttpRequestMessage current = original;
+        HttpRequestMessage? owned = null;
+        int left = _sockets.MaxAutomaticRedirections;
+        while (IsRedirect(response.StatusCode))
+        {
+            if (response.Headers.Location is not Uri location)
+            {
+                break;
+            }
+
+            if (left <= 0)
+            {
+                response.Dispose();
+                if (owned is not null)
+                {
+                    owned.Content = null;
+                    owned.Dispose();
+                }
+
+                throw new HttpRequestException("The redirect limit was reached.");
+            }
+
+            Uri nextUri = location.IsAbsoluteUri ? location : new Uri(current.RequestUri!, location);
+            if (nextUri.Fragment.Length > 0)
+            {
+                UriBuilder builder = new(nextUri) { Fragment = string.Empty };
+                nextUri = builder.Uri;
+            }
+
+            HttpMethod method = RedirectMethod(current.Method, response.StatusCode);
+            bool keepBody = current.Content is not null
+                && method == current.Method
+                && response.StatusCode is HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
+            HttpRequestMessage next = new(method, nextUri)
+            {
+                Version = original.Version,
+                VersionPolicy = original.VersionPolicy,
+            };
+            foreach (KeyValuePair<string, IEnumerable<string>> header in current.Headers)
+            {
+                if (header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)
+                    || (UseCookies && header.Key.Equals("Cookie", StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                if (header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(current.RequestUri?.IdnHost, nextUri.IdnHost, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                next.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            if (keepBody)
+            {
+                next.Content = current.Content;
+            }
+
+            NoteAltSvc(original, response);
+            response.Dispose();
+            if (owned is not null)
+            {
+                owned.Content = null;
+                owned.Dispose();
+            }
+
+            owned = next;
+            current = next;
+            left--;
+            response = await SendAdapterAsync(current, cancellationToken).ConfigureAwait(false);
+        }
+
+        response.RequestMessage = original;
+        if (owned is not null)
+        {
+            owned.Content = null;
+            owned.Dispose();
+        }
+
+        return response;
+    }
+
+    private async Task<HttpResponseMessage> SendAdapterAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
         VersionChoice choice = Choose(request);
         HttpResponseMessage response;
         bool retried = false;
@@ -271,8 +380,31 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
             response = await SendCoreAsync(request, HttpVersion.Version11, HttpVersionPolicy.RequestVersionExact, cancellationToken).ConfigureAwait(false);
         }
 
-        NoteAltSvc(request, response);
         return response;
+    }
+
+    private static bool IsRedirect(HttpStatusCode status) =>
+        status is HttpStatusCode.MultipleChoices
+            or HttpStatusCode.MovedPermanently
+            or HttpStatusCode.Found
+            or HttpStatusCode.SeeOther
+            or HttpStatusCode.TemporaryRedirect
+            or HttpStatusCode.PermanentRedirect;
+
+    private static HttpMethod RedirectMethod(HttpMethod method, HttpStatusCode status)
+    {
+        if (status == HttpStatusCode.SeeOther)
+        {
+            return method == HttpMethod.Head ? HttpMethod.Head : HttpMethod.Get;
+        }
+
+        if (method == HttpMethod.Post
+            && status is HttpStatusCode.MultipleChoices or HttpStatusCode.MovedPermanently or HttpStatusCode.Found)
+        {
+            return HttpMethod.Get;
+        }
+
+        return method;
     }
 
     private void NoteAltSvc(HttpRequestMessage request, HttpResponseMessage response)
