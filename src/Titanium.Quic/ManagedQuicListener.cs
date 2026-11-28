@@ -34,13 +34,16 @@ public sealed class ManagedQuicListener : IAsyncDisposable
 
     private readonly Task _loop;
 
-    private ManagedQuicListener(IUdpPacketTransport transport, ManagedQuicConnectionOptionsCallback callback, TimeSpan handshakeTimeout)
+    private readonly bool _injected;
+
+    private ManagedQuicListener(IUdpPacketTransport transport, ManagedQuicConnectionOptionsCallback callback, TimeSpan handshakeTimeout, bool injected)
     {
         _transport = transport;
         _callback = callback;
         _handshakeTimeout = handshakeTimeout <= TimeSpan.Zero ? TimeSpan.FromSeconds(10) : handshakeTimeout;
+        _injected = injected;
         LocalEndPoint = transport.LocalEndpoint;
-        _loop = RunAsync(_stop.Token);
+        _loop = injected ? Task.CompletedTask : RunAsync(_stop.Token);
     }
 
     /// <summary>Gets the bound local endpoint.</summary>
@@ -60,13 +63,71 @@ public sealed class ManagedQuicListener : IAsyncDisposable
         var transport = new UdpSocketTransport(options.ListenEndPoint);
         try
         {
-            return ValueTask.FromResult(new ManagedQuicListener(transport, options.ConnectionOptionsCallback, options.HandshakeTimeout));
+            return ValueTask.FromResult(new ManagedQuicListener(transport, options.ConnectionOptionsCallback, options.HandshakeTimeout, injected: false));
         }
         catch
         {
             transport.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Accepts datagrams from the caller. Each reply is handed to <paramref name="send"/> before the creating call returns.
+    /// The listener does not open a socket.
+    /// </summary>
+    /// <param name="options">The certificate callback and the FIPS switch. The listen endpoint is not bound.</param>
+    /// <param name="local">The virtual local address. Path checks use this tuple.</param>
+    /// <param name="send">Receives one outbound datagram and the virtual remote address.</param>
+    /// <param name="maximumDatagramSize">The largest payload <paramref name="send"/> will be offered. A tunnel lowers this.</param>
+    /// <returns>A listener that reads only through <see cref="HandleDatagramAsync"/>.</returns>
+    public static ManagedQuicListener CreateInjected(
+        ManagedQuicListenerOptions options,
+        IPEndPoint local,
+        Func<ReadOnlyMemory<byte>, IPEndPoint, CancellationToken, ValueTask> send,
+        int maximumDatagramSize = 65507)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(send);
+        ArgumentNullException.ThrowIfNull(options.ConnectionOptionsCallback);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maximumDatagramSize, 1200);
+
+        QuicConnectionSession.RejectFips(options.AllowManagedStackUnderFips);
+        return new ManagedQuicListener(new CallbackTransport(local, send, maximumDatagramSize), options.ConnectionOptionsCallback, options.HandshakeTimeout, injected: true);
+    }
+
+    /// <summary>Feeds one datagram from a relay. Replies leave through the callback passed to <see cref="CreateInjected"/>.</summary>
+    /// <param name="datagram">The UDP payload. The caller may reuse the buffer after this task completes.</param>
+    /// <param name="remote">The virtual remote address.</param>
+    /// <param name="cancellationToken">A token that cancels the certificate callback.</param>
+    /// <returns>A task that completes after the replies for this datagram have been offered.</returns>
+    public ValueTask HandleDatagramAsync(ReadOnlyMemory<byte> datagram, IPEndPoint remote, CancellationToken cancellationToken = default)
+    {
+        if (!_injected)
+        {
+            throw new InvalidOperationException("This listener reads its own socket.");
+        }
+
+        ArgumentNullException.ThrowIfNull(remote);
+        cancellationToken.ThrowIfCancellationRequested();
+        var copy = new byte[datagram.Length];
+        datagram.Span.CopyTo(copy);
+        return new ValueTask(OnDatagramAsync(copy, remote, cancellationToken));
+    }
+
+    /// <summary>Runs handshake and loss timers for an injected listener. The caller supplies the clock tick.</summary>
+    /// <param name="cancellationToken">A token that cancels the flush.</param>
+    /// <returns>A task that completes after the replies for this tick have been offered.</returns>
+    public ValueTask DriveAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_injected)
+        {
+            throw new InvalidOperationException("This listener reads its own socket.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask(OnTimeoutAsync(TimeProvider.System.GetUtcNow()));
     }
 
     /// <summary>Waits for the next connection to finish its handshake.</summary>
@@ -498,5 +559,52 @@ public sealed class ManagedQuicListener : IAsyncDisposable
         internal ManagedQuicConnection Connection { get; }
 
         internal bool Published { get; set; }
+    }
+
+    private sealed class CallbackTransport : IUdpPacketTransport
+    {
+        private readonly Func<ReadOnlyMemory<byte>, IPEndPoint, CancellationToken, ValueTask> _send;
+
+        internal CallbackTransport(IPEndPoint local, Func<ReadOnlyMemory<byte>, IPEndPoint, CancellationToken, ValueTask> send, int maximumDatagramSize)
+        {
+            LocalEndpoint = local;
+            _send = send;
+            MaximumDatagramSize = maximumDatagramSize;
+        }
+
+        public IPEndPoint LocalEndpoint { get; }
+
+        public int MaximumDatagramSize { get; }
+
+        public bool DatagramPending => false;
+
+        public async ValueTask<int> SendAsync(ReadOnlyMemory<byte> datagram, IPEndPoint destination, CancellationToken cancellationToken)
+        {
+            if (datagram.Length > MaximumDatagramSize)
+            {
+                throw new ArgumentOutOfRangeException(nameof(datagram));
+            }
+
+            await _send(datagram, destination, cancellationToken).ConfigureAwait(false);
+            return datagram.Length;
+        }
+
+        public async ValueTask<int> SendBatchAsync(ReadOnlyMemory<ReadOnlyMemory<byte>> datagrams, IPEndPoint destination, CancellationToken cancellationToken)
+        {
+            int bytes = 0;
+            for (int i = 0; i < datagrams.Length; i++)
+            {
+                bytes += await SendAsync(datagrams.Span[i], destination, cancellationToken).ConfigureAwait(false);
+            }
+
+            return bytes;
+        }
+
+        public ValueTask<UdpReceived> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("An injected listener does not read a socket.");
+
+        public void Dispose()
+        {
+        }
     }
 }

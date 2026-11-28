@@ -53,7 +53,7 @@ Exit: existing proxy tests stay green and unedited. A flag-off run does not cons
 
 ### P3.7 UDP injection
 
-SOCKS5 UDP ASSOCIATE, CONNECT-UDP, and transparent interception can terminate QUIC through the injection API. The platform path stays the default.
+A managed listener can take one datagram from the caller and hand each reply to a callback. It does not open a socket. SOCKS5 UDP ASSOCIATE, CONNECT-UDP, and transparent interception are not wired to that callback yet. The platform path stays the default.
 
 ## Self-review
 
