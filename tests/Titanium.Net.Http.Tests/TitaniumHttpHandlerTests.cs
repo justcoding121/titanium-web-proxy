@@ -455,6 +455,109 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3AltSvcClearDropsTheCachedPort()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        int quicPort = listener.LocalEndPoint.Port;
+        int tcpHits = 0;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(app =>
+        {
+            app.MapGet("/tcp", (HttpResponse response) =>
+            {
+                int hit = Interlocked.Increment(ref tcpHits);
+                if (hit == 1)
+                {
+                    response.Headers.Append("Alt-Svc", "h3=\":" + quicPort.ToString(CultureInfo.InvariantCulture) + "\"; ma=60");
+                    return "tcp";
+                }
+
+                if (hit == 2)
+                {
+                    response.Headers.Append("Alt-Svc", "clear");
+                    return "cleared";
+                }
+
+                return "stayed";
+            });
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using TitaniumHttpHandler handler = Handler();
+        handler.EnableAltSvc = true;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/tcp";
+        using (HttpRequestMessage first = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        })
+        {
+            using HttpResponseMessage firstResponse = await client.SendAsync(first, cancel.Token);
+            Assert.AreEqual("tcp", await firstResponse.Content.ReadAsStringAsync(cancel.Token));
+        }
+
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using (HttpRequestMessage second = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        })
+        {
+            Task<HttpResponseMessage> pending = client.SendAsync(second, cancel.Token);
+            ManagedQuicConnection quic = await accepted;
+            await ReplyAsync(quic, cancel.Token);
+            using HttpResponseMessage secondResponse = await pending;
+            Assert.AreEqual(new Version(3, 0), secondResponse.Version);
+            Assert.AreEqual("ok", await secondResponse.Content.ReadAsStringAsync(cancel.Token));
+            await quic.DisposeAsync();
+        }
+
+        using (HttpRequestMessage clear = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        })
+        {
+            using HttpResponseMessage clearResponse = await client.SendAsync(clear, cancel.Token);
+            Assert.AreEqual("cleared", await clearResponse.Content.ReadAsStringAsync(cancel.Token));
+        }
+
+        using var late = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
+        Task<ManagedQuicConnection> refused = listener.AcceptConnectionAsync(late.Token).AsTask();
+        using HttpRequestMessage third = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        Task<HttpResponseMessage> stayed = client.SendAsync(third, cancel.Token);
+        try
+        {
+            ManagedQuicConnection extra = await refused;
+            await extra.DisposeAsync();
+            Assert.Fail("HTTP/3 was used after Alt-Svc: clear.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        using HttpResponseMessage thirdResponse = await stayed;
+        Assert.AreEqual("stayed", await thirdResponse.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreNotEqual(3, thirdResponse.Version.Major);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3AltSvcFallsBackWhenTheUpgradeHandshakeFails()
     {
         using Socket udp = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
