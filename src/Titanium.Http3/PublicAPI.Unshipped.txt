@@ -54,3 +54,27 @@ static Titanium.Http3.CapsuleReader.WriteDatagram(System.Span<byte> destination,
 static Titanium.Http3.CapsuleReader.WriteVarint(System.Span<byte> destination, long value) -> int
 Titanium.Http3.DatagramHandler
 virtual Titanium.Http3.DatagramHandler.Invoke(System.ReadOnlySpan<byte> payload) -> void
+Titanium.Http3.Http3Settings
+Titanium.Http3.Http3Settings.Http3Settings() -> void
+Titanium.Http3.Http3Settings.Add(ulong id, ulong value) -> void
+Titanium.Http3.Http3Settings.EnableConnectProtocol.get -> bool
+Titanium.Http3.Http3Settings.MaxFieldSectionSize.get -> ulong
+Titanium.Http3.Http3Settings.Parameters.get -> System.Collections.Generic.IReadOnlyList<(ulong Id, ulong Value)>!
+Titanium.Http3.Http3Settings.QpackBlockedStreams.get -> uint
+Titanium.Http3.Http3Settings.QpackMaxTableCapacity.get -> uint
+static Titanium.Http3.Http3Settings.Parse(System.ReadOnlySpan<byte> payload) -> Titanium.Http3.Http3Settings!
+Titanium.Http3.Http3Settings.Serialize() -> byte[]!
+Titanium.Http3.Http3Settings.SetEnableConnectProtocol(bool enabled) -> void
+Titanium.Http3.Http3Settings.SetMaxFieldSectionSize(ulong size) -> void
+Titanium.Http3.Http3Settings.SetQpackBlockedStreams(uint count) -> void
+Titanium.Http3.Http3Settings.SetQpackMaxTableCapacity(uint capacity) -> void
+Titanium.Http3.Http3SettingsId
+const Titanium.Http3.Http3SettingsId.EnableConnectProtocol = 8 -> ulong
+const Titanium.Http3.Http3SettingsId.EnablePush = 2 -> ulong
+const Titanium.Http3.Http3SettingsId.HeaderTableSize = 1 -> ulong
+const Titanium.Http3.Http3SettingsId.InitialWindowSize = 4 -> ulong
+const Titanium.Http3.Http3SettingsId.MaxConcurrentStreams = 3 -> ulong
+const Titanium.Http3.Http3SettingsId.MaxFieldSectionSize = 6 -> ulong
+const Titanium.Http3.Http3SettingsId.MaxFrameSize = 5 -> ulong
+const Titanium.Http3.Http3SettingsId.QpackBlockedStreams = 7 -> ulong
+const Titanium.Http3.Http3SettingsId.QpackMaxTableCapacity = 1 -> ulong

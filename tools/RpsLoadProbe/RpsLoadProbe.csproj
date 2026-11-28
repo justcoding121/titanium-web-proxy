@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Http3\Titanium.Http3.csproj" />
     <!-- Stages beside the harness so the .NET plugin edition arm can copy it into the CLI work dir. -->
     <ProjectReference Include="..\..\tests\Titanium.Web.Proxy.TestPlugins\Titanium.Web.Proxy.TestPlugins.csproj" />
   </ItemGroup>
