@@ -115,7 +115,7 @@ metadata:
     helm.sh/resource-policy: keep
 data:
   twp.yaml: |
-    {"schemaVersion":"7.1","listeners":[],"routes":[{"id":"titanium-gateway-no-match","clusterId":"titanium-gateway-none","match":{"path":"/","pathKind":"prefix","pathCaseSensitive":true},"order":1,"directResponse":{"status":404},"grpcWeb":false}],"clusters":[],"policies":[],"server":{"admin":{"enabled":true,"host":"0.0.0.0","port":9901,"authTokenEnv":"TITANIUM_ADMIN_TOKEN","readiness":{"requireHealthyClusters":false},"preStopDelaySeconds":5}}}
+    {"schemaVersion":"7.1","listeners":[],"routes":[{"id":"titanium-gateway-no-match","clusterId":"titanium-gateway-none","match":{"path":"/","pathKind":"prefix","pathCaseSensitive":true},"order":1,"directResponse":{"status":404},"grpcWeb":false}],"clusters":[],"policies":[],"server":{"admin":{"enabled":true,"host":"0.0.0.0","port":9901,"authTokenEnv":"TITANIUM_ADMIN_TOKEN","readiness":{"requireHealthyClusters":false},"preStopDelaySeconds":5},"managedStack":false}}
 ---
 # Source: titanium-gateway/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1

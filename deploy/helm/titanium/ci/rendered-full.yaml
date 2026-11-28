@@ -138,6 +138,7 @@ data:
         preStopDelaySeconds: 10
         readiness:
           requireHealthyClusters: true
+      managedStack: false
 ---
 # Source: titanium/templates/service.yaml
 apiVersion: v1
@@ -209,7 +210,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: d0262af266cfb1b8f48db3e1dc81fe938dccf3b7ecc54b43a93b5a675b66de3e
+        checksum/config: 489d0106cf5860921f8860752375ff25af56a30159224197ff5d5a90718fb101
       labels:
         helm.sh/chart: titanium-1.0.9
         app.kubernetes.io/name: titanium

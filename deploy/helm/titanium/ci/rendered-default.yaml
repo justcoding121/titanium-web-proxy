@@ -74,6 +74,7 @@ data:
         preStopDelaySeconds: 5
         readiness:
           requireHealthyClusters: false
+      managedStack: false
 ---
 # Source: titanium/templates/service.yaml
 apiVersion: v1

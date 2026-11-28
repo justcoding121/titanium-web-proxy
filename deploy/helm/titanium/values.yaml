@@ -40,6 +40,11 @@ strategy:
 
 # The Titanium config document (twp.yaml). The chart owns `server.admin` and overwrites whatever is set there:
 # use the `admin` values below instead. Everything else is passed through unchanged.
+# The managed TLS and QUIC stacks stay off. They are not a FIPS-validated module, and the platform
+# stack remains the default. `managedStack.enabled` is written to `server.managedStack`.
+managedStack:
+  enabled: false
+
 config:
   schemaVersion: "7.1"
   listeners:

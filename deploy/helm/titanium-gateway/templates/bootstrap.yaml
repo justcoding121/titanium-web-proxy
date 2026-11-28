@@ -20,6 +20,9 @@ metadata:
 data:
   twp.yaml: |
     {{- $body := .Values.dataPlane.bootstrapConfig }}
+    {{- if .Values.dataPlane.managedStack.enabled }}
+    {{- $body = replace "\"managedStack\":false" "\"managedStack\":true" $body }}
+    {{- end }}
     {{- $live := lookup "v1" "ConfigMap" .Release.Namespace $data }}
     {{- if and $live $live.data (hasKey $live.data "twp.yaml") }}
     {{- $body = index $live.data "twp.yaml" }}

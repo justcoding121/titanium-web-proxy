@@ -16,6 +16,13 @@
     },
     "imagePullSecrets": { "type": "array" },
     "serviceAccount": { "type": "object", "additionalProperties": true },
-    "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 }
+    "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+    "managedStack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    }
   }
 }

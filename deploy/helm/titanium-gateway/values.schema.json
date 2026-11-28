@@ -6,6 +6,19 @@
     "gatewayClass": { "type": "object", "additionalProperties": true },
     "ingressClass": { "type": "object", "additionalProperties": true },
     "controller": { "type": "object", "additionalProperties": true },
+    "dataPlane": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "managedStack": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        }
+      }
+    },
     "imagePullSecrets": { "type": "array" }
   }
 }

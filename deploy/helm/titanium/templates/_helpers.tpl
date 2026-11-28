@@ -66,6 +66,7 @@ reference, and the pre-stop delay always agree with the Deployment.
 {{- $server := default (dict) (get $cfg "server") -}}
 {{- $admin := dict "enabled" true "host" "0.0.0.0" "port" (int .Values.admin.port) "authTokenEnv" "TITANIUM_ADMIN_TOKEN" "preStopDelaySeconds" (int .Values.admin.preStopDelaySeconds) "readiness" (dict "requireHealthyClusters" (.Values.admin.requireHealthyClusters | default false)) -}}
 {{- $_ := set $server "admin" $admin -}}
+{{- $_ := set $server "managedStack" (.Values.managedStack.enabled | default false) -}}
 {{- $_ := set $cfg "server" $server -}}
 {{- if .Values.plus.enabled -}}
 {{- $_ := required "plus.controlPlane.sharedSecret.existingSecret is required when plus.enabled is true" .Values.plus.controlPlane.sharedSecret.existingSecret -}}

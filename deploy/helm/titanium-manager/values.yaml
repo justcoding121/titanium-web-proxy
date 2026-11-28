@@ -1,4 +1,5 @@
 # Default values for Titanium Manager.
+# This chart does not run the data plane. The managed TLS and QUIC stacks stay off on the proxy and gateway charts.
 # Single-instance only: keep replicaCount at 1 and use one PVC for the SQLite database.
 
 replicaCount: 1
