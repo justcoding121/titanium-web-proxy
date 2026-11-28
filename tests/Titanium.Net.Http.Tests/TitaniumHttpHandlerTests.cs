@@ -888,6 +888,49 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3CleartextHopSendsAStoredCookie()
+    {
+        using var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        int clearPort = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<TcpClient> clearAccepted = tcp.AcceptTcpClientAsync(cancel.Token).AsTask();
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.UseProxy = false;
+        handler.UseCookies = true;
+        CookieContainer cookies = new();
+        cookies.Add(new Uri("http://127.0.0.1:" + clearPort.ToString(CultureInfo.InvariantCulture) + "/"), new Cookie("sid", "abc"));
+        handler.CookieContainer = cookies;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/from");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        string path = await ReadRequestPathAsync(hop, cancel.Token);
+        Assert.IsTrue(path.EndsWith("/from", StringComparison.Ordinal));
+        await WriteRedirectAsync(
+            hop,
+            "302",
+            "http://127.0.0.1:" + clearPort.ToString(CultureInfo.InvariantCulture) + "/land",
+            cancel.Token);
+        using TcpClient clear = await clearAccepted;
+        await using NetworkStream stream = clear.GetStream();
+        string headers = await ReadHttpHeadersAsync(stream, cancel.Token);
+        Assert.IsTrue(headers.StartsWith("GET /land HTTP/1.1\r\n", StringComparison.Ordinal), headers);
+        Assert.IsTrue(headers.Contains("Cookie: sid=abc", StringComparison.Ordinal), headers);
+        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc"u8.ToArray(), cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("abc", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreNotEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3RedirectStopsWhenTheRequestIsCancelled()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
