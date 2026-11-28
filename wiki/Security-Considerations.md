@@ -147,6 +147,11 @@ claim full OWASP Core Rule Set coverage.
 
 Options, rule categories, and the per-route `waf` policy are in
 [Plus](https://titaniumproxy.com/docs/plus#web-application-firewall-waf).
+
+## The managed TLS and QUIC stacks are opt-in
+
+`UseManagedTlsStack` and `UseManagedQuicStack` default to false, so the proxy keeps `SslStream` and the platform QUIC types. Startup refuses the managed stacks while FIPS mode is on unless `server.managedStackFipsOverride` or `TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1` is set. That override leaves the stack unvalidated. Terminating QUIC that arrives as a raw datagram needs the QUIC flag, because the platform API does not hand those datagrams to a connection. The flag, the features that need it, and the FIPS override are on [Managed TLS and QUIC](Managed-TLS-and-QUIC).
+
 ## See also
 
 - [Migration from 4.x](Migration-from-4.x) — cumulative behavior changes from 4.x through current 7.x.
