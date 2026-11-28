@@ -1416,6 +1416,33 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11AllowAutoRedirectFalseReturnsTheRedirect()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/from", (HttpContext context) =>
+            {
+                context.Response.Redirect("/land");
+                return Task.CompletedTask;
+            });
+            app.MapGet("/land", () => "landed");
+        });
+        using TitaniumHttpHandler handler = Handler();
+        handler.AllowAutoRedirect = false;
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/from")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.Found, response.StatusCode);
+        Assert.IsTrue(response.Headers.Location?.OriginalString.EndsWith("/land", StringComparison.Ordinal));
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11LargeUploadAndDownloadMatchTheirHashes()
     {
         byte[] upload = Pattern(1024 * 1024);
