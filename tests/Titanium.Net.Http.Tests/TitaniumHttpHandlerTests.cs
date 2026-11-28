@@ -455,6 +455,49 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3AltSvcFallsBackWhenTheUpgradeHandshakeFails()
+    {
+        using Socket udp = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        udp.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        int quicPort = ((IPEndPoint)udp.LocalEndPoint!).Port;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(app =>
+        {
+            app.MapGet("/tcp", (HttpResponse response) =>
+            {
+                response.Headers.Append("Alt-Svc", "h3=\":" + quicPort.ToString(CultureInfo.InvariantCulture) + "\"; ma=60");
+                return "tcp";
+            });
+        });
+        using TitaniumHttpHandler handler = Handler();
+        handler.EnableAltSvc = true;
+        handler.ConnectTimeout = TimeSpan.FromMilliseconds(400);
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/tcp";
+        using HttpRequestMessage first = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        using HttpResponseMessage firstResponse = await client.SendAsync(first);
+        Assert.AreEqual("tcp", await firstResponse.Content.ReadAsStringAsync());
+        using HttpRequestMessage second = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        DateTime started = DateTime.UtcNow;
+        using HttpResponseMessage secondResponse = await client.SendAsync(second);
+        string body = await secondResponse.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, secondResponse.StatusCode, body);
+        Assert.AreEqual("tcp", body);
+        Assert.AreNotEqual(3, secondResponse.Version.Major);
+        Assert.AreSame(second, secondResponse.RequestMessage);
+        Assert.AreEqual("https", secondResponse.RequestMessage!.RequestUri!.Scheme);
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromSeconds(3));
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3HeadersReturnBeforeTheBody()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
