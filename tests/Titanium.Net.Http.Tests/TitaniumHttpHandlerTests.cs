@@ -430,6 +430,45 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3AllowAutoRedirectFalseReturnsTheRedirect()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.AllowAutoRedirect = false;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/from");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        string path = await ReadRequestPathAsync(hop, cancel.Token);
+        Assert.IsTrue(path.EndsWith("/from", StringComparison.Ordinal));
+        await WriteRedirectAsync(hop, "302", "/land", cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.Found, response.StatusCode);
+        Assert.IsTrue(response.Headers.Location?.OriginalString.EndsWith("/land", StringComparison.Ordinal));
+        Assert.AreEqual(new Version(3, 0), response.Version);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
