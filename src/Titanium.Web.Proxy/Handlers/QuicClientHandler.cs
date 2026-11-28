@@ -8,6 +8,8 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Net.Compatibility;
+using Titanium.Quic;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3;
@@ -41,7 +43,7 @@ public partial class ProxyServer
 
         QuicListenPolicy.EnsureAllowed();
 
-        if (!QuicListener.IsSupported)
+        if (!UseManagedQuicStack && !QuicListener.IsSupported)
             throw new PlatformNotSupportedException(
                 "HTTP/3 (QUIC) requires the MsQuic native library and a supported OS. " +
                 "CLI/Inspector: use the matching RID zip (natives are bundled) or run `titanium http3-deps install`. " +
@@ -79,6 +81,14 @@ public partial class ProxyServer
     private void ListenSingleQuic(IQuicInboundEndPoint endPoint, CancellationTokenSource cts)
     {
         var address = IsWildcard(endPoint.IpAddress) ? IPAddress.IPv6Any : endPoint.IpAddress;
+        if (UseManagedQuicStack)
+        {
+            var managed = BindManagedQuicListener(endPoint, new IPEndPoint(address, endPoint.Port), cts.Token);
+            endPoint.ManagedQuicListener = managed;
+            endPoint.AssignPort(managed.LocalEndPoint.Port);
+            return;
+        }
+
         var listener = BindQuicListener(endPoint, new IPEndPoint(address, endPoint.Port), cts.Token);
         endPoint.QuicListener = listener;
         endPoint.AssignPort(listener.LocalEndPoint.Port);
@@ -93,6 +103,12 @@ public partial class ProxyServer
     /// </summary>
     private void ListenLoopbackQuic(IQuicInboundEndPoint endPoint, CancellationTokenSource cts)
     {
+        if (UseManagedQuicStack)
+        {
+            ListenLoopbackManagedQuic(endPoint, cts);
+            return;
+        }
+
         var ephemeral = endPoint.Port == 0;
         const int maxAttempts = 20;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
@@ -145,6 +161,57 @@ public partial class ProxyServer
             .GetAwaiter().GetResult();
     }
 
+    private void ListenLoopbackManagedQuic(IQuicInboundEndPoint endPoint, CancellationTokenSource cts)
+    {
+        var ephemeral = endPoint.Port == 0;
+        const int maxAttempts = 20;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var v6 = BindManagedQuicListener(
+                endPoint, new IPEndPoint(IPAddress.IPv6Loopback, endPoint.Port), cts.Token);
+            endPoint.ManagedQuicListener = v6;
+            var port = v6.LocalEndPoint.Port;
+            endPoint.AssignPort(port);
+            try
+            {
+                endPoint.LoopbackV4ManagedQuicListener = BindManagedQuicListener(
+                    endPoint, new IPEndPoint(IPAddress.Loopback, port), cts.Token);
+                return;
+            }
+            catch (Exception ex) when (ephemeral && attempt < maxAttempts && IsAddressAlreadyInUse(ex))
+            {
+                DisposeManagedQuicListener(v6);
+                endPoint.ManagedQuicListener = null;
+                endPoint.LoopbackV4ManagedQuicListener = null;
+                endPoint.AssignPort(0);
+            }
+            catch (Exception)
+            {
+                DisposeManagedQuicListener(v6);
+                endPoint.ManagedQuicListener = null;
+                endPoint.LoopbackV4ManagedQuicListener = null;
+                throw;
+            }
+        }
+    }
+
+    private ManagedQuicListener BindManagedQuicListener(
+        IQuicInboundEndPoint endPoint, IPEndPoint listenEndPoint, CancellationToken cancellationToken)
+    {
+        var listenerOptions = new QuicListenerOptions { ListenEndPoint = listenEndPoint };
+        ManagedQuicListenerOptions managed = QuicListenerOptionsAdapter.ToManaged(
+            listenerOptions,
+            (connection, clientHello, callbackToken) =>
+                GetManagedQuicServerConnectionOptionsAsync(endPoint, connection, clientHello, callbackToken));
+        if (endPoint.HandshakeTimeout > TimeSpan.Zero)
+        {
+            managed.HandshakeTimeout = endPoint.HandshakeTimeout;
+        }
+
+        return ManagedQuicListener.ListenAsync(managed, cancellationToken).AsTask()
+            .GetAwaiter().GetResult();
+    }
+
     /// <summary>
     ///     Stops every <see cref="QuicListener" /> for the given endpoint.
     /// </summary>
@@ -152,16 +219,33 @@ public partial class ProxyServer
     {
         var primary = endPoint.QuicListener;
         var v4 = endPoint.LoopbackV4QuicListener;
+        var managedPrimary = endPoint.ManagedQuicListener;
+        var managedV4 = endPoint.LoopbackV4ManagedQuicListener;
         endPoint.QuicListener = null;
         endPoint.LoopbackV4QuicListener = null;
+        endPoint.ManagedQuicListener = null;
+        endPoint.LoopbackV4ManagedQuicListener = null;
         try
         {
             DisposeQuicListener(primary);
         }
         finally
         {
-            DisposeQuicListener(v4);
+            try
+            {
+                DisposeQuicListener(v4);
+            }
+            finally
+            {
+                DisposeManagedQuicListener(managedPrimary);
+                DisposeManagedQuicListener(managedV4);
+            }
         }
+    }
+
+    private static void DisposeManagedQuicListener(ManagedQuicListener? listener)
+    {
+        listener?.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 
     private static void DisposeQuicListener(QuicListener? listener)
@@ -274,6 +358,89 @@ public partial class ProxyServer
         };
     }
 
+    private async ValueTask<ManagedQuicServerConnectionOptions> GetManagedQuicServerConnectionOptionsAsync(
+        IQuicInboundEndPoint endPoint,
+        ManagedQuicConnection connection,
+        SslClientHelloInfo clientHello,
+        CancellationToken cancellationToken)
+    {
+        var sniHostName = clientHello.ServerName;
+        var remoteEndPoint = connection.RemoteEndPoint;
+        var localEndPoint = connection.LocalEndPoint;
+
+        string destHost;
+        int destPort;
+
+        if (endPoint.OriginalDestinationResolver != null)
+        {
+            var resolved = await endPoint.OriginalDestinationResolver.ResolveAsync(
+                localEndPoint, remoteEndPoint, sniHostName, cancellationToken);
+
+            if (resolved.HasValue)
+            {
+                (destHost, destPort) = resolved.Value;
+            }
+            else if (endPoint.ForwardHost != null)
+            {
+                destHost = endPoint.ForwardHost;
+                destPort = endPoint.ForwardPort ?? 443;
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"IOriginalDestinationResolver returned null and no ForwardHost fallback is configured " +
+                    $"on endpoint {endPoint.IpAddress}:{endPoint.Port}. " +
+                    "Configure ForwardHost/ForwardPort or provide an IOriginalDestinationResolver.");
+            }
+        }
+        else if (endPoint.ForwardHost != null)
+        {
+            destHost = endPoint.ForwardHost;
+            destPort = endPoint.ForwardPort ?? 443;
+        }
+        else
+        {
+            destHost = sniHostName ?? endPoint.GenericCertificateName;
+            destPort = 443;
+        }
+
+        var connectionCts = new CancellationTokenSource();
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connectionCts.Token);
+
+        var eventArgs = new BeforeQuicAuthenticateEventArgs(
+            this, connectionCts, sniHostName, destHost, destPort, remoteEndPoint, localEndPoint);
+
+        await endPoint.InvokeBeforeQuicAuthenticate(this, eventArgs, Logger);
+
+        if (linked.IsCancellationRequested)
+            throw new OperationCanceledException(linked.Token);
+
+        var certHost = !string.IsNullOrEmpty(eventArgs.SniHostName)
+            ? eventArgs.SniHostName
+            : endPoint.GenericCertificateName;
+
+        endPoint.PendingManagedQuicAuthArgs.AddOrUpdate(connection, eventArgs);
+
+        var cert = await CertificateManager.CreateServerCertificate(certHost)
+            ?? throw new InvalidOperationException(
+                $"CertificateManager could not produce a certificate for '{certHost}'.");
+
+        return new ManagedQuicServerConnectionOptions
+        {
+            ServerAuthenticationOptions = new SslServerAuthenticationOptions
+            {
+                ServerCertificate = cert,
+                ClientCertificateRequired = false,
+                EnabledSslProtocols = SupportedServerSslProtocols,
+                CertificateRevocationCheckMode = CheckCertificateRevocation,
+                ApplicationProtocols = new List<SslApplicationProtocol>
+                {
+                    SslApplicationProtocol.Http3
+                }
+            }
+        };
+    }
+
     /// <summary>
     ///     Accept loops for every listener on the endpoint (one, or both loopback families).
     /// </summary>
@@ -281,6 +448,22 @@ public partial class ProxyServer
         IQuicInboundEndPoint endPoint,
         CancellationToken cancellationToken)
     {
+        if (UseManagedQuicStack)
+        {
+            var managedPrimary = endPoint.ManagedQuicListener;
+            var managedV4 = endPoint.LoopbackV4ManagedQuicListener;
+            if (managedPrimary == null)
+                return managedV4 == null
+                    ? Task.CompletedTask
+                    : AcceptManagedQuicListenerAsync(endPoint, managedV4, cancellationToken);
+
+            return managedV4 == null
+                ? AcceptManagedQuicListenerAsync(endPoint, managedPrimary, cancellationToken)
+                : Task.WhenAll(
+                    AcceptManagedQuicListenerAsync(endPoint, managedPrimary, cancellationToken),
+                    AcceptManagedQuicListenerAsync(endPoint, managedV4, cancellationToken));
+        }
+
         var primary = endPoint.QuicListener;
         var v4 = endPoint.LoopbackV4QuicListener;
         if (primary == null)
@@ -333,6 +516,56 @@ public partial class ProxyServer
 
             endPoint.PendingQuicAuthArgs.Remove(connection);
             _ = HandleQuicConnectionAsync(connection, endPoint, authArgs, cancellationToken);
+        }
+    }
+
+    private async Task AcceptManagedQuicListenerAsync(
+        IQuicInboundEndPoint endPoint,
+        ManagedQuicListener listener,
+        CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            ManagedQuicConnection connection;
+            try
+            {
+                connection = await listener.AcceptConnectionAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error accepting QUIC connection on {EndPoint}", endPoint.ProxyEndPoint);
+                continue;
+            }
+
+            if (!endPoint.PendingManagedQuicAuthArgs.TryGetValue(connection, out var authArgs))
+            {
+                _ = connection.CloseAsync(0x100, cancellationToken).AsTask();
+                continue;
+            }
+
+            endPoint.PendingManagedQuicAuthArgs.Remove(connection);
+            _ = CloseManagedQuicConnectionAsync(connection, authArgs, cancellationToken);
+        }
+    }
+
+    private async Task CloseManagedQuicConnectionAsync(
+        ManagedQuicConnection connection,
+        BeforeQuicAuthenticateEventArgs authArgs,
+        CancellationToken cancellationToken)
+    {
+        await using (connection)
+        {
+            using var connectionCts = authArgs.TaskCancellationSource;
+            Logger.LogDebug("HTTP/3 framing still uses the platform QUIC stream.");
+            await connection.CloseAsync(0x100, cancellationToken);
         }
     }
 

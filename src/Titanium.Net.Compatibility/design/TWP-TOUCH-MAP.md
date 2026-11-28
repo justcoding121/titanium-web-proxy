@@ -1,4 +1,4 @@
-This map is the survey for the Phase 3 seam. `ProxyServer.UseManagedTlsStack` and `ProxyServer.UseManagedQuicStack` default to false. `TcpConnectionFactory`, `ExplicitClientHandler`, `TransparentClientHandler`, `TcpTlsTerminateHandler`, `MasqueClientHandler`, and `WebTransportClientHandler` read `UseManagedTlsStack`. `WebTransportOrigin` receives the flag from those callers. `MirrorDispatcher` reads it when a copy opens TLS. `QuicConnectionFactory` reads `UseManagedQuicStack`.
+This map is the survey for the Phase 3 seam. `ProxyServer.UseManagedTlsStack` and `ProxyServer.UseManagedQuicStack` default to false. `TcpConnectionFactory`, `ExplicitClientHandler`, `TransparentClientHandler`, `TcpTlsTerminateHandler`, `MasqueClientHandler`, and `WebTransportClientHandler` read `UseManagedTlsStack`. `WebTransportOrigin` receives the flag from those callers. `MirrorDispatcher` reads it when a copy opens TLS. `QuicConnectionFactory` and `QuicClientHandler` read `UseManagedQuicStack`.
 
 A file is a creation site when it constructs `SslStream`, calls `QuicConnection.ConnectAsync`, or calls `QuicListener.ListenAsync`. A use site calls a member those types own on an object it did not construct. A capability site branches on the runtime type. Comment-only mentions are not a seam.
 
@@ -17,7 +17,7 @@ These are the only places a later flag branch belongs. The flag-off arm stays th
 | `WebTransport/WebTransportOrigin.cs` | Upstream handshake. When the caller passes the managed flag, the site authenticates a `TlsStream`. The default still constructs `SslStream`. |
 | `Routing/MirrorDispatcher.cs` | Upstream handshake for a mirror copy. When the flag is set, the site authenticates a `TlsStream`. The other branch still constructs `SslStream`. |
 | `Network/Quic/QuicConnectionFactory.cs` | Outbound dial. When `UseManagedQuicStack` is set, the site resolves the host and connects a `ManagedQuicConnection`. The other branch still calls `QuicConnection.ConnectAsync`. A request stream still needs the platform stream. |
-| `Handlers/QuicClientHandler.cs` | `QuicListener.ListenAsync` around line 144, and `QuicServerConnectionOptions` around line 265. The listener sets application protocols. `QuicListenerOptionsAdapter` refuses that field and tells the callback to carry them on the server authentication options. |
+| `Handlers/QuicClientHandler.cs` | Inbound listen. When `UseManagedQuicStack` is set, the site binds a `ManagedQuicListener` and carries HTTP/3 on the server authentication options. The other branch still calls `QuicListener.ListenAsync`. An accepted connection is closed until HTTP/3 framing can read a managed stream. |
 
 ## Capability sites
 

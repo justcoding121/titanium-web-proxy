@@ -5,6 +5,7 @@ using System.Net.Quic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Quic;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 
@@ -50,7 +51,16 @@ internal interface IQuicInboundEndPoint
     /// </summary>
     QuicListener? LoopbackV4QuicListener { get; set; }
 
+    /// <summary>Primary managed listener. Set only when <c>UseManagedQuicStack</c> is on.</summary>
+    ManagedQuicListener? ManagedQuicListener { get; set; }
+
+    /// <summary>Paired <c>127.0.0.1</c> managed listener. <see langword="null" /> for a single-address listen.</summary>
+    ManagedQuicListener? LoopbackV4ManagedQuicListener { get; set; }
+
     ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs> PendingQuicAuthArgs { get; }
+
+    /// <summary>Auth args for a managed connection, released if that connection is collected first.</summary>
+    ConditionalWeakTable<ManagedQuicConnection, BeforeQuicAuthenticateEventArgs> PendingManagedQuicAuthArgs { get; }
 
     /// <summary>
     ///     Optional NAT original-destination resolver. Dual-listen reverse endpoints return null and

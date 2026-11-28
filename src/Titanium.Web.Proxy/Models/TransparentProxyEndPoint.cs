@@ -8,6 +8,7 @@ using System.Net.Quic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Quic;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Network.Quic;
@@ -160,7 +161,14 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInbou
 
     internal QuicListener? LoopbackV4QuicListener { get; set; }
 
+    internal ManagedQuicListener? ManagedQuicListener { get; set; }
+
+    internal ManagedQuicListener? LoopbackV4ManagedQuicListener { get; set; }
+
     internal ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs> PendingQuicAuthArgs { get; } =
+        new();
+
+    internal ConditionalWeakTable<ManagedQuicConnection, BeforeQuicAuthenticateEventArgs> PendingManagedQuicAuthArgs { get; } =
         new();
 
     QuicListener? IQuicInboundEndPoint.QuicListener
@@ -175,8 +183,23 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInbou
         set => LoopbackV4QuicListener = value;
     }
 
+    ManagedQuicListener? IQuicInboundEndPoint.ManagedQuicListener
+    {
+        get => ManagedQuicListener;
+        set => ManagedQuicListener = value;
+    }
+
+    ManagedQuicListener? IQuicInboundEndPoint.LoopbackV4ManagedQuicListener
+    {
+        get => LoopbackV4ManagedQuicListener;
+        set => LoopbackV4ManagedQuicListener = value;
+    }
+
     ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs> IQuicInboundEndPoint.PendingQuicAuthArgs =>
         PendingQuicAuthArgs;
+
+    ConditionalWeakTable<ManagedQuicConnection, BeforeQuicAuthenticateEventArgs> IQuicInboundEndPoint.PendingManagedQuicAuthArgs =>
+        PendingManagedQuicAuthArgs;
 
     IOriginalDestinationResolver? IQuicInboundEndPoint.OriginalDestinationResolver => null;
 
