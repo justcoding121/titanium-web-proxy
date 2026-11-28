@@ -25,6 +25,7 @@ internal sealed class Http3Pool : IDisposable
     private readonly Dictionary<string, List<Entry>> _byAuthority = new(StringComparer.Ordinal);
     private readonly TaskCompletionSource _goAway = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _insert = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _settings = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _disposed;
 
     /// <summary>Completes when a peer GOAWAY has been read.</summary>
@@ -32,6 +33,9 @@ internal sealed class Http3Pool : IDisposable
 
     /// <summary>Completes when the peer's encoder stream has inserted one dynamic-table entry.</summary>
     internal Task EncoderInsertObserved => _insert.Task;
+
+    /// <summary>Completes when the peer's first SETTINGS frame has been read.</summary>
+    internal Task PeerSettingsObserved => _settings.Task;
 
     internal async Task<HttpResponseMessage> SendAsync(
         TitaniumHttpHandler handler,
@@ -54,6 +58,7 @@ internal sealed class Http3Pool : IDisposable
                     uri,
                     () => ReleaseAsync(entry),
                     entry.Qpack,
+                    entry.Encoder,
                     cancellationToken).ConfigureAwait(false);
             }
             catch (QuicException ex) when (IsStreamLimit(ex) && retries++ < 1)
@@ -157,8 +162,8 @@ internal sealed class Http3Pool : IDisposable
         int port,
         CancellationToken cancellationToken)
     {
-        ManagedQuicConnection connection = await Http3Client.ConnectAsync(handler, uri, port, cancellationToken).ConfigureAwait(false);
-        Entry entry = new(connection, new QpackContext(Http3Client.TableCapacity));
+        (ManagedQuicConnection connection, ManagedQuicStream encoder) = await Http3Client.ConnectAsync(handler, uri, port, cancellationToken).ConfigureAwait(false);
+        Entry entry = new(connection, encoder, new QpackContext(Http3Client.TableCapacity));
         if (!_byAuthority.TryGetValue(authority, out List<Entry>? list))
         {
             list = new List<Entry>();
@@ -171,6 +176,7 @@ internal sealed class Http3Pool : IDisposable
             entry.Qpack,
             () => NoteGoAwayAsync(entry),
             NoteInsertAsync,
+            NoteSettingsAsync,
             entry.Lifetime.Token);
         return entry;
     }
@@ -178,6 +184,12 @@ internal sealed class Http3Pool : IDisposable
     private Task NoteInsertAsync()
     {
         _insert.TrySetResult();
+        return Task.CompletedTask;
+    }
+
+    private Task NoteSettingsAsync()
+    {
+        _settings.TrySetResult();
         return Task.CompletedTask;
     }
 
@@ -356,15 +368,18 @@ internal sealed class Http3Pool : IDisposable
         private int _disposed;
         private int _qpackDisposed;
 
-        internal Entry(ManagedQuicConnection connection, QpackContext qpack)
+        internal Entry(ManagedQuicConnection connection, ManagedQuicStream encoder, QpackContext qpack)
         {
             Connection = connection;
+            Encoder = encoder;
             Qpack = qpack;
             Created = DateTimeOffset.UtcNow;
             LastUsed = Created;
         }
 
         internal ManagedQuicConnection Connection { get; }
+
+        internal ManagedQuicStream Encoder { get; }
 
         internal QpackContext Qpack { get; }
 

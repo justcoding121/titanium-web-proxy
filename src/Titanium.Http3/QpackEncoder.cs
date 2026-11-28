@@ -266,6 +266,24 @@ internal static class QpackEncoder
     ///     Encodes the Required Insert Count per RFC 9204 §4.5.1.1.
     ///     Encoded = (count % (2 * MaxEntries)) + 1, where MaxEntries = floor(MaxTableCapacity / 32).
     /// </summary>
+    /// <summary>Set Dynamic Table Capacity instruction, pattern 01.</summary>
+    internal static byte[] SetCapacityInstruction(uint capacity)
+    {
+        var body = new MemoryStream(8);
+        WritePrefixedInt(body, 0x40, 6, capacity);
+        return body.ToArray();
+    }
+
+    /// <summary>Insert With Literal Name instruction, pattern 001 and no Huffman coding.</summary>
+    internal static byte[] InsertLiteralInstruction(string name, string value)
+    {
+        var body = new MemoryStream(name.Length + value.Length + 8);
+        body.WriteByte(0x20);
+        WriteStringLiteral(body, name);
+        WriteStringLiteral(body, value);
+        return body.ToArray();
+    }
+
     internal static ulong EncodeRequiredInsertCount(ulong requiredInsertCount, uint maxTableCapacity)
     {
         var maxEntries = (ulong)(maxTableCapacity / 32);

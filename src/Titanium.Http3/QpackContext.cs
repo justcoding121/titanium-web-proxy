@@ -75,6 +75,18 @@ internal sealed class QpackContext : IAsyncDisposable
     /// </summary>
     internal bool OutboundTableDisabled { get; private set; }
 
+    /// <summary>SETTINGS_QPACK_BLOCKED_STREAMS from the peer. Zero until a SETTINGS frame arrives.</summary>
+    internal uint BlockedStreamsFromPeer { get; set; }
+
+    /// <summary>True after a Set Dynamic Table Capacity instruction has been written.</summary>
+    internal bool OutboundCapacitySent { get; set; }
+
+    /// <summary>
+    /// Header blocks that reference an insert the peer has not acknowledged.
+    /// Touched only while <see cref="EncoderStreamWriteLock"/> is held.
+    /// </summary>
+    internal int ReferencingStreams { get; set; }
+
     // Used by AwaitInsertCountAsync to be notified when the InboundDecoderTable's insert count grows.
     private readonly SemaphoreSlim _insertNotifier = new(0);
 

@@ -34,7 +34,7 @@ internal static class Http3Client
         return handler.Pool.SendAsync(handler, request, uri, port, cancellationToken);
     }
 
-    internal static async Task<ManagedQuicConnection> ConnectAsync(
+    internal static async Task<(ManagedQuicConnection Connection, ManagedQuicStream Encoder)> ConnectAsync(
         TitaniumHttpHandler handler,
         Uri uri,
         int port,
@@ -56,8 +56,8 @@ internal static class Http3Client
 
         try
         {
-            await WritePrefaceAsync(connection, cancellationToken).ConfigureAwait(false);
-            return connection;
+            ManagedQuicStream encoder = await WritePrefaceAsync(connection, cancellationToken).ConfigureAwait(false);
+            return (connection, encoder);
         }
         catch (Exception ex)
         {
@@ -82,10 +82,11 @@ internal static class Http3Client
         Uri uri,
         Func<Task> release,
         QpackContext qpack,
+        ManagedQuicStream encoder,
         CancellationToken cancellationToken)
     {
         ManagedQuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false);
-        await WriteRequestAsync(stream, request, uri, cancellationToken).ConfigureAwait(false);
+        await WriteRequestAsync(stream, request, uri, qpack, encoder, cancellationToken).ConfigureAwait(false);
         await stream.CompleteWritesAsync(cancellationToken).ConfigureAwait(false);
         HttpResponseMessage response = await ReadResponseAsync(stream, release, qpack, cancellationToken).ConfigureAwait(false);
         response.RequestMessage = request;
@@ -161,11 +162,12 @@ internal static class Http3Client
         return addresses[0];
     }
 
-    private static async Task WritePrefaceAsync(ManagedQuicConnection connection, CancellationToken cancellationToken)
+    private static async Task<ManagedQuicStream> WritePrefaceAsync(ManagedQuicConnection connection, CancellationToken cancellationToken)
     {
         await WriteStreamTypeAsync(connection, Http3StreamType.Control, SettingsFrame(), cancellationToken).ConfigureAwait(false);
-        await WriteStreamTypeAsync(connection, Http3StreamType.QpackEncoder, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
+        ManagedQuicStream encoder = await WriteStreamTypeAsync(connection, Http3StreamType.QpackEncoder, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
         await WriteStreamTypeAsync(connection, Http3StreamType.QpackDecoder, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
+        return encoder;
     }
 
     /// <summary>
@@ -179,6 +181,7 @@ internal static class Http3Client
         QpackContext qpack,
         Func<Task> onGoAway,
         Func<Task> onInsert,
+        Func<Task> onSettings,
         CancellationToken cancellationToken)
     {
         _ = GuardAsync(WatchInsertsAsync(qpack, onInsert, cancellationToken));
@@ -190,7 +193,7 @@ internal static class Http3Client
                 ulong? type = await Http3VarInt.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
                 if (type == Http3StreamType.Control)
                 {
-                    _ = GuardAsync(ReadControlAsync(stream, qpack, onGoAway, cancellationToken));
+                    _ = GuardAsync(ReadControlAsync(stream, qpack, onGoAway, onSettings, cancellationToken));
                 }
                 else if (type == Http3StreamType.QpackEncoder)
                 {
@@ -222,6 +225,7 @@ internal static class Http3Client
         ManagedQuicStream stream,
         QpackContext qpack,
         Func<Task> onGoAway,
+        Func<Task> onSettings,
         CancellationToken cancellationToken)
     {
         while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is Frame frame)
@@ -230,11 +234,13 @@ internal static class Http3Client
             {
                 Http3Settings settings = Http3Settings.Parse(frame.Payload);
                 qpack.MaxTableCapacityFromPeer = settings.QpackMaxTableCapacity;
+                qpack.BlockedStreamsFromPeer = settings.QpackBlockedStreams;
                 if (settings.QpackMaxTableCapacity == 0)
                 {
                     qpack.DisableOutboundTable();
                 }
 
+                await onSettings().ConfigureAwait(false);
                 continue;
             }
 
@@ -278,7 +284,7 @@ internal static class Http3Client
         return frame.AsMemory(0, written);
     }
 
-    private static async Task WriteStreamTypeAsync(
+    private static async Task<ManagedQuicStream> WriteStreamTypeAsync(
         ManagedQuicConnection connection,
         ulong streamType,
         ReadOnlyMemory<byte> rest,
@@ -292,9 +298,17 @@ internal static class Http3Client
         {
             await stream.WriteAsync(rest, cancellationToken).ConfigureAwait(false);
         }
+
+        return stream;
     }
 
-    private static async Task WriteRequestAsync(ManagedQuicStream stream, HttpRequestMessage request, Uri uri, CancellationToken cancellationToken)
+    private static async Task WriteRequestAsync(
+        ManagedQuicStream stream,
+        HttpRequestMessage request,
+        Uri uri,
+        QpackContext qpack,
+        ManagedQuicStream encoder,
+        CancellationToken cancellationToken)
     {
         var fields = new List<(string Name, string Value)>
         {
@@ -309,7 +323,7 @@ internal static class Http3Client
             AddHeaders(fields, request.Content.Headers);
         }
 
-        byte[] block = QpackEncoder.Encode(fields);
+        byte[] block = await EncodeRequestAsync(fields, qpack, encoder, cancellationToken).ConfigureAwait(false);
         await WriteFrameAsync(stream, Http3FrameType.Headers, block, cancellationToken).ConfigureAwait(false);
         if (request.Content is null)
         {
@@ -417,6 +431,68 @@ internal static class Http3Client
         byte[] frame = new byte[payload.Length + 16];
         int written = Http3FrameCodec.Write(frame, type, payload.Span);
         return stream.WriteAsync(frame.AsMemory(0, written), cancellationToken).AsTask();
+    }
+
+    private static async Task<byte[]> EncodeRequestAsync(
+        List<(string Name, string Value)> fields,
+        QpackContext qpack,
+        ManagedQuicStream encoder,
+        CancellationToken cancellationToken)
+    {
+        if (qpack.OutboundTableDisabled || qpack.MaxTableCapacityFromPeer == 0 || qpack.BlockedStreamsFromPeer == 0)
+        {
+            return QpackEncoder.Encode(fields);
+        }
+
+        await qpack.EncoderStreamWriteLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (qpack.ReferencingStreams >= qpack.BlockedStreamsFromPeer)
+            {
+                return QpackEncoder.Encode(fields);
+            }
+
+            uint capacity = Math.Min(qpack.MaxTableCapacityFromPeer, qpack.LocalMaxTableCapacity);
+            if (!qpack.OutboundCapacitySent)
+            {
+                qpack.OutboundEncoderTable.SetCapacity(capacity);
+                await encoder.WriteAsync(QpackEncoder.SetCapacityInstruction(capacity), cancellationToken).ConfigureAwait(false);
+                qpack.OutboundCapacitySent = true;
+            }
+
+            foreach ((string name, string value) in fields)
+            {
+                if (QpackStaticTable.FindExact(name, value) >= 0)
+                {
+                    continue;
+                }
+
+                if (qpack.OutboundEncoderTable.TryFind(name, value, out _, out bool exact) && exact)
+                {
+                    continue;
+                }
+
+                if (name.Length + value.Length + 32 > capacity)
+                {
+                    continue;
+                }
+
+                await encoder.WriteAsync(QpackEncoder.InsertLiteralInstruction(name, value), cancellationToken).ConfigureAwait(false);
+                qpack.OutboundEncoderTable.Insert(name, value);
+            }
+
+            byte[] block = QpackEncoder.Encode(fields, qpack);
+            if (block.Length > 0 && block[0] != 0)
+            {
+                qpack.ReferencingStreams++;
+            }
+
+            return block;
+        }
+        finally
+        {
+            qpack.EncoderStreamWriteLock.Release();
+        }
     }
 
     private static void AddHeaders(List<(string Name, string Value)> fields, HttpHeaders headers)

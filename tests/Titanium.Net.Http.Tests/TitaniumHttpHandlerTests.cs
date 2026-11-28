@@ -485,6 +485,66 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RequestInsertsAFieldThatIsNotInTheStaticTable()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello";
+        Task<HttpResponseMessage> first = client.SendAsync(Request(address), cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        QpackContext table = new(4096);
+        Task reading = ReadClientEncoderAsync(server, table, cancel.Token);
+        await SendQpackSettingsAsync(server, cancel.Token);
+        await ReplyOnceAsync(server, cancel.Token);
+        using HttpResponseMessage warmed = await first.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, warmed.StatusCode);
+        await handler.Pool.PeerSettingsObserved.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        request.Headers.TryAddWithoutValidation("x-row", "alpha");
+        Task<HttpResponseMessage> second = client.SendAsync(request, cancel.Token);
+        ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
+        byte[]? headers = null;
+        while (await ReadFrameAsync(inbound, cancel.Token) is byte[] frame)
+        {
+            headers = frame;
+            break;
+        }
+
+        Assert.IsNotNull(headers);
+        List<(string Name, string Value)> fields = await DecodeWhenInsertedAsync(headers!, table, cancel.Token);
+        Assert.IsTrue(fields.Exists(static field => field.Name == "x-row" && field.Value == "alpha"));
+        await ReplyOnStreamAsync(inbound, cancel.Token);
+        using HttpResponseMessage response = await second.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        cancel.Cancel();
+        await reading;
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11AgainstLoopbackReturnsTheBody()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
@@ -677,6 +737,80 @@ public sealed class TitaniumHttpHandlerTests
         CertificateRequest request = new("CN=localhost", key, HashAlgorithmName.SHA256);
         using X509Certificate2 created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
         return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pfx), password: null, X509KeyStorageFlags.Exportable);
+    }
+
+    private static async Task SendQpackSettingsAsync(ManagedQuicConnection server, CancellationToken cancellationToken)
+    {
+        Http3Settings settings = new();
+        settings.SetQpackMaxTableCapacity(4096);
+        settings.SetQpackBlockedStreams(16);
+        ManagedQuicStream control = await server.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        byte[] type = new byte[8];
+        int typeLength = Http3VarInt.Write(type, Http3StreamType.Control);
+        await control.WriteAsync(type.AsMemory(0, typeLength), cancellationToken);
+        await WriteFrameAsync(control, Http3FrameType.Settings, settings.Serialize(), cancellationToken);
+    }
+
+    private static async Task ReadClientEncoderAsync(ManagedQuicConnection server, QpackContext table, CancellationToken cancellationToken)
+    {
+        try
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                ManagedQuicStream stream = await server.AcceptInboundUnidirectionalStreamAsync(cancellationToken);
+                ulong? type = await Http3VarInt.ReadAsync(stream, cancellationToken);
+                if (type == Http3StreamType.QpackEncoder)
+                {
+                    await QpackEncoderStreamReader.ProcessAsync(stream, table, cancellationToken);
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (QuicException)
+        {
+        }
+    }
+
+    private static async Task<List<(string Name, string Value)>> DecodeWhenInsertedAsync(
+        byte[] headers,
+        QpackContext table,
+        CancellationToken cancellationToken)
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            try
+            {
+                List<(string Name, string Value)> fields = QpackDecoder.Decode(headers, table, cancellationToken);
+                if (fields.Exists(static field => field.Name == "x-row"))
+                {
+                    return fields;
+                }
+            }
+            catch (Http3ConnectionException)
+            {
+            }
+
+            await Task.Delay(20, cancellationToken);
+        }
+
+        return QpackDecoder.Decode(headers, table, cancellationToken);
+    }
+
+    private static async Task ReplyOnceAsync(ManagedQuicConnection server, CancellationToken cancellationToken)
+    {
+        ManagedQuicStream request = await server.AcceptInboundStreamAsync(cancellationToken);
+        await ReplyOnStreamAsync(request, cancellationToken);
+    }
+
+    private static async Task ReplyOnStreamAsync(ManagedQuicStream request, CancellationToken cancellationToken)
+    {
+        byte[] block = QpackEncoder.Encode([(":status", "200")]);
+        await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
+        await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
+        await request.CompleteWritesAsync(cancellationToken);
     }
 
     private static async Task ReplyAsync(ManagedQuicConnection server, CancellationToken cancellationToken)
