@@ -56,7 +56,7 @@ namespace Titanium.Net.Http;
 /// A failed HTTP/3 connect, before any request byte, falls back to the adapter when the request allows a lower version, and when an Alt-Svc upgrade fails.
 /// When <see cref="EnableAltSvc"/> is set, a later request that allows a higher version uses HTTP/3 after <c>Alt-Svc: h3</c> from the same origin.
 /// The cache holds 256 origins. An entry ends when its <c>ma</c> elapses. A missing <c>ma</c> lasts 24 hours. <c>ma=0</c> and <c>clear</c> drop the entry. A different host is ignored.
-/// <see cref="SslClientAuthenticationOptions.TargetHost"/> is the name sent on the handshake. The connection still goes to the URI host.
+/// <see cref="SslClientAuthenticationOptions.TargetHost"/> is the name sent on the handshake, including HTTP/3. The connection still goes to the URI host.
 /// <see cref="SslClientAuthenticationOptions.EnabledSslProtocols"/> that omit TLS 1.3 fail the request before it is sent.
 /// <see cref="AutomaticDecompression"/> gzip decodes an HTTPS HTTP/1.1 response. An HTTP/3 response with <c>Content-Encoding: gzip</c> stays compressed.
 /// </remarks>
@@ -90,7 +90,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     /// <summary>HTTP/3 connections kept for reuse. Internal so the HTTP/3 client can rent one.</summary>
     internal Http3Pool Pool => _pool;
 
-    /// <summary>Gets or sets the TLS options copied onto each managed handshake. The handler chooses ALPN. A certificate in <see cref="SslClientAuthenticationOptions.ClientCertificates"/> is presented when the server asks for one. <see cref="SslClientAuthenticationOptions.LocalCertificateSelectionCallback"/> chooses which certificate is presented. A certificate without a private key is skipped. <see cref="SslClientAuthenticationOptions.TargetHost"/> is the name sent on the handshake. The connection still goes to the URI host. <see cref="SslClientAuthenticationOptions.EnabledSslProtocols"/> that omit TLS 1.3 fail the request before it is sent.</summary>
+    /// <summary>Gets or sets the TLS options copied onto each managed handshake. The handler chooses ALPN. A certificate in <see cref="SslClientAuthenticationOptions.ClientCertificates"/> is presented when the server asks for one. <see cref="SslClientAuthenticationOptions.LocalCertificateSelectionCallback"/> chooses which certificate is presented. A certificate without a private key is skipped. <see cref="SslClientAuthenticationOptions.TargetHost"/> is the name sent on the handshake, including HTTP/3. The connection still goes to the URI host. <see cref="SslClientAuthenticationOptions.EnabledSslProtocols"/> that omit TLS 1.3 fail the request before it is sent.</summary>
     public SslClientAuthenticationOptions SslOptions
     {
         get => _sslOptions;
