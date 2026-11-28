@@ -1,18 +1,19 @@
 using System;
 using System.Collections.Generic;
 
-namespace Titanium.Web.Proxy.Http3.Qpack;
+namespace Titanium.Http3;
 
 /// <summary>
 ///     QPACK static table (RFC 9204 Appendix A). 99 entries, indexed 0–98.
 /// </summary>
-internal static class QpackStaticTable
+public static class QpackStaticTable
 {
     private const string Method = ":method";
     private const string Status = ":status";
     private const string CacheControl = "cache-control";
     private const string ContentType = "content-type";
 
+    /// <summary>The 99 static-table entries, indexed 0 through 98.</summary>
     public static readonly (string Name, string Value)[] Entries =
     {
         /* 00 */ (":authority", ""),

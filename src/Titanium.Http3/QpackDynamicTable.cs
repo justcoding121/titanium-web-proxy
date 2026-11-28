@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace Titanium.Web.Proxy.Http3.Qpack;
+namespace Titanium.Http3;
 
 /// <summary>
 ///     RFC 9204 QPACK dynamic table.
@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Http3.Qpack;
 ///     in-flight eviction protection is straightforward. Thread-safe via <see cref="ReaderWriterLockSlim" />:
 ///     reads (decode path) are far more common than writes (insert/evict).
 /// </summary>
-internal sealed class QpackDynamicTable : IDisposable
+public sealed class QpackDynamicTable : IDisposable
 {
     // QPACK overhead per entry: 32 bytes (RFC 9204 §3.2.1, same as HPACK §4.1).
     private const int EntryOverhead = 32;
@@ -23,15 +23,17 @@ internal sealed class QpackDynamicTable : IDisposable
     private ulong _baseAbsoluteIndex;
 
     /// <summary>Total number of entries ever inserted (never decremented on eviction).</summary>
-    internal ulong InsertCount { get; private set; }
+    public ulong InsertCount { get; private set; }
 
     /// <summary>Maximum total byte capacity of the table.</summary>
-    internal uint Capacity { get; private set; }
+    public uint Capacity { get; private set; }
 
     /// <summary>Current used bytes (name.Length + value.Length + 32 per entry).</summary>
-    internal int Size { get; private set; }
+    public int Size { get; private set; }
 
-    internal QpackDynamicTable(uint capacity)
+    /// <summary>Creates a table with the given byte capacity.</summary>
+    /// <param name="capacity">Maximum total byte capacity, including the 32-byte overhead per entry.</param>
+    public QpackDynamicTable(uint capacity)
     {
         Capacity = capacity;
     }
@@ -40,7 +42,7 @@ internal sealed class QpackDynamicTable : IDisposable
     ///     Inserts a new entry into the table, evicting oldest entries to make room (unless protected
     ///     by <paramref name="inFlightMinAbsoluteIndex" />). Returns the absolute index of the new entry.
     /// </summary>
-    internal ulong Insert(string name, string value, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    public ulong Insert(string name, string value, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         ConcurrentDictionary<long, ulong>? inFlightMinAbsoluteIndex = null)
     {
         var entrySize = name.Length + value.Length + EntryOverhead;
@@ -93,7 +95,7 @@ internal sealed class QpackDynamicTable : IDisposable
     }
 
     /// <summary>Looks up an entry by absolute index. Returns false if evicted or out of range.</summary>
-    internal bool TryGetByAbsoluteIndex(ulong absoluteIndex, out string name, out string value)
+    public bool TryGetByAbsoluteIndex(ulong absoluteIndex, out string name, out string value)
     {
         _lock.EnterReadLock();
         try
@@ -127,7 +129,7 @@ internal sealed class QpackDynamicTable : IDisposable
     ///     <paramref name="value" />). Returns true when found; sets <paramref name="exactMatch" /> when
     ///     both name and value match.
     /// </summary>
-    internal bool TryFind(string name, string value,
+    public bool TryFind(string name, string value,
         out ulong absoluteIndex, out bool exactMatch)
     {
         _lock.EnterReadLock();
@@ -164,7 +166,7 @@ internal sealed class QpackDynamicTable : IDisposable
     }
 
     /// <summary>Sets a new table capacity, evicting oldest entries until the size constraint is met.</summary>
-    internal void SetCapacity(uint newCapacity)
+    public void SetCapacity(uint newCapacity)
     {
         _lock.EnterWriteLock();
         try
@@ -184,5 +186,6 @@ internal sealed class QpackDynamicTable : IDisposable
         }
     }
 
+    /// <summary>Releases the table lock.</summary>
     public void Dispose() => _lock.Dispose();
 }

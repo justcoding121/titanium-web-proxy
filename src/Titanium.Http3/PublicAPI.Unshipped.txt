@@ -85,3 +85,17 @@ Titanium.Http3.HuffmanEncoder
 static readonly Titanium.Http3.HuffmanEncoder.Instance -> Titanium.Http3.HuffmanEncoder!
 Titanium.Http3.HuffmanEncoder.Encode(System.IO.BinaryWriter! output, System.ReadOnlySpan<byte> data) -> void
 Titanium.Http3.HuffmanEncoder.GetEncodedLength(System.ReadOnlySpan<byte> data) -> int
+Titanium.Http3.QpackDynamicTable
+Titanium.Http3.QpackDynamicTable.Capacity.get -> uint
+Titanium.Http3.QpackDynamicTable.Dispose() -> void
+Titanium.Http3.QpackDynamicTable.Insert(string! name, string! value, System.Collections.Concurrent.ConcurrentDictionary<long, ulong>? inFlightMinAbsoluteIndex = null) -> ulong
+Titanium.Http3.QpackDynamicTable.InsertCount.get -> ulong
+Titanium.Http3.QpackDynamicTable.QpackDynamicTable(uint capacity) -> void
+Titanium.Http3.QpackDynamicTable.SetCapacity(uint newCapacity) -> void
+Titanium.Http3.QpackDynamicTable.Size.get -> int
+Titanium.Http3.QpackDynamicTable.TryFind(string! name, string! value, out ulong absoluteIndex, out bool exactMatch) -> bool
+Titanium.Http3.QpackDynamicTable.TryGetByAbsoluteIndex(ulong absoluteIndex, out string! name, out string! value) -> bool
+Titanium.Http3.QpackStaticTable
+static readonly Titanium.Http3.QpackStaticTable.Entries -> (string! Name, string! Value)[]!
+static Titanium.Http3.QpackStaticTable.FindExact(string! name, string! value) -> int
+static Titanium.Http3.QpackStaticTable.FindName(string! name) -> int
