@@ -87,7 +87,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     /// <summary>HTTP/3 connections kept for reuse. Internal so the HTTP/3 client can rent one.</summary>
     internal Http3Pool Pool => _pool;
 
-    /// <summary>Gets or sets the TLS options copied onto each managed handshake. The handler chooses ALPN.</summary>
+    /// <summary>Gets or sets the TLS options copied onto each managed handshake. The handler chooses ALPN. A certificate in <see cref="SslClientAuthenticationOptions.ClientCertificates"/> is presented when the server asks for one.</summary>
     public SslClientAuthenticationOptions SslOptions
     {
         get => _sslOptions;

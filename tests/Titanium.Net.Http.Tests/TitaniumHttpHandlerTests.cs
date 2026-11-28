@@ -3073,6 +3073,43 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11PresentsTheClientCertificate()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/who", (HttpContext context) =>
+            {
+                string subject = context.Connection.ClientCertificate?.Subject ?? "none";
+                return Results.Text(subject);
+            }),
+            null,
+            HttpProtocols.Http1,
+            requestClientCertificate: true);
+        using X509Certificate2 clientCertificate = CreateClientCertificate();
+        using TitaniumHttpHandler handler = Handler();
+        handler.SslOptions.ClientCertificates = new X509CertificateCollection { clientCertificate };
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/who")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.IsTrue(body.Contains("CN=client", StringComparison.Ordinal), body);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    private static X509Certificate2 CreateClientCertificate()
+    {
+        using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        CertificateRequest request = new("CN=client", key, HashAlgorithmName.SHA256);
+        using X509Certificate2 created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pfx), password: null, X509KeyStorageFlags.Exportable);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http2OrLowerRetriesWhenTheServerRejectsTheScheme()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
@@ -3739,7 +3776,14 @@ public sealed class TitaniumHttpHandlerTests
         public static Task<LoopbackServer> StartAsync(Action<WebApplication> map, Action? onConnection) =>
             StartAsync(map, onConnection, HttpProtocols.Http1AndHttp2);
 
-        public static async Task<LoopbackServer> StartAsync(Action<WebApplication> map, Action? onConnection, HttpProtocols protocols)
+        public static Task<LoopbackServer> StartAsync(Action<WebApplication> map, Action? onConnection, HttpProtocols protocols) =>
+            StartAsync(map, onConnection, protocols, requestClientCertificate: false);
+
+        public static async Task<LoopbackServer> StartAsync(
+            Action<WebApplication> map,
+            Action? onConnection,
+            HttpProtocols protocols,
+            bool requestClientCertificate)
         {
             X509Certificate2 certificate = CreateCertificate();
             try
@@ -3760,7 +3804,19 @@ public sealed class TitaniumHttpHandlerTests
                         }
 
                         listen.Protocols = protocols;
-                        listen.UseHttps(certificate);
+                        if (requestClientCertificate)
+                        {
+                            listen.UseHttps(adapter =>
+                            {
+                                adapter.ServerCertificate = certificate;
+                                adapter.ClientCertificateMode = Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.RequireCertificate;
+                                adapter.ClientCertificateValidation = static (_, _, _) => true;
+                            });
+                        }
+                        else
+                        {
+                            listen.UseHttps(certificate);
+                        }
                     });
                 });
                 WebApplication app = builder.Build();
