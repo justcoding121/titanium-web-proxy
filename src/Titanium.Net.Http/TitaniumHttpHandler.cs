@@ -27,7 +27,7 @@ namespace Titanium.Net.Http;
 /// A Cookie header is copied onto an HTTP/3 hop only when UseCookies is false. A Cookie header on a direct HTTP/3 request is sent.
 /// Cookies and decompression stay on the inner handler. A cleartext hop from HTTP/3 still decompresses gzip and sends a cookie stored for that http URI. A Set-Cookie on that hop is stored for the next request. A direct HTTP/3 request leaves <see cref="CookieContainer"/> unchanged. An HTTPS HTTP/1.1 request sends a stored cookie, and a <c>Set-Cookie</c> on that response is stored. <see cref="UseCookies"/> false leaves that stored cookie off the request, and <c>Set-Cookie</c> stays out of the container.
 /// Port 443 stays on that URI when the caller used the default HTTPS port.
-/// <c>Host</c> stays the caller's host. An HTTPS HTTP/1.1 request sends that host. An HTTP/3 redirect does not send a caller Host, and the next hop's <c>:authority</c> is the URI authority.
+/// <c>Host</c> stays the caller's host. An HTTPS HTTP/1.1 request sends that host. An HTTP/3 redirect does not send a caller Host, and the next hop's <c>:authority</c> is the URI authority. A direct HTTP/3 request uses the URI as <c>:authority</c> and leaves a caller Host off the request.
 /// The inner handler sends <c>:scheme http</c> on HTTP/2, and there is no hook to change it.
 /// A 400 or 421 on GET, HEAD, OPTIONS, or TRACE is retried once over HTTP/1.1 when the request allows a lower version.
 /// An exact HTTP/2 request that the server resets does not fall back to HTTP/1.1.
