@@ -23,6 +23,7 @@ namespace Titanium.Net.Http;
 /// <remarks>
 /// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream.
 /// A redirect is followed here, including an HTTP/3 response. AllowAutoRedirect false returns that response. Each hop is rewritten the same way, so an https Location stays on the managed stream. Authorization is dropped when the host changes. A 302 turns POST into GET. A 303 turns POST into GET and leaves HEAD as HEAD, including on HTTP/3. A 307 keeps the method and body, and an HTTP/3 hop sends that body again. A 301 turns POST into GET, including on HTTP/3. A 308 keeps the method and body, and an HTTP/3 hop sends that body again.
+/// A Cookie header is copied onto an HTTP/3 hop only when UseCookies is false.
 /// Cookies and decompression stay on the inner handler.
 /// Port 443 stays on that URI when the caller used the default HTTPS port.
 /// <c>Host</c> stays the caller's host.

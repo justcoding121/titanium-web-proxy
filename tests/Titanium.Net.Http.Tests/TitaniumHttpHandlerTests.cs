@@ -517,6 +517,58 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RedirectCopiesACookieHeaderOnlyWhenCookiesAreOff()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/from";
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler manual = Handler();
+        manual.UseCookies = false;
+        using HttpClient manualClient = new(manual, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage manualRequest = Request(address);
+        manualRequest.Headers.TryAddWithoutValidation("Cookie", "sid=manual");
+        Task<HttpResponseMessage> pending = manualClient.SendAsync(manualRequest, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        string copied = await ReadRedirectCookieAsync(server, cancel.Token);
+        Assert.AreEqual("sid=manual", copied);
+        using HttpResponseMessage manualResponse = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("sid=manual", await manualResponse.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(manualRequest, manualResponse.RequestMessage);
+        await server.DisposeAsync();
+
+        accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler stored = Handler();
+        stored.UseCookies = true;
+        using HttpClient storedClient = new(stored, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage storedRequest = Request(address);
+        storedRequest.Headers.TryAddWithoutValidation("Cookie", "sid=manual");
+        pending = storedClient.SendAsync(storedRequest, cancel.Token);
+        server = await accepted;
+        string dropped = await ReadRedirectCookieAsync(server, cancel.Token);
+        Assert.AreEqual(string.Empty, dropped);
+        using HttpResponseMessage storedResponse = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("none", await storedResponse.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(storedRequest, storedResponse.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -2158,6 +2210,47 @@ public sealed class TitaniumHttpHandlerTests
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
         await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task<string> ReadRedirectCookieAsync(ManagedQuicConnection server, CancellationToken cancellationToken)
+    {
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancellationToken);
+        (string path, string cookie) = await ReadPathAndCookieAsync(hop, cancellationToken);
+        Assert.IsTrue(path.EndsWith("/from", StringComparison.Ordinal));
+        Assert.AreEqual("sid=manual", cookie);
+        await WriteRedirectAsync(hop, "302", "/land", cancellationToken);
+        hop = await server.AcceptInboundStreamAsync(cancellationToken);
+        (path, cookie) = await ReadPathAndCookieAsync(hop, cancellationToken);
+        Assert.IsTrue(path.EndsWith("/land", StringComparison.Ordinal));
+        await ReplyTextAsync(hop, cookie.Length == 0 ? "none" : cookie, cancellationToken);
+        return cookie;
+    }
+
+    private static async Task<(string Path, string Cookie)> ReadPathAndCookieAsync(
+        ManagedQuicStream request,
+        CancellationToken cancellationToken)
+    {
+        byte[]? headers = await ReadFrameAsync(request, cancellationToken);
+        Assert.IsNotNull(headers);
+        while (await ReadFrameAsync(request, cancellationToken) is not null)
+        {
+        }
+
+        string path = string.Empty;
+        string cookie = string.Empty;
+        foreach ((string name, string value) in QpackDecoder.Decode(headers))
+        {
+            if (name == ":path")
+            {
+                path = value;
+            }
+            else if (string.Equals(name, "cookie", StringComparison.OrdinalIgnoreCase))
+            {
+                cookie = value;
+            }
+        }
+
+        return (path, cookie);
     }
 
     private static async Task ServeRedirectChainAsync(ManagedQuicConnection server, bool finish, CancellationToken cancellationToken)
