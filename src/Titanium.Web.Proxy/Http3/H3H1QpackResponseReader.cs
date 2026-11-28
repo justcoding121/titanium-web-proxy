@@ -74,7 +74,7 @@ internal static class H3H1QpackResponseReader
 
     private static bool TryFinishFromBuffer(
         HttpStream reader,
-        QpackEncoder.ResponseBlockBuilder builder,
+        Titanium.Http3.QpackEncoder.ResponseBlockBuilder builder,
         ref long contentLength,
         ref bool isChunked,
         ref bool connectionClose,
@@ -98,7 +98,7 @@ internal static class H3H1QpackResponseReader
     }
 
     private static Result Finish(
-        QpackEncoder.ResponseBlockBuilder builder,
+        Titanium.Http3.QpackEncoder.ResponseBlockBuilder builder,
         long contentLength,
         bool isChunked,
         bool connectionClose) =>
@@ -112,7 +112,7 @@ internal static class H3H1QpackResponseReader
 
     private static void ConsumeLine(
         ReadOnlySpan<byte> tmpLine,
-        QpackEncoder.ResponseBlockBuilder builder,
+        Titanium.Http3.QpackEncoder.ResponseBlockBuilder builder,
         ref long contentLength,
         ref bool isChunked,
         ref bool connectionClose,
@@ -154,7 +154,7 @@ internal static class H3H1QpackResponseReader
 
     private static void ConsumeLine(
         string tmpLine,
-        QpackEncoder.ResponseBlockBuilder builder,
+        Titanium.Http3.QpackEncoder.ResponseBlockBuilder builder,
         ref long contentLength,
         ref bool isChunked,
         ref bool connectionClose,
