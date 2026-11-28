@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Http3;
@@ -38,6 +39,7 @@ namespace Titanium.Net.Http;
 /// An HTTP/1.1 connection is reused until <see cref="PooledConnectionLifetime"/> elapses. The next request opens another connection.
 /// While that connection is busy, <see cref="MaxConnectionsPerServer"/> of 1 keeps the next HTTP/1.1 request waiting.
 /// An <c>http</c> request is sent to the configured proxy. The request line is the absolute URI.
+/// An <c>https</c> request opens a CONNECT tunnel to that proxy, then the managed TLS handshake.
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
 /// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.
 /// A GOAWAY on the peer's control stream stops new requests on that connection and closes it once nothing is in flight.
@@ -558,6 +560,20 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
             return network;
         }
 
+        Uri? requestUri = context.InitialRequestMessage.RequestUri;
+        if (requestUri is not null && IsProxyEndpoint(context.DnsEndPoint, requestUri))
+        {
+            try
+            {
+                await OpenProxyTunnelAsync(network, requestUri, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                await network.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
         bool requireHttp2 = context.InitialRequestMessage.Version.Major >= 2;
         TlsStream tls = new(network, new TlsStreamOptions
         {
@@ -593,6 +609,55 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
                 await tls.DisposeAsync().ConfigureAwait(false);
             }
         }
+    }
+
+    private static bool IsProxyEndpoint(DnsEndPoint endpoint, Uri origin) =>
+        !string.Equals(endpoint.Host, origin.IdnHost, StringComparison.OrdinalIgnoreCase) || endpoint.Port != origin.Port;
+
+    private static async Task OpenProxyTunnelAsync(Stream stream, Uri origin, CancellationToken cancellationToken)
+    {
+        string authority = origin.IdnHost + ":" + origin.Port.ToString(CultureInfo.InvariantCulture);
+        string connect = "CONNECT " + authority + " HTTP/1.1\r\nHost: " + authority + "\r\n\r\n";
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(connect), cancellationToken).ConfigureAwait(false);
+        string headers = await ReadAsciiHeadersAsync(stream, cancellationToken).ConfigureAwait(false);
+        if (!IsProxySuccess(headers))
+        {
+            throw new HttpRequestException("The proxy refused the tunnel.");
+        }
+    }
+
+    private static async Task<string> ReadAsciiHeadersAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        byte[] buffer = new byte[1024];
+        int length = 0;
+        while (length < buffer.Length)
+        {
+            int read = await stream.ReadAsync(buffer.AsMemory(length, 1), cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                throw new HttpRequestException("The proxy closed the connection.");
+            }
+
+            length += read;
+            if (length >= 4
+                && buffer[length - 4] == (byte)'\r'
+                && buffer[length - 3] == (byte)'\n'
+                && buffer[length - 2] == (byte)'\r'
+                && buffer[length - 1] == (byte)'\n')
+            {
+                return Encoding.ASCII.GetString(buffer, 0, length);
+            }
+        }
+
+        throw new HttpRequestException("The proxy response headers are too long.");
+    }
+
+    private static bool IsProxySuccess(string headers)
+    {
+        int end = headers.IndexOf("\r\n", StringComparison.Ordinal);
+        string line = end >= 0 ? headers[..end] : headers;
+        string[] parts = line.Split(' ');
+        return parts.Length >= 2 && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out int status) && status is >= 200 and <= 299;
     }
 
     private SslClientAuthenticationOptions CopySslOptions(SocketsHttpConnectionContext context, bool requireHttp2)

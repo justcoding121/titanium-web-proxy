@@ -2136,6 +2136,80 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11HttpsRequestTunnelsThroughTheProxy()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/hello", () => Results.Text("tunneled"));
+        });
+        using var proxy = new TcpListener(IPAddress.Loopback, 0);
+        proxy.Start();
+        int proxyPort = ((IPEndPoint)proxy.LocalEndpoint).Port;
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<TcpClient> proxyAccepted = proxy.AcceptTcpClientAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.UseProxy = true;
+        handler.Proxy = new WebProxy("http://127.0.0.1:" + proxyPort.ToString(CultureInfo.InvariantCulture));
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hello";
+        using HttpRequestMessage request = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        using TcpClient accepted = await proxyAccepted.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        await using NetworkStream stream = accepted.GetStream();
+        string headers = await ReadHttpHeadersAsync(stream, cancel.Token);
+        string connect = "CONNECT 127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + " HTTP/1.1\r\n";
+        Assert.IsTrue(headers.StartsWith(connect, StringComparison.Ordinal), headers);
+        await stream.WriteAsync("HTTP/1.1 200 Connection Established\r\n\r\n"u8.ToArray(), cancel.Token);
+        using TcpClient origin = new();
+        await origin.ConnectAsync(IPAddress.Loopback, server.Port, cancel.Token);
+        await using NetworkStream originStream = origin.GetStream();
+        Task forward = CopyBytesAsync(stream, originStream, cancel.Token);
+        Task backward = CopyBytesAsync(originStream, stream, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("tunneled", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(request, response.RequestMessage);
+        Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
+        cancel.Cancel();
+        try
+        {
+            await Task.WhenAll(forward, backward);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private static async Task CopyBytesAsync(Stream from, Stream to, CancellationToken cancellationToken)
+    {
+        byte[] buffer = new byte[4096];
+        try
+        {
+            while (true)
+            {
+                int count = await from.ReadAsync(buffer, cancellationToken);
+                if (count == 0)
+                {
+                    break;
+                }
+
+                await to.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11RequestIsCleartext()
     {
         using var tcp = new TcpListener(IPAddress.Loopback, 0);
