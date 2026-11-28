@@ -624,6 +624,32 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3ResponseWithNoHeadersFailsTheRequest()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
+        string path = await ReadRequestPathAsync(inbound, cancel.Token);
+        await inbound.CompleteWritesAsync(cancel.Token);
+        HttpRequestException ex = await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await pending);
+        Assert.IsTrue(HasMessage(ex, "The HTTP/3 response had no headers."));
+        Assert.AreEqual("/hello", path);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3UsesTargetHostAsTheServerName()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
