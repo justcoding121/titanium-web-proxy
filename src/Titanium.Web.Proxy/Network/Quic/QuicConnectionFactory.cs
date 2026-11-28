@@ -1,12 +1,15 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Net.Compatibility;
+using Titanium.Quic;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Models;
@@ -109,6 +112,12 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
         }
 
         var connectStartedAt = DateTime.UtcNow;
+        if (_proxyServer.UseManagedQuicStack)
+        {
+            return await CreateManagedAsync(
+                clientOptions, sniHost, port, upStreamProxy, upStreamEndPoint, cacheKey, connectStartedAt, cancellationToken);
+        }
+
         var connection = await QuicConnection.ConnectAsync(clientOptions, cancellationToken);
 
         // Store the SNI host as the canonical HostName so Alt-Svc / capability cache keying is
@@ -132,6 +141,78 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
 
         return serverConnection;
     }
+
+    private async Task<QuicServerConnection> CreateManagedAsync(
+        QuicClientConnectionOptions clientOptions,
+        string sniHost,
+        int port,
+        IExternalProxy? upStreamProxy,
+        IPEndPoint? upStreamEndPoint,
+        string cacheKey,
+        DateTime connectStartedAt,
+        CancellationToken cancellationToken)
+    {
+        IPEndPoint resolved = await ResolveRemoteAsync(clientOptions.RemoteEndPoint!, cancellationToken).ConfigureAwait(false);
+        var translated = new QuicClientConnectionOptions
+        {
+            RemoteEndPoint = resolved,
+            LocalEndPoint = clientOptions.LocalEndPoint ?? WildcardLocal(resolved),
+            ClientAuthenticationOptions = clientOptions.ClientAuthenticationOptions,
+            DefaultStreamErrorCode = clientOptions.DefaultStreamErrorCode,
+            HandshakeTimeout = clientOptions.HandshakeTimeout,
+            KeepAliveInterval = clientOptions.KeepAliveInterval,
+            IdleTimeout = clientOptions.IdleTimeout,
+            MaxInboundBidirectionalStreams = clientOptions.MaxInboundBidirectionalStreams,
+            MaxInboundUnidirectionalStreams = clientOptions.MaxInboundUnidirectionalStreams,
+        };
+        ManagedQuicConnection managed = await ManagedQuicConnection.ConnectAsync(
+            QuicClientOptionsAdapter.ToManaged(translated), cancellationToken).ConfigureAwait(false);
+        var serverConnection = new QuicServerConnection(
+            _proxyServer, managed, sniHost, port, upStreamProxy, upStreamEndPoint, cacheKey);
+        await serverConnection.StartHttp3ClientSessionAsync(cancellationToken).ConfigureAwait(false);
+        if (_proxyServer.EnableRequestTimingCapture)
+        {
+            var timing = new UpstreamConnectionTiming(connectStartedAt);
+            timing.MarkTlsHandshakeCompleted();
+            timing.MarkEstablished();
+            serverConnection.Timing = timing;
+        }
+
+        return serverConnection;
+    }
+
+    /// <summary>
+    ///     The managed client takes an IP endpoint. An address literal is parsed. Any other host uses
+    ///     the first address from DNS. The platform dial keeps its own name resolution.
+    /// </summary>
+    internal static async Task<IPEndPoint> ResolveRemoteAsync(EndPoint remote, CancellationToken cancellationToken)
+    {
+        if (remote is IPEndPoint ip)
+        {
+            return ip;
+        }
+
+        if (remote is DnsEndPoint dns)
+        {
+            if (IPAddress.TryParse(dns.Host, out IPAddress? literal))
+            {
+                return new IPEndPoint(literal, dns.Port);
+            }
+
+            IPAddress[] addresses = await Dns.GetHostAddressesAsync(dns.Host, cancellationToken).ConfigureAwait(false);
+            if (addresses is null || addresses.Length == 0)
+            {
+                throw new IOException($"Could not resolve the hostname {dns.Host}");
+            }
+
+            return new IPEndPoint(addresses[0], dns.Port);
+        }
+
+        throw new ArgumentException("The managed client takes an IP endpoint. Resolve the name first.", nameof(remote));
+    }
+
+    private static IPEndPoint WildcardLocal(IPEndPoint remote) =>
+        new(remote.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, 0);
 
     /// <summary>
     ///     Loopback QUIC must bind the client socket to <c>127.0.0.1</c> or <c>::1</c> before connect.

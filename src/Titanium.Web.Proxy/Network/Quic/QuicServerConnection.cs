@@ -5,6 +5,7 @@ using System.Net.Quic;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Quic;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Models;
@@ -26,6 +27,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     private long lastResponseTicks;
     private Func<long>? clock;
     private Http3OriginClientSession? _http3ClientSession;
+    private readonly ManagedQuicConnection? _managed;
 
     internal QuicServerConnection(
         ProxyServer proxyServer,
@@ -85,13 +87,35 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         NegotiatedApplicationProtocol = SslApplicationProtocol.Http3;
     }
 
+    internal QuicServerConnection(
+        ProxyServer proxyServer,
+        ManagedQuicConnection connection,
+        string hostName,
+        int port,
+        IExternalProxy? upStreamProxy,
+        IPEndPoint? upStreamEndPoint,
+        string cacheKey)
+    {
+        _managed = connection;
+        LastAccess = DateTime.UtcNow;
+        ProxyServer = proxyServer;
+        ProxyServer.UpdateServerConnectionCount(true);
+        ProxyServer.UpdateHttp3ServerConnectionCount(true);
+        HostName = hostName;
+        Port = port;
+        UpStreamProxy = upStreamProxy;
+        UpStreamEndPoint = upStreamEndPoint;
+        CacheKey = cacheKey;
+        NegotiatedApplicationProtocol = SslApplicationProtocol.Http3;
+    }
+
     public long Id { get; } = ConnectionId.Next();
 
     private ProxyServer ProxyServer { get; }
 
     /// <summary>
-    ///     Underlying MsQuic connection. <see langword="null" /> only for
-    ///     <see cref="CreateDetachedForTests" /> instances used by pool unit tests.
+    ///     Underlying MsQuic connection. <see langword="null" /> for a detached test double and for a
+    ///     connection that holds <see cref="ManagedQuicConnection"/> instead.
     /// </summary>
     internal QuicConnection? Connection { get; }
 
@@ -126,6 +150,18 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     {
         get
         {
+            if (_managed is not null)
+            {
+                try
+                {
+                    return _managed.RemoteEndPoint;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return null;
+                }
+            }
+
             if (Connection is null) return null;
             try
             {
@@ -150,6 +186,8 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     internal System.Threading.Tasks.ValueTask<QuicStream> OpenRequestStreamAsync(
         System.Threading.CancellationToken cancellationToken)
     {
+        if (_managed is not null)
+            throw new NotSupportedException("HTTP/3 framing still uses the platform QUIC stream.");
         if (Connection is null)
             throw new InvalidOperationException("Detached QuicServerConnection cannot open streams.");
         LastAccess = DateTime.UtcNow;
@@ -178,7 +216,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     /// </summary>
     internal async Task StartHttp3ClientSessionAsync(CancellationToken cancellationToken)
     {
-        if (Connection is null || _http3ClientSession != null) return;
+        if (_managed is not null || Connection is null || _http3ClientSession != null) return;
         _http3ClientSession = new Http3OriginClientSession(Connection, ProxyServer);
         await _http3ClientSession.StartAsync(cancellationToken);
     }
@@ -235,6 +273,22 @@ internal sealed class QuicServerConnection : IAsyncDisposable
             try { await _http3ClientSession.DisposeAsync(); } catch { /* best effort */ }
             _http3ClientSession = null;
         }
+        if (_managed is not null)
+        {
+            try
+            {
+                await _managed.CloseAsync((long)Http3.Http3ErrorCode.NoError).AsTask()
+                    .WaitAsync(TimeSpan.FromSeconds(2));
+            }
+            catch { /* best effort */ }
+            finally
+            {
+                await _managed.DisposeAsync();
+            }
+
+            return;
+        }
+
         if (Connection is null) return;
         try
         {

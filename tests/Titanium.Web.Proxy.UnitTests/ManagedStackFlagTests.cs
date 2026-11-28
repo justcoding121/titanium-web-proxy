@@ -1,8 +1,10 @@
 using System;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Quic;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -56,5 +58,19 @@ public sealed class ManagedStackFlagTests
         proxy.UseManagedQuicStack = true;
         Assert.IsTrue(proxy.UseManagedTlsStack);
         Assert.IsTrue(proxy.UseManagedQuicStack);
+    }
+
+    [TestMethod]
+    public async Task TheManagedDialResolvesAnAddressLiteral()
+    {
+        IPEndPoint resolved = await QuicConnectionFactory.ResolveRemoteAsync(
+            new DnsEndPoint("127.0.0.1", 443), CancellationToken.None);
+
+        Assert.AreEqual(IPAddress.Loopback, resolved.Address);
+        Assert.AreEqual(443, resolved.Port);
+
+        IPEndPoint kept = await QuicConnectionFactory.ResolveRemoteAsync(
+            new IPEndPoint(IPAddress.IPv6Loopback, 443), CancellationToken.None);
+        Assert.AreEqual(IPAddress.IPv6Loopback, kept.Address);
     }
 }

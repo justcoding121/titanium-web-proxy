@@ -31,6 +31,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
     <ProjectReference Include="..\Titanium.Tls\Titanium.Tls.csproj" />
+    <ProjectReference Include="..\Titanium.Quic\Titanium.Quic.csproj" />
+    <ProjectReference Include="..\Titanium.Net.Compatibility\Titanium.Net.Compatibility.csproj" />
   </ItemGroup>
 
   <ItemGroup>
