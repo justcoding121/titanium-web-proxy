@@ -409,6 +409,59 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3PostSendsTheContentType()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/post")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
+        byte[]? headers = await ReadFrameAsync(inbound, cancel.Token);
+        Assert.IsNotNull(headers);
+        using var posted = new MemoryStream();
+        while (await ReadFrameAsync(inbound, cancel.Token) is byte[] frame)
+        {
+            posted.Write(frame);
+        }
+
+        string contentType = string.Empty;
+        string method = string.Empty;
+        foreach ((string name, string value) in QpackDecoder.Decode(headers))
+        {
+            if (name == "content-type")
+            {
+                contentType = value;
+            }
+            else if (name == ":method")
+            {
+                method = value;
+            }
+        }
+
+        await ReplyTextAsync(inbound, "ok", cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual("POST", method);
+        Assert.IsTrue(contentType.Contains("text/plain", StringComparison.OrdinalIgnoreCase), contentType);
+        Assert.AreEqual("payload", System.Text.Encoding.UTF8.GetString(posted.ToArray()));
+        Assert.AreEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3UsesTargetHostAsTheServerName()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
