@@ -287,6 +287,76 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3SeeOtherTurnsPostIntoGetAndKeepsHead()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture);
+        using HttpRequestMessage post = new(HttpMethod.Post, address + "/see")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(post, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        (string method, string path, string body) = await ReadPostedRequestAsync(hop, cancel.Token);
+        Assert.AreEqual("POST", method);
+        Assert.IsTrue(path.EndsWith("/see", StringComparison.Ordinal));
+        Assert.AreEqual("payload", body);
+        await WriteRedirectAsync(hop, "303", "/land", cancel.Token);
+        hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        (method, path, body) = await ReadPostedRequestAsync(hop, cancel.Token);
+        Assert.AreEqual("GET", method);
+        Assert.IsTrue(path.EndsWith("/land", StringComparison.Ordinal));
+        Assert.AreEqual(string.Empty, body);
+        await ReplyTextAsync(hop, "GET:", cancel.Token);
+        using HttpResponseMessage postResponse = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("GET:", await postResponse.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(post, postResponse.RequestMessage);
+
+        using HttpRequestMessage head = new(HttpMethod.Head, address + "/see-head");
+        head.Version = HttpVersion.Version30;
+        head.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
+        pending = client.SendAsync(head, cancel.Token);
+        hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        (method, path, body) = await ReadPostedRequestAsync(hop, cancel.Token);
+        Assert.AreEqual("HEAD", method);
+        Assert.IsTrue(path.EndsWith("/see-head", StringComparison.Ordinal));
+        await WriteRedirectAsync(hop, "303", "/head-land", cancel.Token);
+        hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        (method, path, body) = await ReadPostedRequestAsync(hop, cancel.Token);
+        Assert.AreEqual("HEAD", method);
+        Assert.IsTrue(path.EndsWith("/head-land", StringComparison.Ordinal));
+        Assert.AreEqual(string.Empty, body);
+        await ReplySawAsync(hop, "HEAD", cancel.Token);
+        using HttpResponseMessage headResponse = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, headResponse.StatusCode);
+        Assert.AreEqual("HEAD", headResponse.Headers.GetValues("X-Saw").Single());
+        Assert.AreSame(head, headResponse.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -1966,6 +2036,13 @@ public sealed class TitaniumHttpHandlerTests
         CancellationToken cancellationToken)
     {
         byte[] headers = QpackEncoder.Encode([(":status", status), ("location", location)]);
+        await WriteFrameAsync(stream, Http3FrameType.Headers, headers, cancellationToken);
+        await stream.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task ReplySawAsync(ManagedQuicStream stream, string saw, CancellationToken cancellationToken)
+    {
+        byte[] headers = QpackEncoder.Encode([(":status", "200"), ("x-saw", saw)]);
         await WriteFrameAsync(stream, Http3FrameType.Headers, headers, cancellationToken);
         await stream.CompleteWritesAsync(cancellationToken);
     }
