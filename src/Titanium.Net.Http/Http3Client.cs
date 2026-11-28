@@ -16,17 +16,25 @@ using Titanium.Quic;
 
 namespace Titanium.Net.Http;
 
-/// <summary>One HTTP/3 request on a managed QUIC connection. The connection is not reused.</summary>
+/// <summary>HTTP/3 requests on managed QUIC connections kept by <see cref="Http3Pool"/>.</summary>
 internal static class Http3Client
 {
     private static readonly SslApplicationProtocol H3 = new("h3");
 
-    internal static async Task<HttpResponseMessage> SendAsync(
+    internal static Task<HttpResponseMessage> SendAsync(
         TitaniumHttpHandler handler,
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         Uri uri = request.RequestUri ?? throw new InvalidOperationException("The request URI is required.");
+        return handler.Pool.SendAsync(handler, request, uri, cancellationToken);
+    }
+
+    internal static async Task<ManagedQuicConnection> ConnectAsync(
+        TitaniumHttpHandler handler,
+        Uri uri,
+        CancellationToken cancellationToken)
+    {
         ManagedQuicConnection connection;
         try
         {
@@ -44,19 +52,42 @@ internal static class Http3Client
         try
         {
             await WritePrefaceAsync(connection, cancellationToken).ConfigureAwait(false);
-            ManagedQuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false);
-            await WriteRequestAsync(stream, request, uri, cancellationToken).ConfigureAwait(false);
-            await stream.CompleteWritesAsync(cancellationToken).ConfigureAwait(false);
-            HttpResponseMessage response = await ReadResponseAsync(stream, cancellationToken).ConfigureAwait(false);
-            response.RequestMessage = request;
-            response.Version = HttpVersion.Version30;
-            return response;
+            return connection;
         }
-        finally
+        catch (Exception ex)
         {
             await connection.DisposeAsync().ConfigureAwait(false);
+            if (ex is OperationCanceledException)
+            {
+                throw;
+            }
+
+            if (ex is QuicException or SocketException or IOException)
+            {
+                throw new Http3ConnectException("The HTTP/3 connection failed before the request was sent.", ex);
+            }
+
+            throw;
         }
     }
+
+    internal static async Task<HttpResponseMessage> ExchangeAsync(
+        ManagedQuicConnection connection,
+        HttpRequestMessage request,
+        Uri uri,
+        CancellationToken cancellationToken)
+    {
+        ManagedQuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false);
+        await WriteRequestAsync(stream, request, uri, cancellationToken).ConfigureAwait(false);
+        await stream.CompleteWritesAsync(cancellationToken).ConfigureAwait(false);
+        HttpResponseMessage response = await ReadResponseAsync(stream, cancellationToken).ConfigureAwait(false);
+        response.RequestMessage = request;
+        response.Version = HttpVersion.Version30;
+        return response;
+    }
+
+    internal static string Authority(Uri uri) =>
+        uri.IsDefaultPort ? uri.IdnHost : uri.IdnHost + ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
 
     private static ManagedQuicClientConnectionOptions BuildOptions(TitaniumHttpHandler handler, Uri uri)
     {
@@ -313,9 +344,6 @@ internal static class Http3Client
         || name.Equals("Upgrade", StringComparison.OrdinalIgnoreCase)
         || name.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase)
         || name.Equals("Proxy-Connection", StringComparison.OrdinalIgnoreCase);
-
-    private static string Authority(Uri uri) =>
-        uri.IsDefaultPort ? uri.IdnHost : uri.IdnHost + ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
 
     private readonly struct Frame
     {

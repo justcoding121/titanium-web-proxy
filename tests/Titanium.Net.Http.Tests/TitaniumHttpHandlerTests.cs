@@ -166,6 +166,56 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3ReusesOneConnectionForTheSameAuthority()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello";
+        using HttpRequestMessage first = Request(address);
+        Task<HttpResponseMessage> pending = client.SendAsync(first, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        await ReplyAsync(server, cancel.Token);
+        using HttpResponseMessage firstResponse = await pending;
+        Assert.AreEqual("ok", await firstResponse.Content.ReadAsStringAsync(cancel.Token));
+
+        using HttpRequestMessage second = Request(address);
+        Task<HttpResponseMessage> again = client.SendAsync(second, cancel.Token);
+        await ReplyAsync(server, cancel.Token);
+        using HttpResponseMessage secondResponse = await again;
+        Assert.AreEqual(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.AreEqual("ok", await secondResponse.Content.ReadAsStringAsync(cancel.Token));
+
+        using var late = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        try
+        {
+            ManagedQuicConnection extra = await listener.AcceptConnectionAsync(late.Token);
+            await extra.DisposeAsync();
+            Assert.Fail("A second HTTP/3 connection was opened.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11AgainstLoopbackReturnsTheBody()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
@@ -213,6 +263,12 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreSame(request, response.RequestMessage);
         Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
     }
+
+    private static HttpRequestMessage Request(string address) => new(HttpMethod.Get, address)
+    {
+        Version = HttpVersion.Version30,
+        VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+    };
 
     private static TitaniumHttpHandler Handler()
     {

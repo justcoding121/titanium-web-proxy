@@ -18,7 +18,7 @@ namespace Titanium.Net.Http;
 /// <summary>
 /// HTTP client that always uses the managed TLS stack.
 /// HTTP/1.1 and HTTP/2 go through an inner handler whose connect callback owns the <see cref="TlsStream"/>.
-/// HTTP/3 opens a managed QUIC connection and uses the HTTP/3 codec.
+/// HTTP/3 uses a managed QUIC connection. One connection is reused per authority.
 /// </summary>
 /// <remarks>
 /// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream.
@@ -29,6 +29,8 @@ namespace Titanium.Net.Http;
 /// A server that selects HTTP/1.1 during ALPN is retried over HTTP/1.1 before any request bytes, for any method, when a lower version is allowed.
 /// The negotiated protocol is remembered per authority for ten minutes, up to 256 authorities.
 /// HTTP/3 sends <c>:scheme https</c>. The response body is collected before <see cref="SendAsync"/> returns.
+/// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
+/// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.
 /// A failed HTTP/3 connect, before any request byte, falls back to HTTP/2 or HTTP/1.1 when the request allows a lower version.
 /// </remarks>
 public sealed class TitaniumHttpHandler : HttpMessageHandler
@@ -42,6 +44,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
 
     private readonly SocketsHttpHandler _sockets = new();
     private readonly HttpMessageInvoker _inner;
+    private readonly Http3Pool _pool = new();
     private readonly ConcurrentDictionary<string, AlpnEntry> _alpn = new();
     private SslClientAuthenticationOptions _sslOptions = new();
 
@@ -53,6 +56,9 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         _sockets.ConnectCallback = ConnectAsync;
         _inner = new HttpMessageInvoker(_sockets, disposeHandler: false);
     }
+
+    /// <summary>HTTP/3 connections kept for reuse. Internal so the HTTP/3 client can rent one.</summary>
+    internal Http3Pool Pool => _pool;
 
     /// <summary>Gets or sets the TLS options copied onto each managed handshake. The handler chooses ALPN.</summary>
     public SslClientAuthenticationOptions SslOptions
@@ -250,6 +256,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     {
         if (disposing)
         {
+            _pool.Dispose();
             _inner.Dispose();
             _sockets.Dispose();
         }
