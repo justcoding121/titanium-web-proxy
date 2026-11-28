@@ -169,6 +169,51 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RedirectIsFollowedOnTheSameConnection()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/from");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream first = await server.AcceptInboundStreamAsync(cancel.Token);
+        string firstPath = await ReadRequestPathAsync(first, cancel.Token);
+        Assert.IsTrue(firstPath.EndsWith("/from", StringComparison.Ordinal));
+        byte[] redirect = QpackEncoder.Encode([(":status", "302"), ("location", "/land")]);
+        await WriteFrameAsync(first, Http3FrameType.Headers, redirect, cancel.Token);
+        await first.CompleteWritesAsync(cancel.Token);
+        ManagedQuicStream second = await server.AcceptInboundStreamAsync(cancel.Token);
+        string secondPath = await ReadRequestPathAsync(second, cancel.Token);
+        Assert.IsTrue(secondPath.EndsWith("/land", StringComparison.Ordinal));
+        await ReplyOnAcceptedAsync(second, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual(new Version(3, 0), response.Version);
+        Assert.AreSame(request, response.RequestMessage);
+        Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -1810,6 +1855,25 @@ public sealed class TitaniumHttpHandlerTests
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
         await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task<string> ReadRequestPathAsync(ManagedQuicStream request, CancellationToken cancellationToken)
+    {
+        byte[]? headers = await ReadFrameAsync(request, cancellationToken);
+        Assert.IsNotNull(headers);
+        while (await ReadFrameAsync(request, cancellationToken) is not null)
+        {
+        }
+
+        foreach ((string name, string value) in QpackDecoder.Decode(headers))
+        {
+            if (name == ":path")
+            {
+                return value;
+            }
+        }
+
+        return string.Empty;
     }
 
     private static async Task ReplyAsync(ManagedQuicConnection server, CancellationToken cancellationToken)

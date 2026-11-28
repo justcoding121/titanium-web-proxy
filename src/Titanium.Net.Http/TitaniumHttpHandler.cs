@@ -22,7 +22,7 @@ namespace Titanium.Net.Http;
 /// </summary>
 /// <remarks>
 /// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream.
-/// A redirect is followed here. Each hop is rewritten the same way, so an https Location stays on the managed stream. Authorization is dropped when the host changes. A 302 turns POST into GET. A 303 turns POST into GET and leaves HEAD as HEAD. A 307 keeps the method and body. A 301 turns POST into GET. A 308 keeps the method and body.
+/// A redirect is followed here, including an HTTP/3 response. Each hop is rewritten the same way, so an https Location stays on the managed stream. Authorization is dropped when the host changes. A 302 turns POST into GET. A 303 turns POST into GET and leaves HEAD as HEAD. A 307 keeps the method and body. A 301 turns POST into GET. A 308 keeps the method and body.
 /// Cookies and decompression stay on the inner handler.
 /// Port 443 stays on that URI when the caller used the default HTTPS port.
 /// <c>Host</c> stays the caller's host.
@@ -227,6 +227,14 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     {
         ArgumentNullException.ThrowIfNull(request);
         RequireFips();
+        HttpResponseMessage response = await SendOnceAsync(request, cancellationToken).ConfigureAwait(false);
+        response = await FollowRedirectsAsync(request, response, cancellationToken).ConfigureAwait(false);
+        NoteAltSvc(request, response);
+        return response;
+    }
+
+    private async Task<HttpResponseMessage> SendOnceAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
         bool viaAlt = false;
         int? altPort = null;
         if (!WantsHttp3(request)
@@ -243,19 +251,14 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         {
             try
             {
-                HttpResponseMessage http3 = await Http3Client.SendAsync(this, request, altPort, cancellationToken).ConfigureAwait(false);
-                NoteAltSvc(request, http3);
-                return http3;
+                return await Http3Client.SendAsync(this, request, altPort, cancellationToken).ConfigureAwait(false);
             }
             catch (Http3ConnectException) when (viaAlt || request.VersionPolicy == HttpVersionPolicy.RequestVersionOrLower)
             {
             }
         }
 
-        HttpResponseMessage response = await SendAdapterAsync(request, cancellationToken).ConfigureAwait(false);
-        response = await FollowRedirectsAsync(request, response, cancellationToken).ConfigureAwait(false);
-        NoteAltSvc(request, response);
-        return response;
+        return await SendAdapterAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<HttpResponseMessage> FollowRedirectsAsync(
@@ -339,7 +342,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
             owned = next;
             current = next;
             left--;
-            response = await SendAdapterAsync(current, cancellationToken).ConfigureAwait(false);
+            response = await SendOnceAsync(current, cancellationToken).ConfigureAwait(false);
         }
 
         response.RequestMessage = original;
