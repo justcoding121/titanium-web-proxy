@@ -791,6 +791,52 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3TemporaryRedirectKeepsThePostBodyOnACleartextHop()
+    {
+        using var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        int clearPort = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<TcpClient> clearAccepted = tcp.AcceptTcpClientAsync(cancel.Token).AsTask();
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.UseProxy = false;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/keep")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        (string method, string path, string body) = await ReadPostedRequestAsync(hop, cancel.Token);
+        Assert.AreEqual("POST", method);
+        Assert.IsTrue(path.EndsWith("/keep", StringComparison.Ordinal));
+        Assert.AreEqual("payload", body);
+        await WriteRedirectAsync(
+            hop,
+            "307",
+            "http://127.0.0.1:" + clearPort.ToString(CultureInfo.InvariantCulture) + "/land",
+            cancel.Token);
+        using TcpClient clear = await clearAccepted;
+        await using NetworkStream stream = clear.GetStream();
+        (string headers, string posted) = await ReadHttpRequestWithBodyAsync(stream, cancel.Token);
+        Assert.IsTrue(headers.StartsWith("POST /land HTTP/1.1\r\n", StringComparison.Ordinal), headers);
+        Assert.AreEqual("payload", posted);
+        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nPOST:payload"u8.ToArray(), cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("POST:payload", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreNotEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3RedirectStopsWhenTheRequestIsCancelled()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -2458,6 +2504,58 @@ public sealed class TitaniumHttpHandlerTests
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
         await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task<(string Headers, string Body)> ReadHttpRequestWithBodyAsync(
+        NetworkStream stream,
+        CancellationToken cancellationToken)
+    {
+        using var buffer = new MemoryStream();
+        byte[] chunk = new byte[1024];
+        int headerEnd = -1;
+        while (headerEnd < 0)
+        {
+            int count = await stream.ReadAsync(chunk, cancellationToken);
+            if (count == 0)
+            {
+                break;
+            }
+
+            buffer.Write(chunk, 0, count);
+            headerEnd = buffer.GetBuffer().AsSpan(0, (int)buffer.Length).IndexOf("\r\n\r\n"u8);
+        }
+
+        if (headerEnd < 0)
+        {
+            return (System.Text.Encoding.ASCII.GetString(buffer.GetBuffer(), 0, (int)buffer.Length), string.Empty);
+        }
+
+        string headers = System.Text.Encoding.ASCII.GetString(buffer.GetBuffer(), 0, headerEnd);
+        int length = 0;
+        foreach (string line in headers.Split("\r\n"))
+        {
+            if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(line.AsSpan(15).Trim(), out int parsed))
+            {
+                length = parsed;
+            }
+        }
+
+        int have = (int)buffer.Length - (headerEnd + 4);
+        while (have < length)
+        {
+            int count = await stream.ReadAsync(chunk, cancellationToken);
+            if (count == 0)
+            {
+                break;
+            }
+
+            buffer.Write(chunk, 0, count);
+            have += count;
+        }
+
+        string posted = System.Text.Encoding.ASCII.GetString(buffer.GetBuffer(), headerEnd + 4, Math.Min(length, have));
+        return (headers, posted);
     }
 
     private static async Task<string> ReadHttpHeadersAsync(NetworkStream stream, CancellationToken cancellationToken)
