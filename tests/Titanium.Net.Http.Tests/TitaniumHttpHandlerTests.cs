@@ -531,6 +531,50 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3ConnectionLifetimeOpensAnotherConnection()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello";
+        using TitaniumHttpHandler handler = Handler();
+        handler.PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan;
+        handler.PooledConnectionLifetime = TimeSpan.FromMilliseconds(200);
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        Task<ManagedQuicConnection> firstAccepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using HttpRequestMessage firstRequest = Request(address);
+        Task<HttpResponseMessage> firstPending = client.SendAsync(firstRequest, cancel.Token);
+        ManagedQuicConnection firstServer = await firstAccepted;
+        await ReplyAsync(firstServer, cancel.Token);
+        using HttpResponseMessage firstResponse = await firstPending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, firstResponse.StatusCode);
+        await Task.Delay(TimeSpan.FromMilliseconds(500), cancel.Token);
+        Task<ManagedQuicConnection> secondAccepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using HttpRequestMessage secondRequest = Request(address);
+        Task<HttpResponseMessage> secondPending = client.SendAsync(secondRequest, cancel.Token);
+        ManagedQuicConnection secondServer = await secondAccepted.WaitAsync(TimeSpan.FromSeconds(3), cancel.Token);
+        await ReplyAsync(secondServer, cancel.Token);
+        using HttpResponseMessage secondResponse = await secondPending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, secondResponse.StatusCode);
+        await firstServer.DisposeAsync();
+        await secondServer.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3BodyReadStopsWhenCancelled()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
