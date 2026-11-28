@@ -1,0 +1,35 @@
+#nullable enable
+Titanium.Net.Http.TitaniumHttpHandler
+Titanium.Net.Http.TitaniumHttpHandler.AllowAutoRedirect.get -> bool
+Titanium.Net.Http.TitaniumHttpHandler.AllowAutoRedirect.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.AllowManagedStackUnderFips.get -> bool
+Titanium.Net.Http.TitaniumHttpHandler.AllowManagedStackUnderFips.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.AutomaticDecompression.get -> System.Net.DecompressionMethods
+Titanium.Net.Http.TitaniumHttpHandler.AutomaticDecompression.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.ConnectTimeout.get -> System.TimeSpan
+Titanium.Net.Http.TitaniumHttpHandler.ConnectTimeout.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.CookieContainer.get -> System.Net.CookieContainer?
+Titanium.Net.Http.TitaniumHttpHandler.CookieContainer.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.EnableAltSvc.get -> bool
+Titanium.Net.Http.TitaniumHttpHandler.EnableAltSvc.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.FingerprintProfile.get -> Titanium.Tls.TlsFingerprintProfile?
+Titanium.Net.Http.TitaniumHttpHandler.FingerprintProfile.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.MaxAutomaticRedirections.get -> int
+Titanium.Net.Http.TitaniumHttpHandler.MaxAutomaticRedirections.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.MaxConnectionsPerServer.get -> int
+Titanium.Net.Http.TitaniumHttpHandler.MaxConnectionsPerServer.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.PooledConnectionIdleTimeout.get -> System.TimeSpan
+Titanium.Net.Http.TitaniumHttpHandler.PooledConnectionIdleTimeout.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.PooledConnectionLifetime.get -> System.TimeSpan
+Titanium.Net.Http.TitaniumHttpHandler.PooledConnectionLifetime.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.Proxy.get -> System.Net.IWebProxy?
+Titanium.Net.Http.TitaniumHttpHandler.Proxy.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.QuicOptions.get -> Titanium.Quic.ManagedQuicClientConnectionOptions?
+Titanium.Net.Http.TitaniumHttpHandler.QuicOptions.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.SslOptions.get -> System.Net.Security.SslClientAuthenticationOptions!
+Titanium.Net.Http.TitaniumHttpHandler.SslOptions.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.TitaniumHttpHandler() -> void
+Titanium.Net.Http.TitaniumHttpHandler.UseCookies.get -> bool
+Titanium.Net.Http.TitaniumHttpHandler.UseCookies.set -> void
+Titanium.Net.Http.TitaniumHttpHandler.UseProxy.get -> bool
+Titanium.Net.Http.TitaniumHttpHandler.UseProxy.set -> void

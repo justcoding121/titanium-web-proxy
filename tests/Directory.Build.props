@@ -1,6 +1,6 @@
 <Project>
   <!-- Set before the Compile item below. Directory.Build.props is imported before the project body, so a property set only in the csproj arrives too late. -->
-  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Titanium.Tls.Tests' or '$(MSBuildProjectName)' == 'Titanium.Quic.Tests' or '$(MSBuildProjectName)' == 'Titanium.Net.Compatibility.Tests'">
+    <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Titanium.Tls.Tests' or '$(MSBuildProjectName)' == 'Titanium.Quic.Tests' or '$(MSBuildProjectName)' == 'Titanium.Net.Compatibility.Tests' or '$(MSBuildProjectName)' == 'Titanium.Net.Http.Tests'">
     <ManagedStackTestHost>true</ManagedStackTestHost>
   </PropertyGroup>
   <!-- TestKit and the plugin fixture are not test hosts. Every other project under tests/ is. -->

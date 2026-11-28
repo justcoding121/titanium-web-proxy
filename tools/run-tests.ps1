@@ -25,6 +25,7 @@ $projects = [ordered]@{
     tls           = 'tests\Titanium.Tls.Tests\Titanium.Tls.Tests.csproj'
     quic          = 'tests\Titanium.Quic.Tests\Titanium.Quic.Tests.csproj'
     compat        = 'tests\Titanium.Net.Compatibility.Tests\Titanium.Net.Compatibility.Tests.csproj'
+    nethttp       = 'tests\Titanium.Net.Http.Tests\Titanium.Net.Http.Tests.csproj'
     geoip         = 'tests\Titanium.Cli.GeoIp.Tests\Titanium.Cli.GeoIp.Tests.csproj'
     unit          = 'tests\Titanium.Web.Proxy.UnitTests\Titanium.Web.Proxy.UnitTests.csproj'
     cli           = 'tests\Titanium.Cli.Tests\Titanium.Cli.Tests.csproj'

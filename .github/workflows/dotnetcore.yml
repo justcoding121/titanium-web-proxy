@@ -363,6 +363,7 @@ jobs:
           'tests/Titanium.Tls.Tests/Titanium.Tls.Tests.csproj',
           'tests/Titanium.Quic.Tests/Titanium.Quic.Tests.csproj',
           'tests/Titanium.Net.Compatibility.Tests/Titanium.Net.Compatibility.Tests.csproj',
+          'tests/Titanium.Net.Http.Tests/Titanium.Net.Http.Tests.csproj',
           'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj',
           'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj',
           'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj',
@@ -437,6 +438,8 @@ jobs:
         dotnet test tests/Titanium.Quic.Tests/Titanium.Quic.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --blame-hang --blame-hang-timeout 2m --collect:"Code Coverage" --results-directory coverage/quic
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Net.Compatibility.Tests/Titanium.Net.Compatibility.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --blame-hang --blame-hang-timeout 2m --collect:"Code Coverage" --results-directory coverage/compat
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Net.Http.Tests/Titanium.Net.Http.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --blame-hang --blame-hang-timeout 2m --collect:"Code Coverage" --results-directory coverage/nethttp
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         $unitJobs = @(

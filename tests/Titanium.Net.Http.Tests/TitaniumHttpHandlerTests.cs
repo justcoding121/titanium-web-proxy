@@ -1,0 +1,288 @@
+using System;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace Titanium.Net.Http.Tests;
+
+[TestClass]
+public sealed class TitaniumHttpHandlerTests
+{
+    [TestMethod]
+    public void HttpsDefaultPortStays443()
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://example.com/a?b=1");
+        using HttpRequestMessage inner = TitaniumHttpHandler.CreateInnerRequest(
+            request,
+            HttpVersion.Version11,
+            HttpVersionPolicy.RequestVersionExact);
+
+        Assert.AreEqual("https", request.RequestUri!.Scheme);
+        Assert.AreEqual("http", inner.RequestUri!.Scheme);
+        Assert.AreEqual(443, inner.RequestUri.Port);
+        Assert.AreEqual("/a", inner.RequestUri.AbsolutePath);
+        Assert.AreEqual("?b=1", inner.RequestUri.Query);
+        Assert.AreEqual("example.com", inner.Headers.Host);
+        Assert.IsTrue(inner.Options.TryGetValue(TitaniumHttpHandler.ManagedTlsOption, out bool tls) && tls);
+    }
+
+    [TestMethod]
+    public void ExplicitHttpsPortIsKept()
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://example.com:8443/a");
+        request.Headers.Host = "example.com:8443";
+        using HttpRequestMessage inner = TitaniumHttpHandler.CreateInnerRequest(
+            request,
+            HttpVersion.Version11,
+            HttpVersionPolicy.RequestVersionExact);
+
+        Assert.AreEqual("http", inner.RequestUri!.Scheme);
+        Assert.AreEqual(8443, inner.RequestUri.Port);
+        Assert.AreEqual("example.com:8443", inner.Headers.Host);
+    }
+
+    [TestMethod]
+    public void HttpUriIsNotRewritten()
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, "http://example.com/a");
+        using HttpRequestMessage inner = TitaniumHttpHandler.CreateInnerRequest(
+            request,
+            HttpVersion.Version11,
+            HttpVersionPolicy.RequestVersionExact);
+
+        Assert.AreEqual("http", inner.RequestUri!.Scheme);
+        Assert.AreEqual(80, inner.RequestUri.Port);
+        Assert.IsFalse(inner.Options.TryGetValue(TitaniumHttpHandler.ManagedTlsOption, out _));
+    }
+
+    [TestMethod]
+    public void AssemblyReferencesTheManagedStackOnly()
+    {
+        string[] names = typeof(TitaniumHttpHandler).Assembly.GetReferencedAssemblies()
+            .Select(static reference => reference.Name ?? string.Empty)
+            .ToArray();
+        Assert.IsTrue(names.Contains("Titanium.Tls"));
+        Assert.IsTrue(names.Contains("Titanium.Quic"));
+        Assert.IsTrue(names.Contains("Titanium.Http3"));
+        foreach (string name in names)
+        {
+            Assert.IsFalse(name.Contains("Titanium.Web.Proxy", StringComparison.Ordinal), name);
+            Assert.IsFalse(string.Equals(name, "Titanium.Net.Compatibility", StringComparison.Ordinal), name);
+        }
+    }
+
+    [TestMethod]
+    public void PropertiesRoundTripToTheInnerHandler()
+    {
+        using TitaniumHttpHandler handler = new()
+        {
+            UseProxy = false,
+            MaxConnectionsPerServer = 4,
+            AllowAutoRedirect = false,
+            MaxAutomaticRedirections = 2,
+            AutomaticDecompression = DecompressionMethods.GZip,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(1),
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(30),
+            ConnectTimeout = TimeSpan.FromSeconds(3),
+            UseCookies = false,
+            EnableAltSvc = true,
+            AllowManagedStackUnderFips = true,
+            Proxy = null,
+        };
+        CookieContainer cookies = new();
+        handler.CookieContainer = cookies;
+
+        Assert.IsFalse(handler.UseProxy);
+        Assert.IsNull(handler.Proxy);
+        Assert.AreEqual(4, handler.MaxConnectionsPerServer);
+        Assert.IsFalse(handler.AllowAutoRedirect);
+        Assert.AreEqual(2, handler.MaxAutomaticRedirections);
+        Assert.AreEqual(DecompressionMethods.GZip, handler.AutomaticDecompression);
+        Assert.AreEqual(TimeSpan.FromMinutes(1), handler.PooledConnectionLifetime);
+        Assert.AreEqual(TimeSpan.FromSeconds(30), handler.PooledConnectionIdleTimeout);
+        Assert.AreEqual(TimeSpan.FromSeconds(3), handler.ConnectTimeout);
+        Assert.IsFalse(handler.UseCookies);
+        Assert.IsTrue(handler.EnableAltSvc);
+        Assert.IsTrue(handler.AllowManagedStackUnderFips);
+        Assert.AreSame(cookies, handler.CookieContainer);
+    }
+
+    [TestMethod]
+    public async Task Http3ExactThrows()
+    {
+        using TitaniumHttpHandler handler = new();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://example.com/")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+
+        NotSupportedException ex = await Assert.ThrowsExceptionAsync<NotSupportedException>(() => client.SendAsync(request));
+        StringAssert.Contains(ex.Message, "HTTP/3");
+    }
+
+    [TestMethod]
+    public async Task Http3OrHigherThrows()
+    {
+        using TitaniumHttpHandler handler = new();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://example.com/")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+
+        await Assert.ThrowsExceptionAsync<NotSupportedException>(() => client.SendAsync(request));
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11AgainstLoopbackReturnsTheBody()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/", (HttpRequest request) => request.Protocol);
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://localhost:" + server.Port.ToString() + "/")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+
+        using HttpResponseMessage response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("HTTP/1.1", await response.Content.ReadAsStringAsync());
+        Assert.AreSame(request, response.RequestMessage);
+        Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http2OrLowerRetriesWhenTheServerRejectsTheScheme()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/scheme", (HttpRequest request) =>
+                request.Protocol == "HTTP/2"
+                    ? Results.StatusCode(StatusCodes.Status421MisdirectedRequest)
+                    : Results.Text("downgraded"));
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://localhost:" + server.Port.ToString() + "/scheme")
+        {
+            Version = HttpVersion.Version20,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+        };
+
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("downgraded", body);
+        Assert.AreSame(request, response.RequestMessage);
+        Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
+    }
+
+    private static TitaniumHttpHandler Handler()
+    {
+        TitaniumHttpHandler handler = new()
+        {
+            AllowManagedStackUnderFips = true,
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+        };
+        handler.SslOptions.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
+        return handler;
+    }
+
+    private sealed class LoopbackServer : IAsyncDisposable
+    {
+        private readonly WebApplication _app;
+        private readonly X509Certificate2 _certificate;
+
+        private LoopbackServer(WebApplication app, X509Certificate2 certificate, int port)
+        {
+            _app = app;
+            _certificate = certificate;
+            Port = port;
+        }
+
+        public int Port { get; }
+
+        public static async Task<LoopbackServer> StartAsync(Action<WebApplication> map)
+        {
+            X509Certificate2 certificate = CreateCertificate();
+            try
+            {
+                WebApplicationBuilder builder = WebApplication.CreateBuilder();
+                builder.Logging.ClearProviders();
+                builder.WebHost.ConfigureKestrel(options =>
+                {
+                    options.Listen(IPAddress.Loopback, 0, listen =>
+                    {
+                        listen.Protocols = HttpProtocols.Http1AndHttp2;
+                        listen.UseHttps(certificate);
+                    });
+                });
+                WebApplication app = builder.Build();
+                map(app);
+                await app.StartAsync();
+                IServerAddressesFeature? addresses = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
+                string? address = null;
+                if (addresses is not null)
+                {
+                    foreach (string candidate in addresses.Addresses)
+                    {
+                        address = candidate;
+                    }
+                }
+
+                if (address is null)
+                {
+                    await app.DisposeAsync();
+                    throw new InvalidOperationException("Kestrel did not publish an address.");
+                }
+
+                return new LoopbackServer(app, certificate, new Uri(address).Port);
+            }
+            catch
+            {
+                certificate.Dispose();
+                throw;
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _app.StopAsync();
+            await _app.DisposeAsync();
+            _certificate.Dispose();
+        }
+
+        private static X509Certificate2 CreateCertificate()
+        {
+            using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            CertificateRequest request = new("CN=localhost", key, HashAlgorithmName.SHA256);
+            using X509Certificate2 created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+            return X509CertificateLoader.LoadPkcs12(
+                created.Export(X509ContentType.Pfx),
+                password: null,
+                X509KeyStorageFlags.Exportable);
+        }
+    }
+}
