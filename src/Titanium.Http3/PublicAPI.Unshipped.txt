@@ -99,3 +99,11 @@ Titanium.Http3.QpackStaticTable
 static readonly Titanium.Http3.QpackStaticTable.Entries -> (string! Name, string! Value)[]!
 static Titanium.Http3.QpackStaticTable.FindExact(string! name, string! value) -> int
 static Titanium.Http3.QpackStaticTable.FindName(string! name) -> int
+Titanium.Http3.Http3FrameCodec
+const Titanium.Http3.Http3FrameCodec.DefaultMaxPayloadBytes = 4194304 -> long
+const Titanium.Http3.Http3FrameCodec.ProgressiveRentChunkBytes = 262144 -> int
+const Titanium.Http3.Http3FrameCodec.RelayUnitBytes = 16384 -> int
+static Titanium.Http3.Http3FrameCodec.PayloadLimitForFrameType(ulong frameType, long fieldSectionLimit, long dataFrameLimit) -> long
+static Titanium.Http3.Http3FrameCodec.StreamsPastFrameCap(ulong frameType, long length, long frameCap, bool captureWholeFrame) -> bool
+static Titanium.Http3.Http3FrameCodec.Write(System.Span<byte> destination, ulong frameType, System.ReadOnlySpan<byte> payload) -> int
+static Titanium.Http3.Http3FrameCodec.WriteHeader(System.Span<byte> destination, ulong frameType, ulong payloadLength) -> int

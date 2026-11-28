@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Options;
+using FrameCodec = Titanium.Http3.Http3FrameCodec;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -26,13 +27,13 @@ internal sealed class Http3Frame
     ///     buffering, not a single HTTP/3 DATA frame. 4 MiB covers legitimate frames without
     ///     renting an attacker-chosen length.
     /// </summary>
-    internal const long DefaultMaxPayloadBytes = 4 * 1024 * 1024;
+    internal const long DefaultMaxPayloadBytes = FrameCodec.DefaultMaxPayloadBytes;
 
     /// <summary>
     ///     Declared lengths above this are rented as data arrives, starting at this size, so a peer
     ///     that advertises a huge length and sends nothing cannot reserve the full cap up front.
     /// </summary>
-    internal const int ProgressiveRentChunkBytes = 256 * 1024;
+    internal const int ProgressiveRentChunkBytes = FrameCodec.ProgressiveRentChunkBytes;
 
     /// <summary>Last payload rent size on the progressive path. Tests read this; production does not branch on it.</summary>
     internal static int TestLastRentBytes { get; set; }
@@ -42,7 +43,7 @@ internal sealed class Http3Frame
     ///     A payload no larger than this is forwarded in one step. Only a larger payload is sliced.
     ///     This is not the HEADERS+DATA coalesce threshold (that stays 16 KiB).
     /// </summary>
-    internal const int RelayUnitBytes = 16 * 1024;
+    internal const int RelayUnitBytes = FrameCodec.RelayUnitBytes;
 
     /// <summary>
     ///     Payload byte cap for one frame. HEADERS (including trailers) use
@@ -52,7 +53,7 @@ internal sealed class Http3Frame
     ///     QPACK the compressed size bounds expansion for compliant peers.
     /// </summary>
     internal static long PayloadLimitForFrameType(ulong frameType, long fieldSectionLimit, long dataFrameLimit) =>
-        frameType == Http3FrameType.Headers ? fieldSectionLimit : dataFrameLimit;
+        FrameCodec.PayloadLimitForFrameType(frameType, fieldSectionLimit, dataFrameLimit);
 
     public ulong Type { get; }
     public ReadOnlyMemory<byte> Payload { get; }
@@ -133,9 +134,7 @@ internal sealed class Http3Frame
     ///     trailers and hooks stay under the frame cap.
     /// </summary>
     internal static bool StreamsPastFrameCap(ulong frameType, long length, long frameCap, bool captureWholeFrame)
-        => !captureWholeFrame
-           && frameType == Http3FrameType.Data
-           && length > (frameCap > 0 ? frameCap : DefaultMaxPayloadBytes);
+        => FrameCodec.StreamsPastFrameCap(frameType, length, frameCap, captureWholeFrame);
 
     /// <summary>
     ///     Copies a DATA payload in slices without renting the declared length. Used by the no-hook
@@ -247,12 +246,7 @@ internal sealed class Http3Frame
         if (payload.Length <= 256)
         {
             var rented = ArrayPool<byte>.Shared.Rent(headerCap + payload.Length);
-            var typeLen = Http3VarInt.Write(rented, frameType);
-            var lengthLen = Http3VarInt.Write(rented.AsSpan(typeLen), (ulong)payload.Length);
-            var headerLen = typeLen + lengthLen;
-            if (!payload.IsEmpty)
-                payload.Span.CopyTo(rented.AsSpan(headerLen));
-            var total = headerLen + payload.Length;
+            var total = FrameCodec.Write(rented, frameType, payload.Span);
             // Always await before ArrayPool.Return. Returning on IsCompletedSuccessfully without
             // consuming the ValueTask let QuicStream/MsQuic keep the Memory while the next frame
             // Rent reused the same array — H3_FRAME_ERROR on streamed H3 bodies (≥16 KiB chunks /
@@ -294,12 +288,7 @@ internal sealed class Http3Frame
         try
         {
             var span = scratch.Buffer.AsSpan();
-            var typeLen = Http3VarInt.Write(span, frameType);
-            var lengthLen = Http3VarInt.Write(span.Slice(typeLen), (ulong)payload.Length);
-            var headerLen = typeLen + lengthLen;
-            if (!payload.IsEmpty)
-                payload.Span.CopyTo(span.Slice(headerLen));
-            total = headerLen + payload.Length;
+            total = FrameCodec.Write(span, frameType, payload.Span);
         }
         catch
         {
@@ -358,9 +347,8 @@ internal sealed class Http3Frame
         var headerBytes = ArrayPool<byte>.Shared.Rent(headerCap);
         try
         {
-            var typeLen = Http3VarInt.Write(headerBytes, frameType);
-            var lengthLen = Http3VarInt.Write(headerBytes.AsSpan(typeLen), (ulong)payload.Length);
-            await stream.WriteAsync(headerBytes.AsMemory(0, typeLen + lengthLen), cancellationToken)
+            var headerLen = FrameCodec.WriteHeader(headerBytes, frameType, (ulong)payload.Length);
+            await stream.WriteAsync(headerBytes.AsMemory(0, headerLen), cancellationToken)
                 .ConfigureAwait(false);
             await WriteBufferAsync(stream, payload, completeWrites, cancellationToken)
                 .ConfigureAwait(false);
@@ -399,22 +387,8 @@ internal sealed class Http3Frame
         const int headerCap = 16;
         var total = headerCap + headersPayload.Length + headerCap + dataPayload.Length;
         var rented = ArrayPool<byte>.Shared.Rent(total);
-        var o = 0;
-        o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Headers);
-        o += Http3VarInt.Write(rented.AsSpan(o), (ulong)headersPayload.Length);
-        if (!headersPayload.IsEmpty)
-        {
-            headersPayload.Span.CopyTo(rented.AsSpan(o));
-            o += headersPayload.Length;
-        }
-
-        o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Data);
-        o += Http3VarInt.Write(rented.AsSpan(o), (ulong)dataPayload.Length);
-        if (!dataPayload.IsEmpty)
-        {
-            dataPayload.Span.CopyTo(rented.AsSpan(o));
-            o += dataPayload.Length;
-        }
+        var o = FrameCodec.Write(rented, Http3FrameType.Headers, headersPayload.Span);
+        o += FrameCodec.Write(rented.AsSpan(o), Http3FrameType.Data, dataPayload.Span);
 
         // Same ValueTask-consume-before-Return rule as WriteAsync (see comment there).
         return AwaitWriteAndReturnAsync(
