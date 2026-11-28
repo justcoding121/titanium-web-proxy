@@ -35,6 +35,7 @@ namespace Titanium.Net.Http;
 /// A server that selects HTTP/1.1 during ALPN is retried over HTTP/1.1 before any request bytes, for any method, when a lower version is allowed.
 /// A POST body is sent on that retry.
 /// An exact HTTP/2 request is not retried when ALPN selects HTTP/1.1.
+/// A request that starts at HTTP/1.1 and allows a higher version is retried, and the next request reuses that connection.
 /// The negotiated protocol is remembered per authority for ten minutes, up to 256 authorities.
 /// HTTP/3 sends <c>:scheme https</c>. <see cref="SendAsync"/> returns after the response headers. The body is read as the caller reads it.
 /// A HEADERS frame after the body is applied to the response trailers while that read runs.

@@ -2996,6 +2996,42 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11OrHigherFallsBackWhenAlpnSelectsHttp11AndReusesTheConnection()
+    {
+        int connections = 0;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/ping", (HttpRequest httpRequest) => Results.Text(httpRequest.Protocol)),
+            () => Interlocked.Increment(ref connections),
+            HttpProtocols.Http1);
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/ping";
+        using HttpRequestMessage first = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        using (HttpResponseMessage firstResponse = await client.SendAsync(first))
+        {
+            Assert.AreEqual("HTTP/1.1", await firstResponse.Content.ReadAsStringAsync());
+            Assert.AreSame(first, firstResponse.RequestMessage);
+        }
+
+        using HttpRequestMessage second = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        using (HttpResponseMessage secondResponse = await client.SendAsync(second))
+        {
+            Assert.AreEqual("HTTP/1.1", await secondResponse.Content.ReadAsStringAsync());
+        }
+
+        Assert.AreEqual(2, connections);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http2OrLowerRetriesWhenTheServerRejectsTheScheme()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
