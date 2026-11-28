@@ -3032,6 +3032,47 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11OrHigherOnAnotherPortStillTriesAHigherVersion()
+    {
+        int firstConnections = 0;
+        int secondConnections = 0;
+        await using LoopbackServer first = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/ping", () => Results.Text("one")),
+            () => Interlocked.Increment(ref firstConnections),
+            HttpProtocols.Http1);
+        await using LoopbackServer second = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/ping", () => Results.Text("two")),
+            () => Interlocked.Increment(ref secondConnections),
+            HttpProtocols.Http1);
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage firstRequest = new(HttpMethod.Get, "https://127.0.0.1:" + first.Port.ToString(CultureInfo.InvariantCulture) + "/ping")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        using (HttpResponseMessage firstResponse = await client.SendAsync(firstRequest))
+        {
+            Assert.AreEqual("one", await firstResponse.Content.ReadAsStringAsync());
+        }
+
+        Assert.AreEqual(2, firstConnections);
+        using HttpRequestMessage secondRequest = new(HttpMethod.Get, "https://127.0.0.1:" + second.Port.ToString(CultureInfo.InvariantCulture) + "/ping")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        };
+        using (HttpResponseMessage secondResponse = await client.SendAsync(secondRequest))
+        {
+            Assert.AreEqual("two", await secondResponse.Content.ReadAsStringAsync());
+        }
+
+        Assert.AreEqual(2, secondConnections);
+        Assert.AreEqual(2, firstConnections);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http2OrLowerRetriesWhenTheServerRejectsTheScheme()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
