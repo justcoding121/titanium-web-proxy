@@ -355,6 +355,60 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3DirectRequestSendsACallerHeaderAndLeavesConnectionOff()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        request.Headers.TryAddWithoutValidation("X-Trace", "one");
+        request.Headers.TryAddWithoutValidation("Connection", "close");
+        request.Headers.TryAddWithoutValidation("Upgrade", "websocket");
+        request.Headers.TryAddWithoutValidation("Keep-Alive", "timeout=5");
+        request.Headers.TryAddWithoutValidation("Proxy-Connection", "keep-alive");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
+        byte[]? headers = await ReadFrameAsync(inbound, cancel.Token);
+        Assert.IsNotNull(headers);
+        string trace = string.Empty;
+        bool sawConnectionHeader = false;
+        foreach ((string name, string value) in QpackDecoder.Decode(headers))
+        {
+            if (name == "x-trace")
+            {
+                trace = value;
+            }
+            else if (name is "connection" or "upgrade" or "keep-alive" or "proxy-connection")
+            {
+                sawConnectionHeader = true;
+            }
+        }
+
+        while (await ReadFrameAsync(inbound, cancel.Token) is not null)
+        {
+        }
+
+        await ReplyTextAsync(inbound, "ok", cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual("one", trace);
+        Assert.IsFalse(sawConnectionHeader);
+        Assert.AreEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3UsesTargetHostAsTheServerName()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
