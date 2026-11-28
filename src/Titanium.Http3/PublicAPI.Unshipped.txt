@@ -8,3 +8,37 @@ static Titanium.Http3.Http3VarInt.GetByteCount(ulong value) -> int
 static Titanium.Http3.Http3VarInt.ReadAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<ulong?>
 static Titanium.Http3.Http3VarInt.TryRead(System.ReadOnlySpan<byte> source, out ulong value, out int bytesConsumed) -> bool
 static Titanium.Http3.Http3VarInt.Write(System.Span<byte> destination, ulong value) -> int
+Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.ClosedCriticalStream = 260 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.ConnectError = 271 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.ExcessiveLoad = 263 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.FrameError = 262 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.FrameUnexpected = 261 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.GeneralProtocolError = 257 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.IdError = 264 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.InternalError = 258 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.MessageError = 270 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.MissingSettings = 266 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.NoError = 256 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.QpackDecoderStreamError = 514 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.QpackDecompressionFailed = 512 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.QpackEncoderStreamError = 513 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.RequestCancelled = 268 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.RequestIncomplete = 269 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.RequestRejected = 267 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.SettingsError = 265 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.StreamCreationError = 259 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3ErrorCode.VersionFallback = 272 -> Titanium.Http3.Http3ErrorCode
+Titanium.Http3.Http3FrameType
+const Titanium.Http3.Http3FrameType.CancelPush = 3 -> ulong
+const Titanium.Http3.Http3FrameType.Data = 0 -> ulong
+const Titanium.Http3.Http3FrameType.GoAway = 7 -> ulong
+const Titanium.Http3.Http3FrameType.Headers = 1 -> ulong
+const Titanium.Http3.Http3FrameType.MaxPushId = 13 -> ulong
+const Titanium.Http3.Http3FrameType.PushPromise = 5 -> ulong
+const Titanium.Http3.Http3FrameType.Settings = 4 -> ulong
+Titanium.Http3.Http3StreamType
+const Titanium.Http3.Http3StreamType.Control = 0 -> ulong
+const Titanium.Http3.Http3StreamType.Push = 1 -> ulong
+const Titanium.Http3.Http3StreamType.QpackDecoder = 3 -> ulong
+const Titanium.Http3.Http3StreamType.QpackEncoder = 2 -> ulong

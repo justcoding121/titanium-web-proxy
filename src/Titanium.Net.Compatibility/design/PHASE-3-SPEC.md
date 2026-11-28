@@ -45,7 +45,7 @@ Exit: existing proxy tests stay green and unedited. A flag-off run does not cons
 
 ### P3.5 Extract `Titanium.Http3`
 
-`Http3VarInt` now lives in `Titanium.Http3`. The proxy calls that type. QPACK, frame readers, and capsules stay in the proxy until they no longer use proxy header types or `QuicStream`. The proxy behavior is unchanged.
+`Http3VarInt`, the frame types, the stream types, and the error codes now live in `Titanium.Http3`. The proxy keeps the same names and reads those values. QPACK, frame readers, and capsules stay in the proxy until they no longer use proxy header types or `QuicStream`. The proxy behavior is unchanged.
 
 ### P3.6 `TitaniumHttpHandler`
 

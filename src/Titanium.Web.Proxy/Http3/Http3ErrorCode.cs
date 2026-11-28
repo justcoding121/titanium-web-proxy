@@ -1,67 +1,65 @@
 namespace Titanium.Web.Proxy.Http3;
 
-/// <summary>
-///     HTTP/3 application error codes (RFC 9114 §8.1).
-/// </summary>
+/// <summary>HTTP/3 application error codes. The numbers live in <see cref="Titanium.Http3.Http3ErrorCode"/>.</summary>
 internal enum Http3ErrorCode : long
 {
-    /// <summary>No error. This is used when the connection or stream needs to be closed, but there is no error to signal.</summary>
-    NoError = 0x100,
+    /// <summary>No error.</summary>
+    NoError = (long)Titanium.Http3.Http3ErrorCode.NoError,
 
-    /// <summary>Peer violated protocol requirements in a way which doesn't match a more specific error code, or endpoint declines to use the more specific error code.</summary>
-    GeneralProtocolError = 0x101,
+    /// <summary>General protocol error.</summary>
+    GeneralProtocolError = (long)Titanium.Http3.Http3ErrorCode.GeneralProtocolError,
 
-    /// <summary>An internal error has occurred in the HTTP stack.</summary>
-    InternalError = 0x102,
+    /// <summary>Internal error.</summary>
+    InternalError = (long)Titanium.Http3.Http3ErrorCode.InternalError,
 
-    /// <summary>The endpoint detected that its peer created a stream that it will not accept.</summary>
-    StreamCreationError = 0x103,
+    /// <summary>Stream creation error.</summary>
+    StreamCreationError = (long)Titanium.Http3.Http3ErrorCode.StreamCreationError,
 
-    /// <summary>A stream required by the HTTP/3 connection was closed or reset.</summary>
-    ClosedCriticalStream = 0x104,
+    /// <summary>Closed critical stream.</summary>
+    ClosedCriticalStream = (long)Titanium.Http3.Http3ErrorCode.ClosedCriticalStream,
 
-    /// <summary>A frame was received which was not permitted in the current state or on the current stream type.</summary>
-    FrameUnexpected = 0x105,
+    /// <summary>Unexpected frame.</summary>
+    FrameUnexpected = (long)Titanium.Http3.Http3ErrorCode.FrameUnexpected,
 
-    /// <summary>A frame that fails to satisfy layout requirements or with an invalid size was received.</summary>
-    FrameError = 0x106,
+    /// <summary>Frame error.</summary>
+    FrameError = (long)Titanium.Http3.Http3ErrorCode.FrameError,
 
-    /// <summary>The endpoint detected that its peer is exhibiting a behavior that might be generating excessive load.</summary>
-    ExcessiveLoad = 0x107,
+    /// <summary>Excessive load.</summary>
+    ExcessiveLoad = (long)Titanium.Http3.Http3ErrorCode.ExcessiveLoad,
 
-    /// <summary>A Stream ID or Push ID was used incorrectly, such as exceeding a limit, reducing a limit, or being reused.</summary>
-    IdError = 0x108,
+    /// <summary>ID error.</summary>
+    IdError = (long)Titanium.Http3.Http3ErrorCode.IdError,
 
-    /// <summary>An endpoint detected an error in the payload of a SETTINGS frame.</summary>
-    SettingsError = 0x109,
+    /// <summary>Settings error.</summary>
+    SettingsError = (long)Titanium.Http3.Http3ErrorCode.SettingsError,
 
-    /// <summary>No SETTINGS frame was received at the beginning of the control stream.</summary>
-    MissingSettings = 0x10a,
+    /// <summary>Missing settings.</summary>
+    MissingSettings = (long)Titanium.Http3.Http3ErrorCode.MissingSettings,
 
-    /// <summary>A server rejected a request without performing any application processing.</summary>
-    RequestRejected = 0x10b,
+    /// <summary>Request rejected.</summary>
+    RequestRejected = (long)Titanium.Http3.Http3ErrorCode.RequestRejected,
 
-    /// <summary>The request or its response (including pushed response) is cancelled.</summary>
-    RequestCancelled = 0x10c,
+    /// <summary>Request cancelled.</summary>
+    RequestCancelled = (long)Titanium.Http3.Http3ErrorCode.RequestCancelled,
 
-    /// <summary>The client's stream terminated without containing a fully-formed request.</summary>
-    RequestIncomplete = 0x10d,
+    /// <summary>Request incomplete.</summary>
+    RequestIncomplete = (long)Titanium.Http3.Http3ErrorCode.RequestIncomplete,
 
-    /// <summary>An HTTP message was well-formed but is not supported by this implementation.</summary>
-    MessageError = 0x10e,
+    /// <summary>Message error.</summary>
+    MessageError = (long)Titanium.Http3.Http3ErrorCode.MessageError,
 
-    /// <summary>The TCP connection established in response to a CONNECT request was reset or abnormally closed.</summary>
-    ConnectError = 0x10f,
+    /// <summary>CONNECT error.</summary>
+    ConnectError = (long)Titanium.Http3.Http3ErrorCode.ConnectError,
 
-    /// <summary>The requested operation cannot be served over HTTP/3. The peer should retry over HTTP/1.1.</summary>
-    VersionFallback = 0x110,
+    /// <summary>Version fallback.</summary>
+    VersionFallback = (long)Titanium.Http3.Http3ErrorCode.VersionFallback,
 
-    /// <summary>QPACK header block decompression failure.</summary>
-    QpackDecompressionFailed = 0x200,
+    /// <summary>QPACK decompression failed.</summary>
+    QpackDecompressionFailed = (long)Titanium.Http3.Http3ErrorCode.QpackDecompressionFailed,
 
-    /// <summary>An error on the QPACK encoder stream.</summary>
-    QpackEncoderStreamError = 0x201,
+    /// <summary>QPACK encoder stream error.</summary>
+    QpackEncoderStreamError = (long)Titanium.Http3.Http3ErrorCode.QpackEncoderStreamError,
 
-    /// <summary>An error on the QPACK decoder stream.</summary>
-    QpackDecoderStreamError = 0x202
+    /// <summary>QPACK decoder stream error.</summary>
+    QpackDecoderStreamError = (long)Titanium.Http3.Http3ErrorCode.QpackDecoderStreamError,
 }
