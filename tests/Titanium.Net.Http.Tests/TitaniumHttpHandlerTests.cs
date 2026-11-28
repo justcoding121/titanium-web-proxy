@@ -1273,6 +1273,59 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11SeeOtherTurnsPostIntoGetAndKeepsHead()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapPost("/see", (HttpContext context) =>
+            {
+                context.Response.StatusCode = StatusCodes.Status303SeeOther;
+                context.Response.Headers.Location = "/land";
+                return Task.CompletedTask;
+            });
+            app.MapMethods("/see-head", [HttpMethods.Head], (HttpContext context) =>
+            {
+                context.Response.StatusCode = StatusCodes.Status303SeeOther;
+                context.Response.Headers.Location = "/head-land";
+                return Task.CompletedTask;
+            });
+            app.MapGet("/land", async context =>
+            {
+                using StreamReader reader = new(context.Request.Body);
+                string body = await reader.ReadToEndAsync();
+                await context.Response.WriteAsync(context.Request.Method + ":" + body);
+            });
+            app.MapMethods("/head-land", [HttpMethods.Head], (HttpContext context) =>
+            {
+                context.Response.Headers["X-Saw"] = context.Request.Method;
+                return Task.CompletedTask;
+            });
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture);
+        using HttpRequestMessage post = new(HttpMethod.Post, address + "/see")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        using HttpResponseMessage postResponse = await client.SendAsync(post);
+        Assert.AreEqual("GET:", await postResponse.Content.ReadAsStringAsync());
+        Assert.AreSame(post, postResponse.RequestMessage);
+        using HttpRequestMessage head = new(HttpMethod.Head, address + "/see-head")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage headResponse = await client.SendAsync(head);
+        Assert.AreEqual(HttpStatusCode.OK, headResponse.StatusCode);
+        Assert.AreEqual("HEAD", headResponse.Headers.GetValues("X-Saw").Single());
+        Assert.AreSame(head, headResponse.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11LargeUploadAndDownloadMatchTheirHashes()
     {
         byte[] upload = Pattern(1024 * 1024);
