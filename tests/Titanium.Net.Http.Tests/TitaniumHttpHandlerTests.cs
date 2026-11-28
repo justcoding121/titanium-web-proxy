@@ -318,6 +318,42 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3UsesQuicOptionsLocalEndPoint()
+    {
+        using Socket reserved = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        reserved.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        int localPort = ((IPEndPoint)reserved.LocalEndPoint!).Port;
+        reserved.Close();
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.QuicOptions = new ManagedQuicClientConnectionOptions
+        {
+            LocalEndPoint = new IPEndPoint(IPAddress.Loopback, localPort),
+        };
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        await ReplyAsync(server, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual(localPort, server.RemoteEndPoint.Port);
+        Assert.AreEqual(IPAddress.Loopback, server.RemoteEndPoint.Address);
+        Assert.AreEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3RedirectIsFollowedOnTheSameConnection()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
