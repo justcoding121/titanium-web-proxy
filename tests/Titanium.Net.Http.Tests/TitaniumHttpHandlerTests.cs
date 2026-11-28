@@ -705,6 +705,45 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RedirectToHttpIsFetchedAsHttp11()
+    {
+        using var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        int clearPort = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<TcpClient> clearAccepted = tcp.AcceptTcpClientAsync(cancel.Token).AsTask();
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.UseProxy = false;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/from");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        string path = await ReadRequestPathAsync(hop, cancel.Token);
+        Assert.IsTrue(path.EndsWith("/from", StringComparison.Ordinal));
+        await WriteRedirectAsync(
+            hop,
+            "302",
+            "http://127.0.0.1:" + clearPort.ToString(CultureInfo.InvariantCulture) + "/land",
+            cancel.Token);
+        using TcpClient clear = await clearAccepted;
+        await using NetworkStream stream = clear.GetStream();
+        string headers = await ReadHttpHeadersAsync(stream, cancel.Token);
+        Assert.IsTrue(headers.StartsWith("GET /land HTTP/1.1\r\n", StringComparison.Ordinal), headers);
+        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nclear"u8.ToArray(), cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("clear", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreNotEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -2346,6 +2385,28 @@ public sealed class TitaniumHttpHandlerTests
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
         await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task<string> ReadHttpHeadersAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        using var buffer = new MemoryStream();
+        byte[] chunk = new byte[1024];
+        while (true)
+        {
+            int count = await stream.ReadAsync(chunk, cancellationToken);
+            if (count == 0)
+            {
+                break;
+            }
+
+            buffer.Write(chunk, 0, count);
+            if (buffer.GetBuffer().AsSpan(0, (int)buffer.Length).IndexOf("\r\n\r\n"u8) >= 0)
+            {
+                break;
+            }
+        }
+
+        return System.Text.Encoding.ASCII.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     private static async Task<ManagedQuicListener> ListenHttp3Async(X509Certificate2 certificate) =>

@@ -22,7 +22,7 @@ namespace Titanium.Net.Http;
 /// </summary>
 /// <remarks>
 /// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream.
-/// A redirect is followed here, including an HTTP/3 response. AllowAutoRedirect false returns that response. Each hop is rewritten the same way, so an https Location stays on the managed stream. Authorization is dropped when the host changes, including on HTTP/3. The same host keeps it. A 300 or 302 turns POST into GET, including on HTTP/3. A 303 turns POST into GET and leaves HEAD as HEAD, including on HTTP/3. A 307 keeps the method and body, and an HTTP/3 hop sends that body again. A 301 turns POST into GET, including on HTTP/3. A 308 keeps the method and body, and an HTTP/3 hop sends that body again.
+/// A redirect is followed here, including an HTTP/3 response. AllowAutoRedirect false returns that response. Each hop is rewritten the same way, so an https Location stays on the managed stream. Authorization is dropped when the host changes, including on HTTP/3. The same host keeps it. A 300 or 302 turns POST into GET, including on HTTP/3. An HTTP/3 redirect to an http URL is fetched as HTTP/1.1. A 303 turns POST into GET and leaves HEAD as HEAD, including on HTTP/3. A 307 keeps the method and body, and an HTTP/3 hop sends that body again. A 301 turns POST into GET, including on HTTP/3. A 308 keeps the method and body, and an HTTP/3 hop sends that body again.
 /// A Cookie header is copied onto an HTTP/3 hop only when UseCookies is false.
 /// Cookies and decompression stay on the inner handler.
 /// Port 443 stays on that URI when the caller used the default HTTPS port.
@@ -310,10 +310,18 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
             bool keepBody = current.Content is not null
                 && method == current.Method
                 && response.StatusCode is HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
+            Version hopVersion = original.Version;
+            HttpVersionPolicy hopPolicy = original.VersionPolicy;
+            if (!string.Equals(nextUri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) && original.Version.Major == 3)
+            {
+                hopVersion = HttpVersion.Version11;
+                hopPolicy = HttpVersionPolicy.RequestVersionExact;
+            }
+
             HttpRequestMessage next = new(method, nextUri)
             {
-                Version = original.Version,
-                VersionPolicy = original.VersionPolicy,
+                Version = hopVersion,
+                VersionPolicy = hopPolicy,
             };
             foreach (KeyValuePair<string, IEnumerable<string>> header in current.Headers)
             {
