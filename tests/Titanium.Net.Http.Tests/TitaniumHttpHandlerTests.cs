@@ -3668,6 +3668,38 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11PostSendsTheContentType()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapPost("/post", async (HttpRequest request) =>
+            {
+                using StreamReader reader = new(request.Body);
+                string posted = await reader.ReadToEndAsync();
+                return Results.Text((request.ContentType ?? "none") + "\n" + posted);
+            }),
+            null,
+            HttpProtocols.Http1);
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/post")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        string[] lines = body.Split('\n');
+        Assert.AreEqual(2, lines.Length, body);
+        Assert.IsTrue(lines[0].Contains("text/plain", StringComparison.OrdinalIgnoreCase), body);
+        Assert.AreEqual("payload", lines[1]);
+        Assert.AreEqual(1, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11Tls12IsRefusedBeforeTheRequest()
     {
         int seen = 0;
