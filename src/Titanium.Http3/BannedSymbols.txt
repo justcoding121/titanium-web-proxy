@@ -1,0 +1,9 @@
+T:System.Runtime.InteropServices.DllImportAttribute;P/Invoke is not allowed in the HTTP/3 codec.
+T:System.Runtime.InteropServices.LibraryImportAttribute;P/Invoke is not allowed in the HTTP/3 codec.
+M:System.Threading.Tasks.Task.Run(System.Action);Protocol work stays on the caller. Do not hop threads.
+M:System.Threading.Tasks.Task.Run(System.Action,System.Threading.CancellationToken);Protocol work stays on the caller. Do not hop threads.
+M:System.Threading.Tasks.Task.Run(System.Func{System.Threading.Tasks.Task});Protocol work stays on the caller. Do not hop threads.
+M:System.Threading.Tasks.Task.Run(System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken);Protocol work stays on the caller. Do not hop threads.
+T:System.IO.Pipelines.Pipe;The codec uses the caller-driven stream model, not a pipe.
+T:System.IO.Pipelines.PipeReader;The codec uses the caller-driven stream model, not a pipe.
+T:System.IO.Pipelines.PipeWriter;The codec uses the caller-driven stream model, not a pipe.

@@ -33,6 +33,7 @@
     <ProjectReference Include="..\Titanium.Tls\Titanium.Tls.csproj" />
     <ProjectReference Include="..\Titanium.Quic\Titanium.Quic.csproj" />
     <ProjectReference Include="..\Titanium.Net.Compatibility\Titanium.Net.Compatibility.csproj" />
+    <ProjectReference Include="..\Titanium.Http3\Titanium.Http3.csproj" />
   </ItemGroup>
 
   <ItemGroup>

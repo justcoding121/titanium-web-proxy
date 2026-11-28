@@ -106,6 +106,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Managed.Benchmarks
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Quic.UdpOffload", "Titanium.Quic.UdpOffload\Titanium.Quic.UdpOffload.csproj", "{D8CD5F33-8B30-4363-AE37-98530E1D7BFA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Http3", "Titanium.Http3\Titanium.Http3.csproj", "{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -608,6 +610,18 @@ Global
 		{D8CD5F33-8B30-4363-AE37-98530E1D7BFA}.Release|x64.Build.0 = Release|Any CPU
 		{D8CD5F33-8B30-4363-AE37-98530E1D7BFA}.Release|x86.ActiveCfg = Release|Any CPU
 		{D8CD5F33-8B30-4363-AE37-98530E1D7BFA}.Release|x86.Build.0 = Release|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Debug|x64.Build.0 = Debug|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Debug|x86.Build.0 = Debug|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Release|x64.ActiveCfg = Release|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Release|x64.Build.0 = Release|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Release|x86.ActiveCfg = Release|Any CPU
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -631,6 +645,7 @@ Global
 		{BA074B8A-9FCC-44D8-A56F-2BA153D04B7B} = {7A67E07A-EDE8-3E29-6CA7-8FB9511FC0F2}
 		{84C93745-1378-4D3F-91C0-0DF0A1E5D34B} = {7A67E07A-EDE8-3E29-6CA7-8FB9511FC0F2}
 		{D8CD5F33-8B30-4363-AE37-98530E1D7BFA} = {7A67E07A-EDE8-3E29-6CA7-8FB9511FC0F2}
+		{B355CF9D-4E9C-4D56-BBC2-00F3D1B9BE0D} = {7A67E07A-EDE8-3E29-6CA7-8FB9511FC0F2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {625C1EB5-44CF-47DE-A85A-B4C8C40ED90A}

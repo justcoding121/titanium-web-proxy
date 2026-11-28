@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\Titanium.Managed.Common.props" />
+  <PropertyGroup>
+    <RootNamespace>Titanium.Http3</RootNamespace>
+    <Description>HTTP/3 framing for .NET. The codec does not open sockets.</Description>
+    <PackageId>Titanium.Http3</PackageId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+    <AdditionalFiles Include="BannedSymbols.txt" />
+    <None Include="LICENSE" Pack="true" PackagePath="" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+</Project>

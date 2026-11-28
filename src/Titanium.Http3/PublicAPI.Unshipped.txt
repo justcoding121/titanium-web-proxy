@@ -1,0 +1,10 @@
+#nullable enable
+Titanium.Http3.Http3VarInt
+const Titanium.Http3.Http3VarInt.Max1ByteValue = 63 -> ulong
+const Titanium.Http3.Http3VarInt.Max2ByteValue = 16383 -> ulong
+const Titanium.Http3.Http3VarInt.Max4ByteValue = 1073741823 -> ulong
+const Titanium.Http3.Http3VarInt.Max8ByteValue = 4611686018427387903 -> ulong
+static Titanium.Http3.Http3VarInt.GetByteCount(ulong value) -> int
+static Titanium.Http3.Http3VarInt.ReadAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<ulong?>
+static Titanium.Http3.Http3VarInt.TryRead(System.ReadOnlySpan<byte> source, out ulong value, out int bytesConsumed) -> bool
+static Titanium.Http3.Http3VarInt.Write(System.Span<byte> destination, ulong value) -> int

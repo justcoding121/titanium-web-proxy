@@ -45,7 +45,7 @@ Exit: existing proxy tests stay green and unedited. A flag-off run does not cons
 
 ### P3.5 Extract `Titanium.Http3`
 
-Move the stream-agnostic HTTP/3 framing, varint, QPACK, and capsule code into a new project with no proxy reference. The proxy keeps the same behavior and references the new project.
+`Http3VarInt` now lives in `Titanium.Http3`. The proxy calls that type. QPACK, frame readers, and capsules stay in the proxy until they no longer use proxy header types or `QuicStream`. The proxy behavior is unchanged.
 
 ### P3.6 `TitaniumHttpHandler`
 
