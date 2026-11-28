@@ -837,7 +837,7 @@ server:
   reloadListeners: false       # true reconciles listeners on reload; xDS forces on
 ```
 
-Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3. `managedStack` turns on both managed stacks. `managedTls` and `managedQuic` override it. Omit all three to leave the library default, which is off.
+Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3. `managedStack` turns on both managed stacks. `managedTls` and `managedQuic` override it. Omit all three to leave the library default, which is off. `titanium run --managed-stack` and `TITANIUM_MANAGED_STACK` (`1`, `true`, `0`, or `false`) override the file. The flag wins over the variable.
 
 HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, request decompression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
 

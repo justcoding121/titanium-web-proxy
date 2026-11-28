@@ -63,6 +63,7 @@ internal static class RunCommand
         var serviceMode = ParseServiceMode(args);
         var watch = ParseWatch(args);
         var zoneOverride = ParseZone(args);
+        var managedStackOverride = ParseManagedStack(args);
         var serviceName = ParseServiceName(args) ?? Service.ServiceDefaults.DefaultServiceName;
 
         if (serviceMode && OperatingSystem.IsWindows())
@@ -71,7 +72,7 @@ internal static class RunCommand
                 .ConfigureAwait(false);
         }
 
-        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None, watch, zoneOverride)
+        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None, watch, zoneOverride, managedStackOverride)
             .ConfigureAwait(false);
     }
 
@@ -82,7 +83,8 @@ internal static class RunCommand
         bool serviceMode,
         CancellationToken stoppingToken,
         bool watch = false,
-        string? zoneOverride = null)
+        string? zoneOverride = null,
+        bool? managedStackOverride = null)
     {
         // Hashed before the load: if the file is replaced in between (a ConfigMap swap while the pod starts), the run
         // loads the newer content but reports the older hash, and the check after the watcher starts reloads it.
@@ -151,6 +153,7 @@ internal static class RunCommand
         proxy.CertificateManager.ApplyFastColdStartLeafSettings();
         ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
+        ApplyManagedStackOverride(proxy, managedStackOverride);
         using var geoIpHost = new GeoIpResolverHost();
         var plusEnabled = loaded.Config.Plus?.Enabled == true;
         if (!string.IsNullOrWhiteSpace(loaded.Config.Server?.GeoIpDatabasePath) && !plusEnabled)
@@ -355,7 +358,8 @@ internal static class RunCommand
                     setPlugins: next => pluginHost = next,
                     scriptPipeline: scriptPipeline,
                     stoppingToken: ct,
-                    runningListeners: runningListeners).ConfigureAwait(false);
+                    runningListeners: runningListeners,
+                    managedStackOverride: managedStackOverride).ConfigureAwait(false);
                 configHash = AdminHost.ComputeConfigHash(configPath);
                 AsyncConsole.WriteLine("Config reloaded.");
                 await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -740,7 +744,8 @@ internal static class RunCommand
         CliConfigEditor? configEditor = null,
         SemaphoreSlim? configEditGate = null,
         Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)>? runningListeners = null,
-        CancellationToken stoppingToken = default)
+        CancellationToken stoppingToken = default,
+        bool? managedStackOverride = null)
     {
         if (configEditGate is not null)
         {
@@ -783,6 +788,7 @@ internal static class RunCommand
 
         ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
+        ApplyManagedStackOverride(proxy, managedStackOverride);
         if (loaded.Config.Plus?.Enabled == true)
         {
             geoIpHost?.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: false, warn: AsyncConsole.WriteError);
@@ -1125,6 +1131,9 @@ internal static class RunCommand
               --service      Run as an OS service worker (used by `titanium service install`).
               --name         Windows SCM service name when --service is set (default: titanium).
               --watch        Debounced reload when the config file changes (off by default).
+              --managed-stack [true|false]
+                             Use Titanium's TLS and QUIC stacks. Also reads TITANIUM_MANAGED_STACK
+                             (1, true, 0, or false). The flag wins, then the variable, then the config file.
 
             Starts the proxy and blocks until Ctrl+C, SIGTERM, or the service manager stops it.
             With server.admin enabled, /readyz answers 503 as soon as a stop is requested, then the
@@ -2402,5 +2411,88 @@ internal static class RunCommand
         }
 
         return null;
+    }
+
+    internal static bool? ParseManagedStack(string[] args)
+    {
+        bool? value = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i].Equals("--managed-stack", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 < args.Length && TryParseManagedStackValue(args[i + 1], out var next))
+                {
+                    value = next;
+                    i++;
+                }
+                else
+                {
+                    value = true;
+                }
+
+                continue;
+            }
+
+            if (args[i].StartsWith("--managed-stack=", StringComparison.OrdinalIgnoreCase))
+            {
+                var text = args[i]["--managed-stack=".Length..];
+                if (!TryParseManagedStackValue(text, out var parsed))
+                {
+                    throw new ArgumentException("--managed-stack expects true, false, 1, or 0.");
+                }
+
+                value = parsed;
+            }
+        }
+
+        return value;
+    }
+
+    internal static bool? ResolveManagedStack(bool? cliOverride)
+    {
+        if (cliOverride is bool fromCli)
+        {
+            return fromCli;
+        }
+
+        var env = Environment.GetEnvironmentVariable("TITANIUM_MANAGED_STACK");
+        if (string.IsNullOrWhiteSpace(env))
+        {
+            return null;
+        }
+
+        if (!TryParseManagedStackValue(env.Trim(), out var fromEnv))
+        {
+            throw new ArgumentException("TITANIUM_MANAGED_STACK expects true, false, 1, or 0.");
+        }
+
+        return fromEnv;
+    }
+
+    internal static void ApplyManagedStackOverride(ProxyServer proxy, bool? cliOverride)
+    {
+        if (ResolveManagedStack(cliOverride) is bool enabled)
+        {
+            proxy.UseManagedTlsStack = enabled;
+            proxy.UseManagedQuicStack = enabled;
+        }
+    }
+
+    private static bool TryParseManagedStackValue(string text, out bool value)
+    {
+        if (text.Equals("1", StringComparison.OrdinalIgnoreCase) || text.Equals("true", StringComparison.OrdinalIgnoreCase))
+        {
+            value = true;
+            return true;
+        }
+
+        if (text.Equals("0", StringComparison.OrdinalIgnoreCase) || text.Equals("false", StringComparison.OrdinalIgnoreCase))
+        {
+            value = false;
+            return true;
+        }
+
+        value = false;
+        return false;
     }
 }

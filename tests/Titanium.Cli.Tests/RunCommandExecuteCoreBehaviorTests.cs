@@ -328,6 +328,35 @@ public class RunCommandExecuteCoreBehaviorTests
     }
 
     [TestMethod]
+    public void ResolveManagedStack_PrefersTheFlagThenTheEnvironment()
+    {
+        Assert.AreEqual(true, RunCommand.ParseManagedStack(["run", "--managed-stack"]));
+        Assert.AreEqual(false, RunCommand.ParseManagedStack(["run", "--managed-stack=false"]));
+        Assert.AreEqual(true, RunCommand.ParseManagedStack(["run", "--managed-stack", "1"]));
+        Assert.IsNull(RunCommand.ParseManagedStack(["run", "-c", "twp.yaml"]));
+
+        var previous = Environment.GetEnvironmentVariable("TITANIUM_MANAGED_STACK");
+        try
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_MANAGED_STACK", "true");
+            Assert.AreEqual(false, RunCommand.ResolveManagedStack(false));
+            Assert.AreEqual(true, RunCommand.ResolveManagedStack(null));
+            Environment.SetEnvironmentVariable("TITANIUM_MANAGED_STACK", "0");
+            Assert.AreEqual(false, RunCommand.ResolveManagedStack(null));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_MANAGED_STACK", previous);
+        }
+
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(proxy, new ServerConfig { ManagedTls = true });
+        RunCommand.ApplyManagedStackOverride(proxy, false);
+        Assert.IsFalse(proxy.UseManagedTlsStack);
+        Assert.IsFalse(proxy.UseManagedQuicStack);
+    }
+
+    [TestMethod]
     public void ResolveLocalZone_PrefersOverrideThenServerThenNull()
     {
         var previous = Environment.GetEnvironmentVariable("TITANIUM_ZONE");

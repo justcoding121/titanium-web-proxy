@@ -75,7 +75,7 @@ internal static class Program
             Titanium Web Proxy CLI
 
             Usage:
-              titanium run -c <config> [-v|--verbose] [--service] [--watch]
+              titanium run -c <config> [-v|--verbose] [--service] [--watch] [--managed-stack [true|false]]
               titanium reload -c <config>
               titanium restart -c <config>   (Linux hot restart)
               titanium test -c <config>
