@@ -24,7 +24,7 @@ proxy.UseManagedTlsStack = true;
 proxy.UseManagedQuicStack = true;
 ```
 
-`new HttpClient(new TitaniumHttpHandler())` always uses the managed stacks. That handler has no flag. It is a separate package, `Titanium.Net.Http`.
+`new HttpClient(new TitaniumHttpHandler())` always uses the managed stacks. That handler has no flag. It is a separate package, `Titanium.Net.Http`. `samples/HttpClientManagedStack` sends one request as HTTP/1.1, one as HTTP/2, and one as HTTP/3.
 
 ## What needs the flag
 
