@@ -3164,6 +3164,33 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreSame(request, response.RequestMessage);
     }
 
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11UsesTargetHostAsTheServerName()
+    {
+        TaskCompletionSource<string> serverName = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/hello", () => Results.Text("ok")),
+            null,
+            HttpProtocols.Http1,
+            requestClientCertificate: false,
+            observedServerName: serverName);
+        using TitaniumHttpHandler handler = Handler();
+        handler.SslOptions.TargetHost = "app.example";
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("ok", body);
+        Assert.AreEqual("app.example", await serverName.Task);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
     private static X509Certificate2 CreateClientCertificate() => CreateClientCertificate("client");
 
     private static X509Certificate2 CreateClientCertificate(string commonName)
@@ -3849,7 +3876,8 @@ public sealed class TitaniumHttpHandlerTests
             Action<WebApplication> map,
             Action? onConnection,
             HttpProtocols protocols,
-            bool requestClientCertificate)
+            bool requestClientCertificate,
+            TaskCompletionSource<string>? observedServerName = null)
         {
             X509Certificate2 certificate = CreateCertificate();
             try
@@ -3877,6 +3905,32 @@ public sealed class TitaniumHttpHandlerTests
                                 adapter.ServerCertificate = certificate;
                                 adapter.ClientCertificateMode = Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.RequireCertificate;
                                 adapter.ClientCertificateValidation = static (_, _, _) => true;
+                            });
+                        }
+                        else if (observedServerName is not null)
+                        {
+                            listen.UseHttps(new Microsoft.AspNetCore.Server.Kestrel.Https.TlsHandshakeCallbackOptions
+                            {
+                                OnConnection = context =>
+                                {
+                                    observedServerName.TrySetResult(context.ClientHelloInfo.ServerName);
+                                    List<SslApplicationProtocol> applicationProtocols = new();
+                                    if ((protocols & HttpProtocols.Http2) != 0)
+                                    {
+                                        applicationProtocols.Add(SslApplicationProtocol.Http2);
+                                    }
+
+                                    if ((protocols & HttpProtocols.Http1) != 0)
+                                    {
+                                        applicationProtocols.Add(SslApplicationProtocol.Http11);
+                                    }
+
+                                    return new ValueTask<SslServerAuthenticationOptions>(new SslServerAuthenticationOptions
+                                    {
+                                        ServerCertificate = certificate,
+                                        ApplicationProtocols = applicationProtocols,
+                                    });
+                                },
                             });
                         }
                         else
