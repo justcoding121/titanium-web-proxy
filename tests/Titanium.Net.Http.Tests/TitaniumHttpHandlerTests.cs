@@ -3429,6 +3429,51 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3EmptyTargetHostSendsTheUriHost()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        TaskCompletionSource<string> serverName = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, hello, _) =>
+            {
+                serverName.TrySetResult(hello.ServerName);
+                return ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+                {
+                    AllowManagedStackUnderFips = true,
+                    ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = certificate,
+                        ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                    },
+                });
+            },
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        await ReplyAsync(server, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual("127.0.0.1", await serverName.Task);
+        Assert.AreEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11DecompressesGzip()
     {
         byte[] payload;
