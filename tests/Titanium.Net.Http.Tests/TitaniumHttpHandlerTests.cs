@@ -1225,6 +1225,54 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11PostRedirectTurnsFoundIntoGetAndKeepsTemporaryRedirect()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapPost("/found", (HttpContext context) =>
+            {
+                context.Response.StatusCode = StatusCodes.Status302Found;
+                context.Response.Headers.Location = "/land";
+                return Task.CompletedTask;
+            });
+            app.MapPost("/keep", (HttpContext context) =>
+            {
+                context.Response.StatusCode = StatusCodes.Status307TemporaryRedirect;
+                context.Response.Headers.Location = "/land";
+                return Task.CompletedTask;
+            });
+            app.MapMethods("/land", ["GET", "POST"], async context =>
+            {
+                using StreamReader reader = new(context.Request.Body);
+                string body = await reader.ReadToEndAsync();
+                await context.Response.WriteAsync(context.Request.Method + ":" + body);
+            });
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture);
+        using HttpRequestMessage found = new(HttpMethod.Post, address + "/found")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        using HttpResponseMessage foundResponse = await client.SendAsync(found);
+        Assert.AreEqual("GET:", await foundResponse.Content.ReadAsStringAsync());
+        Assert.AreSame(found, foundResponse.RequestMessage);
+        using HttpRequestMessage keep = new(HttpMethod.Post, address + "/keep")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        using HttpResponseMessage keepResponse = await client.SendAsync(keep);
+        Assert.AreEqual("POST:payload", await keepResponse.Content.ReadAsStringAsync());
+        Assert.AreSame(keep, keepResponse.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11LargeUploadAndDownloadMatchTheirHashes()
     {
         byte[] upload = Pattern(1024 * 1024);
