@@ -2968,6 +2968,34 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http2ExactIsNotRetriedWhenAlpnSelectsHttp11()
+    {
+        int connections = 0;
+        int seen = 0;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            app => app.MapPost("/hello", () =>
+            {
+                Interlocked.Increment(ref seen);
+                return Results.Text("seen");
+            }),
+            () => Interlocked.Increment(ref connections),
+            HttpProtocols.Http1);
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version20,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        HttpRequestException ex = await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await client.SendAsync(request));
+        Assert.IsTrue(HasMessage(ex, "The server selected HTTP/1.1."), ex.ToString());
+        Assert.AreEqual(1, connections);
+        Assert.AreEqual(0, seen);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http2OrLowerRetriesWhenTheServerRejectsTheScheme()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
