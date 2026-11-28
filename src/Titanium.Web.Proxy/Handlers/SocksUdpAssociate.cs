@@ -1,10 +1,13 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy;
@@ -107,6 +110,9 @@ public partial class ProxyServer
     {
         var buffer = ArrayPool<byte>.Shared.Rent(65535);
         var outbound = ArrayPool<byte>.Shared.Rent(65535);
+        Dictionary<string, ManagedQuicListener>? quic = UseManagedQuicStack
+            ? new Dictionary<string, ManagedQuicListener>(StringComparer.Ordinal)
+            : null;
         IPEndPoint? client = null;
         try
         {
@@ -119,12 +125,20 @@ public partial class ProxyServer
                 }
 
                 client = await DispatchSocksDatagramAsync(
-                    relay, expectedClient, client, buffer, outbound, received.Value, cancellationToken)
+                    relay, expectedClient, client, buffer, outbound, quic, received.Value, cancellationToken)
                     .ConfigureAwait(false);
             }
         }
         finally
         {
+            if (quic is not null)
+            {
+                foreach (ManagedQuicListener listener in quic.Values)
+                {
+                    await listener.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+
             ArrayPool<byte>.Shared.Return(buffer);
             ArrayPool<byte>.Shared.Return(outbound);
         }
@@ -149,7 +163,7 @@ public partial class ProxyServer
 
     private async Task<IPEndPoint?> DispatchSocksDatagramAsync(
         Socket relay, IPAddress? expectedClient, IPEndPoint? client, byte[] buffer, byte[] outbound,
-        SocketReceiveFromResult received, CancellationToken cancellationToken)
+        Dictionary<string, ManagedQuicListener>? quic, SocketReceiveFromResult received, CancellationToken cancellationToken)
     {
         if (received.RemoteEndPoint is not IPEndPoint from)
         {
@@ -168,7 +182,7 @@ public partial class ProxyServer
 
         if (from.Equals(client))
         {
-            await SendClientSocksDatagramAsync(relay, buffer, received.ReceivedBytes, cancellationToken)
+            await SendClientSocksDatagramAsync(relay, from, buffer, outbound, quic, received.ReceivedBytes, cancellationToken)
                 .ConfigureAwait(false);
         }
         else
@@ -181,7 +195,8 @@ public partial class ProxyServer
     }
 
     private async Task SendClientSocksDatagramAsync(
-        Socket relay, byte[] buffer, int receivedBytes, CancellationToken cancellationToken)
+        Socket relay, IPEndPoint client, byte[] buffer, byte[] outbound, Dictionary<string, ManagedQuicListener>? quic,
+        int receivedBytes, CancellationToken cancellationToken)
     {
         if (!TryParseSocksUdp(buffer.AsSpan(0, receivedBytes), out var host, out var port, out var headerLength))
         {
@@ -207,8 +222,78 @@ public partial class ProxyServer
             return;
         }
 
+        var target = new IPEndPoint(targetAddress, port);
+        if (quic is not null && (quic.ContainsKey(target.ToString()) || IsQuicDatagram(buffer.AsSpan(headerLength, payloadLength))))
+        {
+            await InjectSocksQuicAsync(relay, client, target, host, buffer, outbound, quic, headerLength, payloadLength, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
         await relay.SendToAsync(buffer.AsMemory(headerLength, payloadLength), SocketFlags.None,
-            new IPEndPoint(targetAddress, port), cancellationToken).ConfigureAwait(false);
+            target, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task InjectSocksQuicAsync(
+        Socket relay, IPEndPoint client, IPEndPoint target, string host, byte[] buffer, byte[] outbound,
+        Dictionary<string, ManagedQuicListener> quic, int headerLength, int payloadLength, CancellationToken cancellationToken)
+    {
+        string key = target.ToString();
+        if (!quic.TryGetValue(key, out ManagedQuicListener? listener))
+        {
+            listener = ManagedQuicListener.CreateInjected(
+                new ManagedQuicListenerOptions
+                {
+                    ListenEndPoint = target,
+                    AllowManagedStackUnderFips = AllowManagedStackUnderFips,
+                    ConnectionOptionsCallback = (_, hello, token) => SocksQuicOptionsAsync(host, hello, token),
+                },
+                target,
+                (datagram, _, token) => SendSocksQuicReplyAsync(relay, outbound, datagram, target, client, token));
+            quic.Add(key, listener);
+        }
+
+        await listener.HandleDatagramAsync(buffer.AsMemory(headerLength, payloadLength), client, cancellationToken)
+            .ConfigureAwait(false);
+        await listener.DriveAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<ManagedQuicServerConnectionOptions> SocksQuicOptionsAsync(
+        string host, SslClientHelloInfo hello, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string certHost = string.IsNullOrEmpty(hello.ServerName) ? host : hello.ServerName;
+        var cert = await CertificateManager.CreateServerCertificate(certHost).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"CertificateManager could not produce a certificate for '{certHost}'.");
+        return new ManagedQuicServerConnectionOptions
+        {
+            AllowManagedStackUnderFips = AllowManagedStackUnderFips,
+            ServerAuthenticationOptions = new SslServerAuthenticationOptions
+            {
+                ServerCertificate = cert,
+                ClientCertificateRequired = false,
+                EnabledSslProtocols = SupportedServerSslProtocols,
+                CertificateRevocationCheckMode = CheckCertificateRevocation,
+                ApplicationProtocols = new List<SslApplicationProtocol> { SslApplicationProtocol.Http3 },
+            },
+        };
+    }
+
+    private static bool IsQuicDatagram(ReadOnlySpan<byte> payload) =>
+        payload.Length >= 1200 && (payload[0] & 0x80) != 0;
+
+    private static async ValueTask SendSocksQuicReplyAsync(
+        Socket relay, byte[] outbound, ReadOnlyMemory<byte> datagram, IPEndPoint target, IPEndPoint client,
+        CancellationToken cancellationToken)
+    {
+        int wrapped = WriteSocksUdp(outbound, target, datagram.Span);
+        if (wrapped <= 0)
+        {
+            return;
+        }
+
+        await relay.SendToAsync(outbound.AsMemory(0, wrapped), SocketFlags.None, client, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static async Task SendTargetSocksReplyAsync(

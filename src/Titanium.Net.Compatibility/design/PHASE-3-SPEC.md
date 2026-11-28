@@ -53,7 +53,7 @@ Exit: existing proxy tests stay green and unedited. A flag-off run does not cons
 
 ### P3.7 UDP injection
 
-A managed listener can take one datagram from the caller and hand each reply to a callback. It does not open a socket. SOCKS5 UDP ASSOCIATE, CONNECT-UDP, and transparent interception are not wired to that callback yet. The platform path stays the default.
+A managed listener can take one datagram from the caller and hand each reply to a callback. It does not open a socket. When the managed QUIC stack is on, SOCKS5 UDP ASSOCIATE feeds a QUIC datagram to that listener and returns the reply on the same association. Other datagrams stay on the relay. CONNECT-UDP and transparent interception are not wired yet. The platform path stays the default.
 
 ## Self-review
 

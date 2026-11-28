@@ -112,9 +112,79 @@ public class Socks5UdpAssociateTests
         }
     }
 
-    private static ProxyServer BuildProxy(bool blockLoopback = false)
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task UdpAssociate_ManagedQuic_AnswersALongHeaderWithoutForwarding()
     {
-        var proxy = new ProxyServer(false, false, false) { BlockLoopbackDestinations = blockLoopback };
+        using var echo = new UdpEcho();
+        using var plain = new UdpEcho();
+        var proxy = BuildProxy(managedQuic: true);
+        try
+        {
+            var socksPort = proxy.ProxyEndPoints[0].Port;
+            using var control = new TcpClient(IPAddress.Loopback.ToString(), socksPort);
+            var stream = control.GetStream();
+            await stream.WriteAsync(new byte[] { 5, 1, 0 });
+            await ReadExactAsync(stream, new byte[2]);
+            await stream.WriteAsync(new byte[] { 5, 3, 0, 1, 0, 0, 0, 0, 0, 0 });
+            var associate = new byte[10];
+            await ReadExactAsync(stream, associate);
+            var relayPort = (associate[8] << 8) + associate[9];
+
+            using var client = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            client.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            var packet = new byte[1200];
+            packet[0] = 0xC0;
+            packet[4] = 2;
+            packet[5] = 4;
+            var header = new byte[10 + packet.Length];
+            header[3] = 1;
+            IPAddress.Loopback.GetAddressBytes().CopyTo(header, 4);
+            header[8] = (byte)(echo.Port >> 8);
+            header[9] = (byte)echo.Port;
+            packet.CopyTo(header, 10);
+            await client.SendToAsync(header, SocketFlags.None, new IPEndPoint(IPAddress.Loopback, relayPort));
+
+            var received = new byte[1500];
+            using var wait = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var result = await client.ReceiveFromAsync(received, SocketFlags.None, new IPEndPoint(IPAddress.Loopback, 0), wait.Token);
+            Assert.IsTrue(result.ReceivedBytes > 14);
+            Assert.AreEqual(0x80, received[10]);
+            Assert.AreEqual(0, received[11]);
+            Assert.AreEqual(0, received[12]);
+            Assert.AreEqual(0, received[13]);
+            Assert.AreEqual(0, received[14]);
+            await Task.Delay(200);
+            Assert.AreEqual(0, echo.Received);
+
+            var small = new byte[] { 4, 5, 6 };
+            var follow = new byte[10 + small.Length];
+            follow[3] = 1;
+            IPAddress.Loopback.GetAddressBytes().CopyTo(follow, 4);
+            follow[8] = (byte)(plain.Port >> 8);
+            follow[9] = (byte)plain.Port;
+            small.CopyTo(follow, 10);
+            await client.SendToAsync(follow, SocketFlags.None, new IPEndPoint(IPAddress.Loopback, relayPort));
+            using var plainWait = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var echoed = await client.ReceiveFromAsync(received, SocketFlags.None, new IPEndPoint(IPAddress.Loopback, 0), plainWait.Token);
+            CollectionAssert.AreEqual(small, received.AsSpan(10, small.Length).ToArray());
+            Assert.IsTrue(echoed.ReceivedBytes > 10);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    private static ProxyServer BuildProxy(bool blockLoopback = false, bool managedQuic = false)
+    {
+        var proxy = new ProxyServer(false, false, false)
+        {
+            BlockLoopbackDestinations = blockLoopback,
+            UseManagedQuicStack = managedQuic,
+            AllowManagedStackUnderFips = managedQuic,
+        };
         proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
         proxy.CertificateManager.SaveFakeCertificates = false;
         proxy.AddEndPoint(new SocksProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false));
@@ -151,6 +221,8 @@ public class Socks5UdpAssociateTests
 
         public int Port { get; }
 
+        public int Received { get; private set; }
+
         public void Dispose()
         {
             cancellation.Cancel();
@@ -167,6 +239,7 @@ public class Socks5UdpAssociateTests
                 {
                     var received = await socket.ReceiveFromAsync(buffer, SocketFlags.None,
                         new IPEndPoint(IPAddress.Loopback, 0), cancellation.Token);
+                    Received++;
                     await socket.SendToAsync(buffer.AsMemory(0, received.ReceivedBytes), SocketFlags.None,
                         received.RemoteEndPoint, cancellation.Token);
                 }
