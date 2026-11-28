@@ -1,5 +1,7 @@
 using System;
 using System.Net;
+using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Abstractions.Clusters;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -44,6 +46,24 @@ public sealed class ManagedStackFlagTests
         {
             Environment.SetEnvironmentVariable("TWP_MANAGED_TLS", previous);
         }
+    }
+
+    [TestMethod]
+    public void UpstreamFingerprintFailsClosed()
+    {
+        using var off = new ProxyServer(false, false, false);
+        var profile = new ClusterHttpClientConfig { Fingerprint = "chrome" };
+        ManagedStackRequiredException denied = Assert.ThrowsExactly<ManagedStackRequiredException>(
+            () => off.RejectUpstreamFingerprint(profile));
+        StringAssert.Contains(denied.Message, "UseManagedTlsStack");
+        StringAssert.Contains(denied.Message, ManagedStackRequiredException.Reason);
+
+        using var on = new ProxyServer(false, false, false);
+        on.UseManagedTlsStack = true;
+        NotSupportedException builtIn = Assert.ThrowsExactly<NotSupportedException>(
+            () => on.RejectUpstreamFingerprint(profile));
+        StringAssert.Contains(builtIn.Message, "built-in hello");
+        on.RejectUpstreamFingerprint(null);
     }
 
     [TestMethod]

@@ -197,6 +197,13 @@ public sealed class ClusterHttpClientConfig
     public string? ServerName { get; init; }
 
     /// <summary>
+    ///     Browser ClientHello profile for this cluster's upstream handshake. <c>chrome</c> is the only name.
+    ///     It needs the managed TLS stack. The proxy refuses the handshake while that stack is off,
+    ///     and also while the managed ClientHello is still the built-in one.
+    /// </summary>
+    public string? Fingerprint { get; init; }
+
+    /// <summary>
     ///     When false, only a certificate name mismatch is tolerated. Chain, expiry, and revocation
     ///     errors still fail the handshake.
     /// </summary>
@@ -227,13 +234,19 @@ public sealed class ClusterHttpClientConfig
     private string BuildConnectionKey()
     {
         if (SslProtocols is null && !AcceptAnyServerCertificate && MaxConnectionsPerServer is null &&
-            ConnectTimeout is null && RequestTimeout is null && !HasTlsMaterial)
+            ConnectTimeout is null && RequestTimeout is null && !HasTlsMaterial &&
+            string.IsNullOrEmpty(Fingerprint))
         {
             return string.Empty;
         }
 
         var key = (SslProtocols ?? string.Empty) + "|" + AcceptAnyServerCertificate + "|" + MaxConnectionsPerServer +
                   "|" + ConnectTimeout?.TotalMilliseconds + "|" + RequestTimeout?.TotalMilliseconds;
+        if (!string.IsNullOrEmpty(Fingerprint))
+        {
+            key += "|fp:" + Fingerprint;
+        }
+
         if (!HasTlsFiles && VerifyHostname && string.IsNullOrEmpty(ServerName))
         {
             return key;

@@ -1,6 +1,8 @@
 using System;
 using Microsoft.Extensions.Logging;
 using Titanium.Tls;
+using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Abstractions.Clusters;
 
 namespace Titanium.Web.Proxy;
 
@@ -67,6 +69,22 @@ public partial class ProxyServer
         }
 
         field = value;
+    }
+
+    internal void RejectUpstreamFingerprint(ClusterHttpClientConfig? http)
+    {
+        if (string.IsNullOrWhiteSpace(http?.Fingerprint))
+        {
+            return;
+        }
+
+        if (!_useManagedTlsStack)
+        {
+            throw new ManagedStackRequiredException("Upstream fingerprint evasion", nameof(UseManagedTlsStack));
+        }
+
+        throw new NotSupportedException(
+            "httpClient.fingerprint requests a browser ClientHello. The managed stack still sends its built-in hello, so the handshake is refused.");
     }
 
     internal TlsStream CreateManagedTlsStream(System.IO.Stream inner, bool leaveInnerStreamOpen) =>

@@ -504,6 +504,11 @@ Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.FirstAlphabetical 
 Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.PowerOfTwoChoices = 4 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.HttpClient.get -> Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.HttpClient.init -> void
+Titanium.Web.Proxy.Abstractions.ManagedStackRequiredException
+Titanium.Web.Proxy.Abstractions.ManagedStackRequiredException.ManagedStackRequiredException(string! feature, string! flag) -> void
+Titanium.Web.Proxy.Abstractions.ManagedStackRequiredException.Feature.get -> string!
+Titanium.Web.Proxy.Abstractions.ManagedStackRequiredException.Flag.get -> string!
+const Titanium.Web.Proxy.Abstractions.ManagedStackRequiredException.Reason = "The platform TLS and QUIC APIs do not let a program choose the exact ClientHello, extension order or QUIC Initial layout, and do not expose raw UDP datagrams to a QUIC connection, so these features can only be built on a TLS and QUIC implementation we own." -> string!
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.AcceptAnyServerCertificate.get -> bool
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.AcceptAnyServerCertificate.init -> void
@@ -682,6 +687,8 @@ Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertifica
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificateKeyPath.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificatePasswordEnv.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificatePasswordEnv.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.Fingerprint.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.Fingerprint.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.CaBundlePath.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.CaBundlePath.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ServerName.get -> string?

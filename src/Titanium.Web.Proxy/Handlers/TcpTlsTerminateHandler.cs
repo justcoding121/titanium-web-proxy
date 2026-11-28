@@ -429,6 +429,7 @@ public partial class ProxyServer
                 return stream;
             }
 
+            RejectUpstreamFingerprint(cluster.HttpClient);
             if (UseManagedTlsStack)
             {
                 var managedMaterial = UpstreamTlsMaterial.For(cluster.HttpClient);

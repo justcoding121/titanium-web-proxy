@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Abstractions.Plugins;
@@ -59,6 +60,7 @@ public static class TwpConfigValidator
         ValidateListenerOverlaps(config, errors);
         ValidateScriptWiring(config, errors);
         ValidateServer(config.Server, errors);
+        ValidateManagedOnlyFeatures(config, errors);
         ValidateZoneAware(config, errors);
         ValidateTcpTlsListeners(config, errors);
         ValidateOverload(config.Server?.Overload, errors);
@@ -2687,6 +2689,36 @@ public static class TwpConfigValidator
             else if (constraint.StartsWith("regex(", StringComparison.Ordinal) && !CompilesAsRegex(constraint[6..^1]))
             {
                 errors.Add($"Route '{route.Id}' template constraint '{constraint}' does not compile.");
+            }
+        }
+    }
+
+    private static void ValidateManagedOnlyFeatures(TwpConfig config, List<string> errors)
+    {
+        bool managedTls = config.Server?.ManagedTls ?? config.Server?.ManagedStack ?? false;
+        foreach (ClusterConfig cluster in config.Clusters ?? [])
+        {
+            string? profile = cluster.HttpClient?.Fingerprint;
+            if (string.IsNullOrWhiteSpace(profile))
+            {
+                continue;
+            }
+
+            if (!profile.Equals("chrome", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"Cluster '{cluster.Id}' httpClient.fingerprint '{profile}' is unknown. The known profile is chrome.");
+                continue;
+            }
+
+            if (!managedTls)
+            {
+                errors.Add(new ManagedStackRequiredException("Upstream fingerprint evasion", "UseManagedTlsStack").Message);
+            }
+
+            string? fips = Titanium.Tls.FipsEnvironment.ManagedStackRefusal(true, config.Server?.ManagedStackFipsOverride == true);
+            if (fips is not null)
+            {
+                errors.Add(fips + " Upstream fingerprint evasion will not match a browser under the FIPS-approved algorithm set.");
             }
         }
     }

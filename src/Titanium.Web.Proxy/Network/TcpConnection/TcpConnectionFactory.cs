@@ -1387,6 +1387,7 @@ internal partial class TcpConnectionFactory : IDisposable
 
                 if (isHttps)
                 {
+                    proxyServer.RejectUpstreamFingerprint(sessionArgs?.UpstreamHttpClient);
                     // CONNECT tunnel: wrap TLS on the existing HttpServerStream (may hold buffered
                     // bytes from the CONNECT response). leaveInnerOpen:false — disposing the outer
                     // HttpServerStream tears down the chain.
@@ -1435,6 +1436,7 @@ internal partial class TcpConnectionFactory : IDisposable
             }
             else if (isHttps)
             {
+                proxyServer.RejectUpstreamFingerprint(sessionArgs?.UpstreamHttpClient);
                 if (proxyServer.UseManagedTlsStack)
                 {
                     var managed = proxyServer.CreateManagedTlsStream(networkStream, leaveInnerStreamOpen: false);
