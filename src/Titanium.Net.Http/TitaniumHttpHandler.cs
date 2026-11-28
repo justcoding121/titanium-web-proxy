@@ -30,6 +30,7 @@ namespace Titanium.Net.Http;
 /// <c>Host</c> stays the caller's host. An HTTP/3 redirect does not send a caller Host, and the next hop's <c>:authority</c> is the URI authority.
 /// The inner handler sends <c>:scheme http</c> on HTTP/2, and there is no hook to change it.
 /// A 400 or 421 on GET, HEAD, OPTIONS, or TRACE is retried once over HTTP/1.1 when the request allows a lower version.
+/// An exact HTTP/2 request that the server resets does not fall back to HTTP/1.1.
 /// A server that selects HTTP/1.1 during ALPN is retried over HTTP/1.1 before any request bytes, for any method, when a lower version is allowed.
 /// The negotiated protocol is remembered per authority for ten minutes, up to 256 authorities.
 /// HTTP/3 sends <c>:scheme https</c>. <see cref="SendAsync"/> returns after the response headers. The body is read as the caller reads it.
