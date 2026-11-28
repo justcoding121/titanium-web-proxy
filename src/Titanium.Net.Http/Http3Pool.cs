@@ -14,7 +14,7 @@ namespace Titanium.Net.Http;
 /// Keeps one HTTP/3 connection per authority.
 /// A connection accepts 16 request streams, which is the stream limit this stack advertises.
 /// The next request opens another connection, up to <see cref="TitaniumHttpHandler.MaxConnectionsPerServer"/>.
-/// A GOAWAY on the peer's control stream stops new requests on that connection.
+/// A GOAWAY on the peer's control stream stops new requests on that connection and closes it once nothing is in flight.
 /// The dynamic table is capped at <see cref="Http3Client.TableCapacity"/> bytes.
 /// </summary>
 internal sealed class Http3Pool : IDisposable
@@ -36,6 +36,29 @@ internal sealed class Http3Pool : IDisposable
 
     /// <summary>Completes when the peer's first SETTINGS frame has been read.</summary>
     internal Task PeerSettingsObserved => _settings.Task;
+
+    /// <summary>The number of connections still held for any authority.</summary>
+    internal int ConnectionCount
+    {
+        get
+        {
+            _gate.Wait();
+            try
+            {
+                int count = 0;
+                foreach (List<Entry> list in _byAuthority.Values)
+                {
+                    count += list.Count;
+                }
+
+                return count;
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+    }
 
     internal async Task<HttpResponseMessage> SendAsync(
         TitaniumHttpHandler handler,
@@ -196,15 +219,28 @@ internal sealed class Http3Pool : IDisposable
 
     private async Task NoteGoAwayAsync(Entry entry)
     {
+        bool dispose = false;
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             entry.Retired = true;
+            dispose = entry.InFlight == 0 && entry.TryMarkDisposed();
+            if (dispose)
+            {
+                Remove(entry);
+            }
+
             _goAway.TrySetResult();
         }
         finally
         {
             _gate.Release();
+        }
+
+        if (dispose)
+        {
+            await entry.Connection.DisposeAsync().ConfigureAwait(false);
+            entry.DisposeQpack();
         }
     }
 

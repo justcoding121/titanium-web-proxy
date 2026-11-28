@@ -248,6 +248,7 @@ public sealed class TitaniumHttpHandlerTests
 
         await SendGoAwayAsync(server, 0, cancel.Token);
         await handler.Pool.GoAwayObserved.WaitAsync(cancel.Token);
+        Assert.AreEqual(0, handler.Pool.ConnectionCount);
 
         Task<ManagedQuicConnection> next = listener.AcceptConnectionAsync(cancel.Token).AsTask();
         using HttpRequestMessage second = Request(address);
@@ -258,6 +259,43 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreEqual("ok", await secondResponse.Content.ReadAsStringAsync(cancel.Token));
         await server.DisposeAsync();
         await server2.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http3GoAwayClosesTheConnectionWhenTheBodyFinishes()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        await ReplyAsync(server, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(1, handler.Pool.ConnectionCount);
+        await SendGoAwayAsync(server, 0, cancel.Token);
+        await handler.Pool.GoAwayObserved.WaitAsync(cancel.Token);
+        Assert.AreEqual(1, handler.Pool.ConnectionCount);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual(0, handler.Pool.ConnectionCount);
+        await server.DisposeAsync();
     }
 
     [TestMethod]

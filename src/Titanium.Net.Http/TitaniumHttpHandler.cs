@@ -35,7 +35,7 @@ namespace Titanium.Net.Http;
 /// Cancelling that read stops it while it is waiting for the next frame.
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
 /// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.
-/// A GOAWAY on the peer's control stream stops new requests on that connection.
+/// A GOAWAY on the peer's control stream stops new requests on that connection and closes it once nothing is in flight.
 /// The dynamic table is capped at 4096 bytes. A request inserts a field that is not in the static table when the peer allows a dynamic table and at least one blocked stream. A peer insert is decoded.
 /// A failed HTTP/3 connect, before any request byte, falls back to HTTP/2 or HTTP/1.1 when the request allows a lower version.
 /// When <see cref="EnableAltSvc"/> is set, a later request that allows a higher version uses HTTP/3 after <c>Alt-Svc: h3</c> from the same origin.
