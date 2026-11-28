@@ -41,7 +41,7 @@ Exit: existing proxy tests stay green and unedited. A flag-off run does not cons
 
 ### P3.4 Managed-mode test run
 
-`TWP_MANAGED_TLS=1` runs the existing proxy suites. Failures are split into a managed bug, a parity gap in `PARITY-DIFFS.md`, or a test assumption. None are skipped silently.
+`TWP_MANAGED_TLS=1` sets both proxy flags when a `ProxyServer` is constructed. Unset, the library default stays off. The soft workflow `managed-stack-proxy.yml` runs the existing unit and integration suites with that variable and does not fail the pull request. Failures are split into a managed bug, a parity gap in `PARITY-DIFFS.md`, or a test assumption. None are skipped silently.
 
 ### P3.5 Extract `Titanium.Http3`
 

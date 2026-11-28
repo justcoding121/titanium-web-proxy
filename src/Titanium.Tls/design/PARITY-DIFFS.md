@@ -21,7 +21,7 @@ Seeded from the S1 `SslStream` baselines (Windows x64 and Linux x64, runtime 10.
 Recorded differences:
 
 - Revocation mode stays `NoCheck`. Online revocation is not hopped to another thread.
-- The engine ClientHello is the built-in one (AES-128-GCM-SHA256, X25519 and P-256, `ecdsa_secp256r1_sha256`). `TlsStreamOptions.FingerprintProfile` is stored and `FingerprintFidelity` reports it. The profile is not the hello on the wire.
+- The engine ClientHello is the built-in one (AES-128-GCM-SHA256, X25519 and P-256, `ecdsa_secp256r1_sha256`). `TlsStreamOptions.FingerprintProfile` is stored and `FingerprintFidelity` reports it. The profile is not the hello on the wire. With `TWP_MANAGED_TLS=1`, `UpstreamTlsTests.AcceptAnyServerCertificate_StillWorksOnTcp` gets a 502. The origin's `SslStream` reports that the peers have no common algorithm, because this hello offers only an ECDSA signature scheme.
 - A write that fits in 2^14 bytes is one TLS record. A larger write is split. `SslStream` may coalesce several small writes.
 - Stapled OCSP and signed certificate timestamps are copied and not enforced.
 - `NegotiateClientCertificateAsync` throws `NotSupportedException`. Post-handshake client authentication is not implemented.

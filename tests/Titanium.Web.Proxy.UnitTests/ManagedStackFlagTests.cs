@@ -30,6 +30,23 @@ public sealed class ManagedStackFlagTests
     }
 
     [TestMethod]
+    public void TheSuiteSwitchTurnsBothFlagsOn()
+    {
+        string? previous = Environment.GetEnvironmentVariable("TWP_MANAGED_TLS");
+        try
+        {
+            Environment.SetEnvironmentVariable("TWP_MANAGED_TLS", "1");
+            using var proxy = new ProxyServer(false, false, false);
+            Assert.IsTrue(proxy.UseManagedTlsStack);
+            Assert.IsTrue(proxy.UseManagedQuicStack);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TWP_MANAGED_TLS", previous);
+        }
+    }
+
+    [TestMethod]
     public async Task ADifferentValueAfterStartThrowsAndTheSameValueDoesNot()
     {
         using var proxy = new ProxyServer(false, false, false);

@@ -1,0 +1,71 @@
+name: managed-stack-proxy
+
+# Soft gate. TWP_MANAGED_TLS=1 turns both managed stacks on for the existing proxy suites.
+# A failure here is a triage item (managed bug, parity gap, or a test that assumes the platform stack).
+# The job stays green until that triage is the required gate.
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - beta
+      - stable
+    paths:
+      - 'src/Titanium.Web.Proxy/**'
+      - 'src/Titanium.Tls/**'
+      - 'src/Titanium.Quic/**'
+      - 'src/Titanium.Net.Compatibility/**'
+      - 'tests/Titanium.Web.Proxy.UnitTests/**'
+      - 'tests/Titanium.Web.Proxy.IntegrationTests/**'
+      - '.github/workflows/managed-stack-proxy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: managed-stack-proxy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  proxy-suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Unit tests with the managed stack
+        id: unit
+        continue-on-error: true
+        env:
+          TWP_MANAGED_TLS: "1"
+        run: |
+          dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --nologo \
+            --filter "TestCategory!=Slow&TestCategory!=Fuzz-Nightly"
+
+      - name: Integration tests with the managed stack
+        id: integration
+        continue-on-error: true
+        env:
+          TWP_MANAGED_TLS: "1"
+        run: |
+          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --nologo \
+            --filter "TestCategory!=Slow"
+
+      - name: Record the soft result
+        if: always()
+        run: |
+          {
+            echo "### Managed stack proxy suites"
+            echo
+            echo "Unit: ${{ steps.unit.outcome }}"
+            echo "Integration: ${{ steps.integration.outcome }}"
+            echo
+            echo "TWP_MANAGED_TLS=1. This job does not fail the pull request."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -193,6 +193,7 @@ public partial class ProxyServer : IDisposable
             userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger,
             () => ResourceLimits.MaxCertificateCacheEntries,
             () => ResourceLimits.MaxCertificateDiskCacheEntries);
+        ApplyManagedStackSuiteSwitch();
     }
 
     /// <summary>

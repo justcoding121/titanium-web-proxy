@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Extensions.Logging;
 using Titanium.Tls;
 
@@ -47,6 +48,15 @@ public partial class ProxyServer
     {
         get => _allowManagedStackUnderFips;
         set => AssignManagedStack(ref _allowManagedStackUnderFips, value, nameof(AllowManagedStackUnderFips));
+    }
+
+    private void ApplyManagedStackSuiteSwitch()
+    {
+        if (string.Equals(Environment.GetEnvironmentVariable("TWP_MANAGED_TLS"), "1", StringComparison.Ordinal))
+        {
+            _useManagedTlsStack = true;
+            _useManagedQuicStack = true;
+        }
     }
 
     private void AssignManagedStack(ref bool field, bool value, string name)
