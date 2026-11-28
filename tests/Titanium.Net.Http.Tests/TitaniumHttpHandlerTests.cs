@@ -2009,6 +2009,51 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11ReusesAConnectionUntilItsLifetime()
+    {
+        int connections = 0;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/ping", () => Results.Text("pong")),
+            () => Interlocked.Increment(ref connections));
+        using TitaniumHttpHandler handler = Handler();
+        handler.PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan;
+        handler.PooledConnectionLifetime = TimeSpan.FromMilliseconds(300);
+        using HttpClient client = new(handler, disposeHandler: false);
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/ping";
+        using HttpRequestMessage first = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using (HttpResponseMessage firstResponse = await client.SendAsync(first))
+        {
+            Assert.AreEqual("pong", await firstResponse.Content.ReadAsStringAsync());
+        }
+
+        using HttpRequestMessage second = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using (HttpResponseMessage secondResponse = await client.SendAsync(second))
+        {
+            Assert.AreEqual("pong", await secondResponse.Content.ReadAsStringAsync());
+        }
+
+        Assert.AreEqual(1, connections);
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        using HttpRequestMessage third = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage thirdResponse = await client.SendAsync(third);
+        Assert.AreEqual("pong", await thirdResponse.Content.ReadAsStringAsync());
+        Assert.AreEqual(2, connections);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11RequestIsCleartext()
     {
         using var tcp = new TcpListener(IPAddress.Loopback, 0);
