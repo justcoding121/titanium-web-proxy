@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace Titanium.Web.Proxy.Http3.Qpack;
+namespace Titanium.Http3;
 
 /// <summary>
 ///     Per-connection QPACK state, holding two independent dynamic tables (one inbound, one outbound)

@@ -3,7 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Titanium.Web.Proxy.Http3.Qpack;
+namespace Titanium.Http3;
 
 /// <summary>
 ///     Drains <see cref="QpackContext.DecoderAckChannel" /> and writes the pending Section Acknowledgment

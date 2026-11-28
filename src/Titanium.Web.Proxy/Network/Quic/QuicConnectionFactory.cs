@@ -84,8 +84,8 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
                 RemoteCertificateValidationCallback = remoteCertificateValidationCallback
                     ?? DefaultValidationCallback
             },
-            DefaultStreamErrorCode = (long)Http3.Http3ErrorCode.RequestCancelled,
-            DefaultCloseErrorCode = (long)Http3.Http3ErrorCode.NoError,
+            DefaultStreamErrorCode = (long)Titanium.Http3.Http3ErrorCode.RequestCancelled,
+            DefaultCloseErrorCode = (long)Titanium.Http3.Http3ErrorCode.NoError,
             HandshakeTimeout = TimeSpan.FromSeconds(handshakeSeconds),
             // Keep idle pooled connections from being silently closed by MsQuic before our pool
             // TTL notices (see QuicConnectionPool.IdleConnectionTimeout / stale-retry path).

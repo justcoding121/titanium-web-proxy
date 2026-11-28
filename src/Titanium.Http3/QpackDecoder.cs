@@ -4,7 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Titanium.Web.Proxy.Http3.Qpack;
+namespace Titanium.Http3;
 
 /// <summary>
 ///     QPACK decoder (RFC 9204). Supports both static-table-only mode and dynamic-table mode.
@@ -64,7 +64,7 @@ internal static class QpackDecoder
     }
 
     /// <summary>
-    ///     Async-shaped wrapper over <see cref="Decode" />. Decoding never yields (blocked streams
+    ///     Async-shaped wrapper over <see cref="Decode(ReadOnlySpan{byte})" />. Decoding never yields (blocked streams
     ///     are rejected); prefer the synchronous overload on the request hot path.
     /// </summary>
     public static ValueTask<List<(string Name, string Value)>> DecodeAsync(

@@ -277,7 +277,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         {
             try
             {
-                await _managed.CloseAsync((long)Http3.Http3ErrorCode.NoError).AsTask()
+                await _managed.CloseAsync((long)Titanium.Http3.Http3ErrorCode.NoError).AsTask()
                     .WaitAsync(TimeSpan.FromSeconds(2));
             }
             catch { /* best effort */ }
@@ -292,7 +292,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         if (Connection is null) return;
         try
         {
-            await Connection.CloseAsync((long)Http3.Http3ErrorCode.NoError).AsTask()
+            await Connection.CloseAsync((long)Titanium.Http3.Http3ErrorCode.NoError).AsTask()
                 .WaitAsync(TimeSpan.FromSeconds(2));
         }
         catch { /* best effort */ }

@@ -1,6 +1,6 @@
 using System;
 
-namespace Titanium.Web.Proxy.Http3;
+namespace Titanium.Http3;
 
 /// <summary>
 ///     Exception carrying an HTTP/3 error code, used to abort a stream or connection.
