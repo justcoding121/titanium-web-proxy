@@ -2829,6 +2829,27 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http2PostDoesNotRetryWhenTheServerResetsTheStream()
+    {
+        int connections = 0;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapPost("/hello", () => Results.Text("retried")),
+            () => Interlocked.Increment(ref connections));
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version20,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+            Content = new StringContent("payload"),
+        };
+        HttpRequestException ex = await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await client.SendAsync(request));
+        Assert.AreEqual(HttpRequestError.HttpProtocolError, ex.HttpRequestError);
+        Assert.AreEqual(1, connections);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http2OrLowerRetriesWhenTheServerRejectsTheScheme()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
