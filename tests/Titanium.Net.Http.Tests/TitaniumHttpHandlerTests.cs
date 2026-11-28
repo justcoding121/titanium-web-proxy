@@ -1977,6 +1977,28 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11PropertyChangeAfterTheFirstRequestThrows()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/ping", () => Results.Text("pong"));
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/ping")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        Assert.AreEqual("pong", await response.Content.ReadAsStringAsync());
+        InvalidOperationException ex = Assert.ThrowsExactly<InvalidOperationException>(() => handler.MaxConnectionsPerServer = 2);
+        Assert.AreEqual("This instance has already started one or more requests. Properties can only be modified before sending the first request.", ex.Message);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11BodyReadStopsWhenCancelled()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>

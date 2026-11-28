@@ -41,7 +41,7 @@ namespace Titanium.Net.Http;
 /// An HTTP/1.1 connection is reused until <see cref="PooledConnectionLifetime"/> elapses. The next request opens another connection.
 /// While that connection is busy, <see cref="MaxConnectionsPerServer"/> of 1 keeps the next HTTP/1.1 request waiting.
 /// An <c>http</c> request is sent to the configured proxy. The request line is the absolute URI.
-/// <see cref="UseProxy"/> false sends an <c>http</c> request to the origin even when a proxy is set. The request line is the origin path.
+/// <see cref="UseProxy"/> false sends an <c>http</c> request to the origin even when a proxy is set. The request line is the origin path. Changing MaxConnectionsPerServer after the first request throws.
 /// An <c>https</c> request opens a CONNECT tunnel to that proxy, then the managed TLS handshake.
 /// A proxy that refuses the CONNECT tunnel fails the request before the TLS handshake.
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
