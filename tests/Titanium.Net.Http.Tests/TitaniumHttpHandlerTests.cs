@@ -607,6 +607,66 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RedirectDropsAuthorizationWhenTheHostChanges()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener origin = await ListenHttp3Async(certificate);
+        await using ManagedQuicListener next = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        string originPort = origin.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture);
+        string nextPort = next.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture);
+        Task<ManagedQuicConnection> acceptedOrigin = origin.AcceptConnectionAsync(cancel.Token).AsTask();
+        Task<ManagedQuicConnection> acceptedNext = next.AcceptConnectionAsync(cancel.Token).AsTask();
+        using (TitaniumHttpHandler handler = Handler())
+        using (HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) })
+        {
+            using HttpRequestMessage changed = Request("https://127.0.0.1:" + originPort + "/drop");
+            changed.Headers.TryAddWithoutValidation("Authorization", "Bearer secret");
+            Task<HttpResponseMessage> pending = client.SendAsync(changed, cancel.Token);
+            ManagedQuicConnection server = await acceptedOrigin;
+            ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+            (string path, string authorization) = await ReadPathAndAuthorizationAsync(hop, cancel.Token);
+            Assert.IsTrue(path.EndsWith("/drop", StringComparison.Ordinal));
+            Assert.AreEqual("Bearer secret", authorization);
+            await WriteRedirectAsync(hop, "302", "https://localhost:" + nextPort + "/see", cancel.Token);
+            ManagedQuicConnection landed = await acceptedNext;
+            hop = await landed.AcceptInboundStreamAsync(cancel.Token);
+            (path, authorization) = await ReadPathAndAuthorizationAsync(hop, cancel.Token);
+            Assert.IsTrue(path.EndsWith("/see", StringComparison.Ordinal));
+            Assert.AreEqual(string.Empty, authorization);
+            await ReplyTextAsync(hop, "absent", cancel.Token);
+            using HttpResponseMessage dropped = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+            Assert.AreEqual("absent", await dropped.Content.ReadAsStringAsync(cancel.Token));
+            Assert.AreSame(changed, dropped.RequestMessage);
+            await server.DisposeAsync();
+            await landed.DisposeAsync();
+        }
+
+        Task<ManagedQuicConnection> acceptedKeep = next.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler again = Handler();
+        using HttpClient keepClient = new(again, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage same = Request("https://localhost:" + nextPort + "/keep");
+        same.Headers.TryAddWithoutValidation("Authorization", "Bearer secret");
+        Task<HttpResponseMessage> keptPending = keepClient.SendAsync(same, cancel.Token);
+        ManagedQuicConnection keepServer = await acceptedKeep;
+        ManagedQuicStream keepHop = await keepServer.AcceptInboundStreamAsync(cancel.Token);
+        (string keepPath, string keptAuthorization) = await ReadPathAndAuthorizationAsync(keepHop, cancel.Token);
+        Assert.IsTrue(keepPath.EndsWith("/keep", StringComparison.Ordinal));
+        Assert.AreEqual("Bearer secret", keptAuthorization);
+        await WriteRedirectAsync(keepHop, "302", "/see", cancel.Token);
+        keepHop = await keepServer.AcceptInboundStreamAsync(cancel.Token);
+        (keepPath, keptAuthorization) = await ReadPathAndAuthorizationAsync(keepHop, cancel.Token);
+        Assert.IsTrue(keepPath.EndsWith("/see", StringComparison.Ordinal));
+        Assert.AreEqual("Bearer secret", keptAuthorization);
+        await ReplyTextAsync(keepHop, "present", cancel.Token);
+        using HttpResponseMessage kept = await keptPending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("present", await kept.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(same, kept.RequestMessage);
+        await keepServer.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -2248,6 +2308,49 @@ public sealed class TitaniumHttpHandlerTests
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
         await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task<ManagedQuicListener> ListenHttp3Async(X509Certificate2 certificate) =>
+        await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+
+    private static async Task<(string Path, string Authorization)> ReadPathAndAuthorizationAsync(
+        ManagedQuicStream request,
+        CancellationToken cancellationToken)
+    {
+        byte[]? headers = await ReadFrameAsync(request, cancellationToken);
+        Assert.IsNotNull(headers);
+        while (await ReadFrameAsync(request, cancellationToken) is not null)
+        {
+        }
+
+        string path = string.Empty;
+        string authorization = string.Empty;
+        foreach ((string name, string value) in QpackDecoder.Decode(headers))
+        {
+            if (name == ":path")
+            {
+                path = value;
+            }
+            else if (string.Equals(name, "authorization", StringComparison.OrdinalIgnoreCase))
+            {
+                authorization = value;
+            }
+        }
+
+        return (path, authorization);
     }
 
     private static async Task<string> ReadRedirectAuthorityAsync(
