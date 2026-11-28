@@ -3217,6 +3217,50 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreEqual(0, seen);
     }
 
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11DecompressesGzip()
+    {
+        byte[] payload;
+        using (MemoryStream encoded = new())
+        {
+            using (GZipStream gzip = new(encoded, CompressionLevel.Fastest, leaveOpen: true))
+            {
+                gzip.Write("hello"u8);
+            }
+
+            payload = encoded.ToArray();
+        }
+
+        string? acceptEncoding = null;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            app => app.MapGet("/gzip", async context =>
+            {
+                acceptEncoding = context.Request.Headers.AcceptEncoding.ToString();
+                context.Response.Headers.ContentEncoding = "gzip";
+                context.Response.ContentType = "text/plain";
+                context.Response.ContentLength = payload.Length;
+                await context.Response.Body.WriteAsync(payload);
+            }),
+            null,
+            HttpProtocols.Http1);
+        using TitaniumHttpHandler handler = Handler();
+        handler.AutomaticDecompression = DecompressionMethods.GZip;
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/gzip")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("hello", body);
+        Assert.IsTrue(acceptEncoding?.Contains("gzip", StringComparison.OrdinalIgnoreCase) == true, acceptEncoding);
+        Assert.AreEqual(1, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
     private static X509Certificate2 CreateClientCertificate() => CreateClientCertificate("client");
 
     private static X509Certificate2 CreateClientCertificate(string commonName)
