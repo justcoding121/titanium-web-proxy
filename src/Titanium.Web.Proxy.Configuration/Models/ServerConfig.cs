@@ -41,6 +41,19 @@ public sealed class ServerConfig
 
     public bool? EnableHttp3 { get; set; }
 
+    /// <summary>
+    ///     When true, sets both <c>UseManagedTlsStack</c> and <c>UseManagedQuicStack</c>.
+    ///     <see cref="ManagedTls"/> and <see cref="ManagedQuic"/> override this per protocol.
+    ///     Null leaves the library default, which is off.
+    /// </summary>
+    public bool? ManagedStack { get; set; }
+
+    /// <summary>Overrides <see cref="ManagedStack"/> for TLS. Null inherits the umbrella, then the library default.</summary>
+    public bool? ManagedTls { get; set; }
+
+    /// <summary>Overrides <see cref="ManagedStack"/> for QUIC. Null inherits the umbrella, then the library default.</summary>
+    public bool? ManagedQuic { get; set; }
+
     public bool? EnableRfc8441 { get; set; }
 
     /// <summary>

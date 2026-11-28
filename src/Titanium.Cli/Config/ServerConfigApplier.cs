@@ -144,6 +144,7 @@ internal static class ServerConfigApplier
     private static void ApplyProtocolFlags(ProxyServer proxy, ServerConfig server)
     {
         ApplyBool(server.EnableHttp2, v => proxy.EnableHttp2 = v);
+        ApplyManagedStack(proxy, server);
 
         if (server.EnableHttp3 is bool http3)
         {
@@ -193,6 +194,17 @@ internal static class ServerConfigApplier
         {
             proxy.DnsServerEndPoint = dns;
         }
+    }
+
+    private static void ApplyManagedStack(ProxyServer proxy, ServerConfig server)
+    {
+        if (server.ManagedStack is null && server.ManagedTls is null && server.ManagedQuic is null)
+        {
+            return;
+        }
+
+        proxy.UseManagedTlsStack = server.ManagedTls ?? server.ManagedStack ?? false;
+        proxy.UseManagedQuicStack = server.ManagedQuic ?? server.ManagedStack ?? false;
     }
 
     private static void ApplyBool(bool? value, Action<bool> apply)

@@ -319,6 +319,12 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp2.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp2.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp3.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp3.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedQuic.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedQuic.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedStack.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedStack.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedTls.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ManagedTls.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttpsSvcbDnsDiscovery.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttpsSvcbDnsDiscovery.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableQpackDynamicTable.get -> bool?

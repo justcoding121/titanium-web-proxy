@@ -1805,6 +1805,15 @@
         "localZone": {
           "type": "string"
         },
+        "managedQuic": {
+          "type": "boolean"
+        },
+        "managedStack": {
+          "type": "boolean"
+        },
+        "managedTls": {
+          "type": "boolean"
+        },
         "metrics": {
           "type": "object",
           "additionalProperties": false,

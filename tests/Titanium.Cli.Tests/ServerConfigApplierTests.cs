@@ -123,6 +123,31 @@ public class ServerConfigApplierTests
     }
 
     [TestMethod]
+    public void Apply_ManagedStack_UmbrellaAndPerProtocolOverride()
+    {
+        using var untouched = new ProxyServer(userTrustRootCertificate: false);
+        untouched.UseManagedTlsStack = true;
+        ServerConfigApplier.Apply(untouched, new ServerConfig());
+        Assert.IsTrue(untouched.UseManagedTlsStack);
+        Assert.IsFalse(untouched.UseManagedQuicStack);
+
+        using var both = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(both, new ServerConfig { ManagedStack = true });
+        Assert.IsTrue(both.UseManagedTlsStack);
+        Assert.IsTrue(both.UseManagedQuicStack);
+
+        using var tlsOff = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(tlsOff, new ServerConfig { ManagedStack = true, ManagedTls = false });
+        Assert.IsFalse(tlsOff.UseManagedTlsStack);
+        Assert.IsTrue(tlsOff.UseManagedQuicStack);
+
+        using var quicOnly = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(quicOnly, new ServerConfig { ManagedQuic = true });
+        Assert.IsFalse(quicOnly.UseManagedTlsStack);
+        Assert.IsTrue(quicOnly.UseManagedQuicStack);
+    }
+
+    [TestMethod]
     public void Apply_EnableHttp2False()
     {
         using var proxy = new ProxyServer(userTrustRootCertificate: false);

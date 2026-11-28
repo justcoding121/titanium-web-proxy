@@ -697,6 +697,9 @@ server:
   profile: Balanced   # Balanced | LegacyCompatible | PublicFacing. PublicFacing sets streams to 256, idle 60s, request 120s.
   enableHttp2: true
   enableHttp3: null
+  managedStack: null        # umbrella for the managed TLS and QUIC stacks. Default off.
+  managedTls: null          # overrides managedStack for TLS
+  managedQuic: null         # overrides managedStack for QUIC
   enableRfc8441: false
   enableConnectTcp: false   # explicit listeners only; reverse uses listeners[].acceptConnectTcp
   enableWebTransport: false # explicit listeners only; reverse uses listeners[].acceptWebTransport
@@ -834,7 +837,7 @@ server:
   reloadListeners: false       # true reconciles listeners on reload; xDS forces on
 ```
 
-Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
+Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3. `managedStack` turns on both managed stacks. `managedTls` and `managedQuic` override it. Omit all three to leave the library default, which is off.
 
 HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, request decompression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
 
