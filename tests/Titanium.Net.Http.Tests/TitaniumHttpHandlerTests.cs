@@ -3191,6 +3191,32 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreSame(request, response.RequestMessage);
     }
 
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11Tls12IsRefusedBeforeTheRequest()
+    {
+        int seen = 0;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            app => app.MapGet("/hello", () =>
+            {
+                seen++;
+                return Results.Text("ok");
+            }),
+            null,
+            HttpProtocols.Http1);
+        using TitaniumHttpHandler handler = Handler();
+        handler.SslOptions.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(5) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        HttpRequestException ex = await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await client.SendAsync(request));
+        Assert.IsTrue(HasMessage(ex, "The remote party selected a TLS version below 1.3."), ex.ToString());
+        Assert.AreEqual(0, seen);
+    }
+
     private static X509Certificate2 CreateClientCertificate() => CreateClientCertificate("client");
 
     private static X509Certificate2 CreateClientCertificate(string commonName)
