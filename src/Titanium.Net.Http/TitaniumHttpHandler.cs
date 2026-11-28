@@ -21,7 +21,7 @@ namespace Titanium.Net.Http;
 /// HTTP/3 uses a managed QUIC connection. One connection is reused per authority.
 /// </summary>
 /// <remarks>
-/// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream. A caller <c>http</c> URI is sent as cleartext.
+/// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream. A caller <c>http</c> URI is sent as cleartext, including when it asks for version 3.
 /// A redirect is followed here, including an HTTP/3 response. AllowAutoRedirect false returns that response. Each hop is rewritten the same way, so an https Location stays on the managed stream. Authorization is dropped when the host changes, including on HTTP/3. The same host keeps it. A 300 or 302 turns POST into GET, including on HTTP/3. An HTTP/3 redirect to an http URL is fetched as HTTP/1.1. A later https hop returns to HTTP/3. Cancelling the request stops an HTTP/3 redirect while the next hop is waiting. A 303 turns POST into GET and leaves HEAD as HEAD, including on HTTP/3. A 307 keeps the method and body, and an HTTP/3 hop sends that body again. A cleartext hop sends it again too. A 301 turns POST into GET, including on HTTP/3. A 308 keeps the method and body, and an HTTP/3 hop sends that body again.
 /// A Cookie header is copied onto an HTTP/3 hop only when UseCookies is false.
 /// Cookies and decompression stay on the inner handler. A cleartext hop from HTTP/3 still decompresses gzip and sends a cookie stored for that http URI. A Set-Cookie on that hop is stored for the next request.
@@ -244,6 +244,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         bool viaAlt = false;
         int? altPort = null;
         if (!WantsHttp3(request)
+            && IsHttps(request)
             && EnableAltSvc
             && request.VersionPolicy == HttpVersionPolicy.RequestVersionOrHigher
             && request.RequestUri is Uri origin
@@ -470,6 +471,11 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
 
     private VersionChoice Choose(HttpRequestMessage request)
     {
+        if (request.Version.Major == 3 && !IsHttps(request))
+        {
+            return new VersionChoice(HttpVersion.Version11, HttpVersionPolicy.RequestVersionExact, false, false);
+        }
+
         bool knownHttp11 = TryKnownHttp11(request.RequestUri);
         bool allowHigher = request.VersionPolicy == HttpVersionPolicy.RequestVersionOrHigher;
         bool asksForHttp2 = request.Version.Major >= 2;
@@ -500,7 +506,10 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         throw new NotSupportedException(FipsRefusal);
     }
 
-    private static bool WantsHttp3(HttpRequestMessage request) => request.Version.Major == 3;
+    private static bool WantsHttp3(HttpRequestMessage request) => request.Version.Major == 3 && IsHttps(request);
+
+    private static bool IsHttps(HttpRequestMessage request) =>
+        request.RequestUri is Uri uri && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal);
 
     private async ValueTask<Stream> ConnectAsync(SocketsHttpConnectionContext context, CancellationToken cancellationToken)
     {
