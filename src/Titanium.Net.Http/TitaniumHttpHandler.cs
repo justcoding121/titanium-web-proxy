@@ -22,7 +22,7 @@ namespace Titanium.Net.Http;
 /// </summary>
 /// <remarks>
 /// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream.
-/// A redirect is followed here. Each hop is rewritten the same way, so an https Location stays on the managed stream.
+/// A redirect is followed here. Each hop is rewritten the same way, so an https Location stays on the managed stream. Authorization is dropped when the host changes.
 /// Cookies and decompression stay on the inner handler.
 /// Port 443 stays on that URI when the caller used the default HTTPS port.
 /// <c>Host</c> stays the caller's host.

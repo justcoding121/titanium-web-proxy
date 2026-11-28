@@ -1181,6 +1181,50 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11RedirectDropsAuthorizationWhenTheHostChanges()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/drop", (HttpContext context) =>
+            {
+                int port = context.Connection.LocalPort;
+                context.Response.Redirect("https://localhost:" + port.ToString(CultureInfo.InvariantCulture) + "/see");
+                return Task.CompletedTask;
+            });
+            app.MapGet("/keep", (HttpContext context) =>
+            {
+                int port = context.Connection.LocalPort;
+                context.Response.Redirect("https://localhost:" + port.ToString(CultureInfo.InvariantCulture) + "/see");
+                return Task.CompletedTask;
+            });
+            app.MapGet("/see", (HttpRequest request) =>
+                request.Headers.Authorization.Count == 0 ? "absent" : "present");
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        string port = server.Port.ToString(CultureInfo.InvariantCulture);
+        using HttpRequestMessage changed = new(HttpMethod.Get, "https://127.0.0.1:" + port + "/drop")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        changed.Headers.TryAddWithoutValidation("Authorization", "Bearer secret");
+        using HttpResponseMessage dropped = await client.SendAsync(changed);
+        Assert.AreEqual("absent", await dropped.Content.ReadAsStringAsync());
+        Assert.AreSame(changed, dropped.RequestMessage);
+        using HttpRequestMessage same = new(HttpMethod.Get, "https://localhost:" + port + "/keep")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        same.Headers.TryAddWithoutValidation("Authorization", "Bearer secret");
+        using HttpResponseMessage kept = await client.SendAsync(same);
+        Assert.AreEqual("present", await kept.Content.ReadAsStringAsync());
+        Assert.AreSame(same, kept.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11LargeUploadAndDownloadMatchTheirHashes()
     {
         byte[] upload = Pattern(1024 * 1024);
