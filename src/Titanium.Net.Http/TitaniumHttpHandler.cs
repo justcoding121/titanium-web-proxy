@@ -40,6 +40,7 @@ namespace Titanium.Net.Http;
 /// While that connection is busy, <see cref="MaxConnectionsPerServer"/> of 1 keeps the next HTTP/1.1 request waiting.
 /// An <c>http</c> request is sent to the configured proxy. The request line is the absolute URI.
 /// An <c>https</c> request opens a CONNECT tunnel to that proxy, then the managed TLS handshake.
+/// A proxy that refuses the CONNECT tunnel fails the request before the TLS handshake.
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
 /// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.
 /// A GOAWAY on the peer's control stream stops new requests on that connection and closes it once nothing is in flight.

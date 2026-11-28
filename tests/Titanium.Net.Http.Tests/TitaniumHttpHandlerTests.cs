@@ -2184,6 +2184,55 @@ public sealed class TitaniumHttpHandlerTests
         }
     }
 
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11ProxyRefusalFailsBeforeTheTlsHandshake()
+    {
+        using var origin = new TcpListener(IPAddress.Loopback, 0);
+        origin.Start();
+        using var proxy = new TcpListener(IPAddress.Loopback, 0);
+        proxy.Start();
+        int originPort = ((IPEndPoint)origin.LocalEndpoint).Port;
+        int proxyPort = ((IPEndPoint)proxy.LocalEndpoint).Port;
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<TcpClient> originAccepted = origin.AcceptTcpClientAsync(cancel.Token).AsTask();
+        Task<TcpClient> proxyAccepted = proxy.AcceptTcpClientAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.UseProxy = true;
+        handler.Proxy = new WebProxy("http://127.0.0.1:" + proxyPort.ToString(CultureInfo.InvariantCulture));
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + originPort.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        using TcpClient accepted = await proxyAccepted.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        await using NetworkStream stream = accepted.GetStream();
+        string headers = await ReadHttpHeadersAsync(stream, cancel.Token);
+        Assert.IsTrue(headers.StartsWith("CONNECT 127.0.0.1:" + originPort.ToString(CultureInfo.InvariantCulture) + " HTTP/1.1\r\n", StringComparison.Ordinal), headers);
+        long started = Environment.TickCount64;
+        await stream.WriteAsync("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), cancel.Token);
+        HttpRequestException ex = await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await pending);
+        Assert.IsTrue(Environment.TickCount64 - started < 2000);
+        Assert.IsTrue(HasMessage(ex, "The proxy refused the tunnel."), ex.ToString());
+        Assert.IsFalse(originAccepted.IsCompleted);
+        origin.Stop();
+    }
+
+    private static bool HasMessage(Exception exception, string text)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current.Message.Contains(text, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static async Task CopyBytesAsync(Stream from, Stream to, CancellationToken cancellationToken)
     {
         byte[] buffer = new byte[4096];
