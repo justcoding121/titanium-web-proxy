@@ -1104,6 +1104,33 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
     }
 
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http3OrLowerFallsBackWhenTheHandshakeFails()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/down", () => Results.Text("http11"));
+        });
+        using TitaniumHttpHandler handler = Handler();
+        handler.ConnectTimeout = TimeSpan.FromMilliseconds(400);
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/down")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+        };
+        DateTime started = DateTime.UtcNow;
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("http11", body);
+        Assert.AreNotEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromSeconds(5));
+    }
+
     private static HttpRequestMessage Request(string address) => new(HttpMethod.Get, address)
     {
         Version = HttpVersion.Version30,
