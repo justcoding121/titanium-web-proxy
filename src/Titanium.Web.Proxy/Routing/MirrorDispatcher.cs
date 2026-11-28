@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Titanium.Tls;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -47,6 +48,9 @@ internal sealed class MirrorDispatcher : IDisposable
     private int disposed;
 
     public MirrorDispatcher() => shutdownToken = shutdown.Token;
+
+    /// <summary>Read when a copy opens TLS. Unset keeps the platform handshake.</summary>
+    internal Func<bool>? ManagedTls { get; set; }
 
     /// <summary>Test sink. When set, nothing is queued.</summary>
     internal Action<string, string, string>? Observed { get; set; }
@@ -314,7 +318,7 @@ internal sealed class MirrorDispatcher : IDisposable
             }
             else
             {
-                await SendAsync(work, shutdownToken).ConfigureAwait(false);
+                await SendAsync(work, shutdownToken, ManagedTls?.Invoke() == true).ConfigureAwait(false);
             }
 
             Interlocked.Increment(ref sent);
@@ -331,7 +335,7 @@ internal sealed class MirrorDispatcher : IDisposable
         }
     }
 
-    private static async Task SendAsync(MirrorWork work, CancellationToken stopping)
+    private static async Task SendAsync(MirrorWork work, CancellationToken stopping, bool useManagedTls)
     {
         using var client = new TcpClient();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stopping);
@@ -340,10 +344,20 @@ internal sealed class MirrorDispatcher : IDisposable
         Stream stream = client.GetStream();
         if (work.UseHttps)
         {
+            if (useManagedTls)
+            {
+                var managed = new TlsStream(stream, leaveInnerStreamOpen: false);
+                stream = managed;
+                await managed.AuthenticateAsClientAsync(
+                    new SslClientAuthenticationOptions { TargetHost = work.Host }, timeout.Token).ConfigureAwait(false);
+            }
+            else
+            {
             var secure = new SslStream(stream, false);
             stream = secure;
             await secure.AuthenticateAsClientAsync(
                 new SslClientAuthenticationOptions { TargetHost = work.Host }, timeout.Token).ConfigureAwait(false);
+            }
         }
 
         await using var closer = stream.ConfigureAwait(false);
