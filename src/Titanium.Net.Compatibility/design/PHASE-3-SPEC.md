@@ -49,7 +49,7 @@ Exit: existing proxy tests stay green and unedited. A flag-off run does not cons
 
 ### P3.6 `TitaniumHttpHandler`
 
-`Titanium.Net.Http` contains `TitaniumHttpHandler`. HTTP/1.1 and HTTP/2 go through an inner handler whose connect callback owns the managed TLS stream. The handler rewrites `https` to `http` and keeps port 443, and the response points at the caller's request. HTTP/3 opens a managed QUIC connection, sends the control streams, and reads one response. The same connection is reused for that authority until 16 request streams, the idle timeout, or the connection lifetime. The call returns after the response headers, and the body is read as the caller reads it. A GOAWAY on the peer's control stream stops new requests on that connection. The handler always uses the managed stack.
+`Titanium.Net.Http` contains `TitaniumHttpHandler`. HTTP/1.1 and HTTP/2 go through an inner handler whose connect callback owns the managed TLS stream. The handler rewrites `https` to `http` and keeps port 443, and the response points at the caller's request. HTTP/3 opens a managed QUIC connection, sends the control streams, and reads one response. The same connection is reused for that authority until 16 request streams, the idle timeout, or the connection lifetime. The call returns after the response headers, and the body is read as the caller reads it. A GOAWAY on the peer's control stream stops new requests on that connection. The dynamic table is capped at 4096 bytes. Requests use the static table, and a peer insert is decoded. The handler always uses the managed stack.
 
 ### P3.7 UDP injection
 

@@ -260,6 +260,44 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3DynamicTableDecodesAPeerInsert()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        await using QpackContext table = new(Http3Client.TableCapacity);
+        table.MaxTableCapacityFromPeer = Http3Client.TableCapacity;
+        table.OutboundEncoderTable.Insert("x-dyn", "yes", null);
+        byte[] block = QpackEncoder.Encode([(":status", "200"), ("x-dyn", "yes")], table);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        await SendEncoderInsertAsync(server, "x-dyn", "yes", cancel.Token);
+        await handler.Pool.EncoderInsertObserved.WaitAsync(cancel.Token);
+        await ReplyWithBlockAsync(server, block, cancel.Token);
+        using HttpResponseMessage response = await pending;
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(response.Headers.TryGetValues("x-dyn", out IEnumerable<string>? values));
+        Assert.AreEqual("yes", values!.Single());
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3HeadersReturnBeforeTheBody()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -402,6 +440,35 @@ public sealed class TitaniumHttpHandlerTests
         byte[] payload = new byte[idLength];
         id.AsSpan(0, idLength).CopyTo(payload);
         await WriteFrameAsync(control, Http3FrameType.GoAway, payload, cancellationToken);
+    }
+
+    private static async Task SendEncoderInsertAsync(ManagedQuicConnection server, string name, string value, CancellationToken cancellationToken)
+    {
+        ManagedQuicStream encoder = await server.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        byte[] type = new byte[8];
+        int typeLength = Http3VarInt.Write(type, Http3StreamType.QpackEncoder);
+        await encoder.WriteAsync(type.AsMemory(0, typeLength), cancellationToken);
+        byte[] nameBytes = System.Text.Encoding.Latin1.GetBytes(name);
+        byte[] valueBytes = System.Text.Encoding.Latin1.GetBytes(value);
+        byte[] instruction = new byte[1 + 1 + nameBytes.Length + 1 + valueBytes.Length];
+        instruction[0] = 0x20;
+        instruction[1] = (byte)nameBytes.Length;
+        nameBytes.CopyTo(instruction.AsSpan(2));
+        instruction[2 + nameBytes.Length] = (byte)valueBytes.Length;
+        valueBytes.CopyTo(instruction.AsSpan(3 + nameBytes.Length));
+        await encoder.WriteAsync(instruction, cancellationToken);
+    }
+
+    private static async Task ReplyWithBlockAsync(ManagedQuicConnection server, byte[] block, CancellationToken cancellationToken)
+    {
+        ManagedQuicStream request = await server.AcceptInboundStreamAsync(cancellationToken);
+        while (await ReadFrameAsync(request, cancellationToken) is not null)
+        {
+        }
+
+        await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
+        await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
+        await request.CompleteWritesAsync(cancellationToken);
     }
 
     private static async Task<byte[]?> ReadFrameAsync(Stream stream, CancellationToken cancellationToken)

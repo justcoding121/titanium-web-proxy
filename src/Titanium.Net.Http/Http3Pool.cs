@@ -5,6 +5,7 @@ using System.Net.Quic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Http3;
 using Titanium.Quic;
 
 namespace Titanium.Net.Http;
@@ -14,6 +15,7 @@ namespace Titanium.Net.Http;
 /// A connection accepts 16 request streams, which is the stream limit this stack advertises.
 /// The next request opens another connection, up to <see cref="TitaniumHttpHandler.MaxConnectionsPerServer"/>.
 /// A GOAWAY on the peer's control stream stops new requests on that connection.
+/// The dynamic table is capped at <see cref="Http3Client.TableCapacity"/> bytes.
 /// </summary>
 internal sealed class Http3Pool : IDisposable
 {
@@ -22,10 +24,14 @@ internal sealed class Http3Pool : IDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<string, List<Entry>> _byAuthority = new(StringComparer.Ordinal);
     private readonly TaskCompletionSource _goAway = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _insert = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _disposed;
 
     /// <summary>Completes when a peer GOAWAY has been read.</summary>
     internal Task GoAwayObserved => _goAway.Task;
+
+    /// <summary>Completes when the peer's encoder stream has inserted one dynamic-table entry.</summary>
+    internal Task EncoderInsertObserved => _insert.Task;
 
     internal async Task<HttpResponseMessage> SendAsync(
         TitaniumHttpHandler handler,
@@ -46,6 +52,7 @@ internal sealed class Http3Pool : IDisposable
                     request,
                     uri,
                     () => ReleaseAsync(entry),
+                    entry.Qpack,
                     cancellationToken).ConfigureAwait(false);
             }
             catch (QuicException ex) when (IsStreamLimit(ex) && retries++ < 1)
@@ -64,7 +71,7 @@ internal sealed class Http3Pool : IDisposable
 
     public void Dispose()
     {
-        List<ManagedQuicConnection> connections = new();
+        List<Entry> entries = new();
         _gate.Wait();
         try
         {
@@ -76,7 +83,7 @@ internal sealed class Http3Pool : IDisposable
                     entry.Retired = true;
                     if (entry.TryMarkDisposed())
                     {
-                        connections.Add(entry.Connection);
+                        entries.Add(entry);
                     }
                 }
             }
@@ -88,9 +95,10 @@ internal sealed class Http3Pool : IDisposable
             _gate.Release();
         }
 
-        foreach (ManagedQuicConnection connection in connections)
+        foreach (Entry entry in entries)
         {
-            connection.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            entry.Connection.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            entry.DisposeQpack();
         }
 
         _gate.Dispose();
@@ -147,7 +155,7 @@ internal sealed class Http3Pool : IDisposable
         CancellationToken cancellationToken)
     {
         ManagedQuicConnection connection = await Http3Client.ConnectAsync(handler, uri, cancellationToken).ConfigureAwait(false);
-        Entry entry = new(connection);
+        Entry entry = new(connection, new QpackContext(Http3Client.TableCapacity));
         if (!_byAuthority.TryGetValue(authority, out List<Entry>? list))
         {
             list = new List<Entry>();
@@ -155,8 +163,19 @@ internal sealed class Http3Pool : IDisposable
         }
 
         list.Add(entry);
-        _ = Http3Client.WatchControlAsync(connection, () => NoteGoAwayAsync(entry), CancellationToken.None);
+        _ = Http3Client.WatchPeerStreamsAsync(
+            connection,
+            entry.Qpack,
+            () => NoteGoAwayAsync(entry),
+            NoteInsertAsync,
+            entry.Lifetime.Token);
         return entry;
+    }
+
+    private Task NoteInsertAsync()
+    {
+        _insert.TrySetResult();
+        return Task.CompletedTask;
     }
 
     private async Task NoteGoAwayAsync(Entry entry)
@@ -212,6 +231,7 @@ internal sealed class Http3Pool : IDisposable
         {
             list.Remove(victim);
             victim.Connection.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            victim.DisposeQpack();
         }
 
         return true;
@@ -245,6 +265,7 @@ internal sealed class Http3Pool : IDisposable
             {
                 list.RemoveAt(i);
                 entry.Connection.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                entry.DisposeQpack();
             }
         }
     }
@@ -309,6 +330,7 @@ internal sealed class Http3Pool : IDisposable
         if (dispose)
         {
             await entry.Connection.DisposeAsync().ConfigureAwait(false);
+            entry.DisposeQpack();
         }
     }
 
@@ -329,15 +351,21 @@ internal sealed class Http3Pool : IDisposable
     private sealed class Entry
     {
         private int _disposed;
+        private int _qpackDisposed;
 
-        internal Entry(ManagedQuicConnection connection)
+        internal Entry(ManagedQuicConnection connection, QpackContext qpack)
         {
             Connection = connection;
+            Qpack = qpack;
             Created = DateTimeOffset.UtcNow;
             LastUsed = Created;
         }
 
         internal ManagedQuicConnection Connection { get; }
+
+        internal QpackContext Qpack { get; }
+
+        internal CancellationTokenSource Lifetime { get; } = new();
 
         internal int StreamsOpened { get; set; }
 
@@ -351,6 +379,26 @@ internal sealed class Http3Pool : IDisposable
 
         internal int Released;
 
-        internal bool TryMarkDisposed() => Interlocked.Exchange(ref _disposed, 1) == 0;
+        internal bool TryMarkDisposed()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return false;
+            }
+
+            Lifetime.Cancel();
+            return true;
+        }
+
+        internal void DisposeQpack()
+        {
+            if (Interlocked.Exchange(ref _qpackDisposed, 1) != 0)
+            {
+                return;
+            }
+
+            Lifetime.Cancel();
+            Qpack.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
     }
 }

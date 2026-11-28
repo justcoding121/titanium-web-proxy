@@ -32,6 +32,7 @@ namespace Titanium.Net.Http;
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
 /// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.
 /// A GOAWAY on the peer's control stream stops new requests on that connection.
+/// The dynamic table is capped at 4096 bytes. Requests use the static table. A peer insert is decoded.
 /// A failed HTTP/3 connect, before any request byte, falls back to HTTP/2 or HTTP/1.1 when the request allows a lower version.
 /// </remarks>
 public sealed class TitaniumHttpHandler : HttpMessageHandler

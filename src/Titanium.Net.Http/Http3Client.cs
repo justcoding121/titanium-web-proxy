@@ -19,6 +19,8 @@ namespace Titanium.Net.Http;
 /// <summary>HTTP/3 requests on managed QUIC connections kept by <see cref="Http3Pool"/>.</summary>
 internal static class Http3Client
 {
+    internal const uint TableCapacity = 4096;
+
     private static readonly SslApplicationProtocol H3 = new("h3");
 
     internal static Task<HttpResponseMessage> SendAsync(
@@ -76,12 +78,13 @@ internal static class Http3Client
         HttpRequestMessage request,
         Uri uri,
         Func<Task> release,
+        QpackContext qpack,
         CancellationToken cancellationToken)
     {
         ManagedQuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false);
         await WriteRequestAsync(stream, request, uri, cancellationToken).ConfigureAwait(false);
         await stream.CompleteWritesAsync(cancellationToken).ConfigureAwait(false);
-        HttpResponseMessage response = await ReadResponseAsync(stream, release, cancellationToken).ConfigureAwait(false);
+        HttpResponseMessage response = await ReadResponseAsync(stream, release, qpack, cancellationToken).ConfigureAwait(false);
         response.RequestMessage = request;
         response.Version = HttpVersion.Version30;
         return response;
@@ -157,38 +160,39 @@ internal static class Http3Client
 
     private static async Task WritePrefaceAsync(ManagedQuicConnection connection, CancellationToken cancellationToken)
     {
-        await WriteStreamTypeAsync(connection, Http3StreamType.Control, EmptySettings(), cancellationToken).ConfigureAwait(false);
+        await WriteStreamTypeAsync(connection, Http3StreamType.Control, SettingsFrame(), cancellationToken).ConfigureAwait(false);
         await WriteStreamTypeAsync(connection, Http3StreamType.QpackEncoder, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
         await WriteStreamTypeAsync(connection, Http3StreamType.QpackDecoder, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Reads the peer's control stream. A GOAWAY frame runs <paramref name="onGoAway"/> and that connection is not used for new requests.
+    /// Reads the peer's unidirectional streams.
+    /// A GOAWAY frame runs <paramref name="onGoAway"/> and that connection is not used for new requests.
+    /// Encoder-stream instructions fill the dynamic table, which is capped at <see cref="TableCapacity"/>.
+    /// The first insert runs <paramref name="onInsert"/>.
     /// </summary>
-    internal static async Task WatchControlAsync(ManagedQuicConnection connection, Func<Task> onGoAway, CancellationToken cancellationToken)
+    internal static async Task WatchPeerStreamsAsync(
+        ManagedQuicConnection connection,
+        QpackContext qpack,
+        Func<Task> onGoAway,
+        Func<Task> onInsert,
+        CancellationToken cancellationToken)
     {
+        _ = GuardAsync(WatchInsertsAsync(qpack, onInsert, cancellationToken));
         try
         {
             for (int attempt = 0; attempt < 4; attempt++)
             {
                 ManagedQuicStream stream = await connection.AcceptInboundUnidirectionalStreamAsync(cancellationToken).ConfigureAwait(false);
                 ulong? type = await Http3VarInt.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
-                if (type != Http3StreamType.Control)
+                if (type == Http3StreamType.Control)
                 {
-                    continue;
+                    _ = GuardAsync(ReadControlAsync(stream, qpack, onGoAway, cancellationToken));
                 }
-
-                while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is Frame frame)
+                else if (type == Http3StreamType.QpackEncoder)
                 {
-                    if (frame.Type != Http3FrameType.GoAway)
-                    {
-                        continue;
-                    }
-
-                    await onGoAway().ConfigureAwait(false);
+                    _ = GuardAsync(QpackEncoderStreamReader.ProcessAsync(stream, qpack, cancellationToken));
                 }
-
-                return;
             }
         }
         catch (OperationCanceledException)
@@ -205,9 +209,67 @@ internal static class Http3Client
         }
     }
 
-    private static ReadOnlyMemory<byte> EmptySettings()
+    private static async Task WatchInsertsAsync(QpackContext qpack, Func<Task> onInsert, CancellationToken cancellationToken)
     {
-        byte[] payload = new Http3Settings().Serialize();
+        await qpack.AwaitInsertCountAsync(1, cancellationToken).ConfigureAwait(false);
+        await onInsert().ConfigureAwait(false);
+    }
+
+    private static async Task ReadControlAsync(
+        ManagedQuicStream stream,
+        QpackContext qpack,
+        Func<Task> onGoAway,
+        CancellationToken cancellationToken)
+    {
+        while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is Frame frame)
+        {
+            if (frame.Type == Http3FrameType.Settings)
+            {
+                Http3Settings settings = Http3Settings.Parse(frame.Payload);
+                qpack.MaxTableCapacityFromPeer = settings.QpackMaxTableCapacity;
+                if (settings.QpackMaxTableCapacity == 0)
+                {
+                    qpack.DisableOutboundTable();
+                }
+
+                continue;
+            }
+
+            if (frame.Type == Http3FrameType.GoAway)
+            {
+                await onGoAway().ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static async Task GuardAsync(Task work)
+    {
+        try
+        {
+            await work.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (QuicException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch (Http3ConnectionException)
+        {
+        }
+    }
+
+    private static ReadOnlyMemory<byte> SettingsFrame()
+    {
+        Http3Settings settings = new();
+        settings.SetQpackMaxTableCapacity(TableCapacity);
+        byte[] payload = settings.Serialize();
         byte[] frame = new byte[payload.Length + 16];
         int written = Http3FrameCodec.Write(frame, Http3FrameType.Settings, payload);
         return frame.AsMemory(0, written);
@@ -268,6 +330,7 @@ internal static class Http3Client
     private static async Task<HttpResponseMessage> ReadResponseAsync(
         ManagedQuicStream stream,
         Func<Task> release,
+        QpackContext qpack,
         CancellationToken cancellationToken)
     {
         var response = new HttpResponseMessage();
@@ -283,8 +346,8 @@ internal static class Http3Client
                 continue;
             }
 
-            List<(string Name, string Value)> fields = QpackDecoder.Decode(frame.Payload);
-            response.Content = new StreamContent(new Http3ResponseBody(stream, response, release));
+            List<(string Name, string Value)> fields = QpackDecoder.Decode(frame.Payload, qpack, cancellationToken);
+            response.Content = new StreamContent(new Http3ResponseBody(stream, response, release, qpack));
             foreach ((string name, string value) in fields)
             {
                 if (string.Equals(name, ":status", StringComparison.Ordinal))
@@ -395,15 +458,17 @@ internal static class Http3Client
         private readonly ManagedQuicStream _stream;
         private readonly HttpResponseMessage _response;
         private readonly Func<Task> _release;
+        private readonly QpackContext _qpack;
         private byte[]? _pending;
         private int _offset;
         private int _finished;
 
-        internal Http3ResponseBody(ManagedQuicStream stream, HttpResponseMessage response, Func<Task> release)
+        internal Http3ResponseBody(ManagedQuicStream stream, HttpResponseMessage response, Func<Task> release, QpackContext qpack)
         {
             _stream = stream;
             _response = response;
             _release = release;
+            _qpack = qpack;
         }
 
         public override bool CanRead => true;
@@ -459,7 +524,7 @@ internal static class Http3Client
 
                 if (frame.Value.Type == Http3FrameType.Headers)
                 {
-                    AddFields(_response.TrailingHeaders, null, QpackDecoder.Decode(frame.Value.Payload));
+                    AddFields(_response.TrailingHeaders, null, QpackDecoder.Decode(frame.Value.Payload, _qpack, cancellationToken));
                     continue;
                 }
 
