@@ -34,6 +34,7 @@ namespace Titanium.Net.Http;
 /// HTTP/3 sends <c>:scheme https</c>. <see cref="SendAsync"/> returns after the response headers. The body is read as the caller reads it.
 /// A HEADERS frame after the body is applied to the response trailers while that read runs.
 /// Cancelling that read stops it while it is waiting for the next frame.
+/// Cancelling an HTTP/1.1 body read stops it while the rest of the body is still waiting.
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
 /// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.
 /// A GOAWAY on the peer's control stream stops new requests on that connection and closes it once nothing is in flight.

@@ -1977,6 +1977,38 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11BodyReadStopsWhenCancelled()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/slow", async context =>
+            {
+                context.Response.ContentLength = 8;
+                await context.Response.Body.FlushAsync();
+                await Task.Delay(Timeout.Infinite, context.RequestAborted);
+            });
+        });
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://localhost:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/slow")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel.Token);
+        await using Stream body = await response.Content.ReadAsStreamAsync(cancel.Token);
+        using var readCancel = new CancellationTokenSource();
+        ValueTask<int> read = body.ReadAsync(new byte[8], readCancel.Token);
+        readCancel.Cancel();
+        long started = Environment.TickCount64;
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await read);
+        Assert.IsTrue(Environment.TickCount64 - started < 2000);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11RequestIsCleartext()
     {
         using var tcp = new TcpListener(IPAddress.Loopback, 0);
