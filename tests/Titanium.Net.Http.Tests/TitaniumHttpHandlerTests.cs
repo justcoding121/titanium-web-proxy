@@ -1326,6 +1326,48 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11RedirectLimitStopsALongerChain()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/a", (HttpContext context) =>
+            {
+                context.Response.Redirect("/b");
+                return Task.CompletedTask;
+            });
+            app.MapGet("/b", (HttpContext context) =>
+            {
+                context.Response.Redirect("/c");
+                return Task.CompletedTask;
+            });
+            app.MapGet("/c", () => "landed");
+        });
+        using TitaniumHttpHandler handler = Handler();
+        handler.MaxAutomaticRedirections = 1;
+        using HttpClient client = new(handler, disposeHandler: false);
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/a";
+        using HttpRequestMessage limited = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        HttpRequestException ex = await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await client.SendAsync(limited));
+        Assert.AreEqual("The redirect limit was reached.", ex.Message);
+        using TitaniumHttpHandler longer = Handler();
+        longer.MaxAutomaticRedirections = 2;
+        using HttpClient again = new(longer, disposeHandler: false);
+        using HttpRequestMessage allowed = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await again.SendAsync(allowed);
+        Assert.AreEqual("landed", await response.Content.ReadAsStringAsync());
+        Assert.AreSame(allowed, response.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11LargeUploadAndDownloadMatchTheirHashes()
     {
         byte[] upload = Pattern(1024 * 1024);

@@ -134,7 +134,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         set => _followRedirects = value;
     }
 
-    /// <summary>Gets or sets how many redirects the inner handler follows.</summary>
+    /// <summary>Gets or sets how many redirects this handler follows.</summary>
     public int MaxAutomaticRedirections
     {
         get => _sockets.MaxAutomaticRedirections;
