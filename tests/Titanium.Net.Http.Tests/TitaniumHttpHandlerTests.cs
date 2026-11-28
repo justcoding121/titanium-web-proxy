@@ -2142,6 +2142,31 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3UnknownFrameWhileTheBodyIsReadIsSkipped()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream stream = await HeadersAsync(server, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        await WriteFrameAsync(stream, Http3FrameType.Data, "ab"u8.ToArray(), cancel.Token);
+        await WriteFrameAsync(stream, 0x21, "no"u8.ToArray(), cancel.Token);
+        await WriteFrameAsync(stream, Http3FrameType.Data, "cd"u8.ToArray(), cancel.Token);
+        await stream.CompleteWritesAsync(cancel.Token);
+        Assert.AreEqual("abcd", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual(3, response.Version.Major);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3IdleConnectionIsNotReused()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
