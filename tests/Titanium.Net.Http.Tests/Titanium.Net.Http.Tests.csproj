@@ -20,5 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Net.Http\Titanium.Net.Http.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Quic\Titanium.Quic.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Http3\Titanium.Http3.csproj" />
   </ItemGroup>
 </Project>

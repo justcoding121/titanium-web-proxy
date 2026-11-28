@@ -6,6 +6,6 @@ HTTP/1.1 and HTTP/2 go through an inner handler. Its connect callback opens the 
 
 The inner handler sends `:scheme http` on HTTP/2. There is no hook to change that. A `400` or `421` on a GET, HEAD, OPTIONS, or TRACE is retried once over HTTP/1.1 when the request allows a lower version. A server that selects HTTP/1.1 during ALPN is retried over HTTP/1.1 before any request bytes, for any method, when a lower version is allowed.
 
-HTTP/3 throws `NotSupportedException`. `QuicOptions` and `EnableAltSvc` are stored for that client.
+HTTP/3 opens a managed QUIC connection. The request uses the static QPACK table. The response body is collected before the call returns. `EnableAltSvc` is stored and is not read yet.
 
 The package is experimental. It is not a FIPS-validated module. While FIPS mode is on, `SendAsync` throws unless `AllowManagedStackUnderFips` is set or `TITANIUM_MANAGED_STACK_FIPS_OVERRIDE=1`.

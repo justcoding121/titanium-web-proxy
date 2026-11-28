@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Reflection;
+using System.Net.Quic;
+using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -15,6 +20,8 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Http3;
+using Titanium.Quic;
 
 namespace Titanium.Net.Http.Tests;
 
@@ -121,32 +128,40 @@ public sealed class TitaniumHttpHandlerTests
     }
 
     [TestMethod]
-    public async Task Http3ExactThrows()
+    [Timeout(60000)]
+    public async Task Http3AgainstLoopbackReturnsTheBody()
     {
-        using TitaniumHttpHandler handler = new();
-        using HttpClient client = new(handler, disposeHandler: false);
-        using HttpRequestMessage request = new(HttpMethod.Get, "https://example.com/")
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
         {
             Version = HttpVersion.Version30,
             VersionPolicy = HttpVersionPolicy.RequestVersionExact,
         };
-
-        NotSupportedException ex = await Assert.ThrowsExceptionAsync<NotSupportedException>(() => client.SendAsync(request));
-        StringAssert.Contains(ex.Message, "HTTP/3");
-    }
-
-    [TestMethod]
-    public async Task Http3OrHigherThrows()
-    {
-        using TitaniumHttpHandler handler = new();
-        using HttpClient client = new(handler, disposeHandler: false);
-        using HttpRequestMessage request = new(HttpMethod.Get, "https://example.com/")
-        {
-            Version = HttpVersion.Version30,
-            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
-        };
-
-        await Assert.ThrowsExceptionAsync<NotSupportedException>(() => client.SendAsync(request));
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        await ReplyAsync(server, cancel.Token);
+        using HttpResponseMessage response = await pending;
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(request, response.RequestMessage);
+        Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
+        await server.DisposeAsync();
     }
 
     [TestMethod]
@@ -208,6 +223,64 @@ public sealed class TitaniumHttpHandlerTests
         };
         handler.SslOptions.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
         return handler;
+    }
+
+    private static X509Certificate2 CreateHttp3Certificate()
+    {
+        using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        CertificateRequest request = new("CN=localhost", key, HashAlgorithmName.SHA256);
+        using X509Certificate2 created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pfx), password: null, X509KeyStorageFlags.Exportable);
+    }
+
+    private static async Task ReplyAsync(ManagedQuicConnection server, CancellationToken cancellationToken)
+    {
+        ManagedQuicStream request = await server.AcceptInboundStreamAsync(cancellationToken);
+        while (await ReadFrameAsync(request, cancellationToken) is not null)
+        {
+        }
+
+        byte[] block = QpackEncoder.Encode([(":status", "200")]);
+        await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
+        await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
+        await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task<byte[]?> ReadFrameAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        ulong? type = await Http3VarInt.ReadAsync(stream, cancellationToken);
+        if (type is null)
+        {
+            return null;
+        }
+
+        ulong? length = await Http3VarInt.ReadAsync(stream, cancellationToken);
+        if (length is null)
+        {
+            return null;
+        }
+
+        byte[] payload = new byte[(int)length.Value];
+        int read = 0;
+        while (read < payload.Length)
+        {
+            int count = await stream.ReadAsync(payload.AsMemory(read), cancellationToken);
+            if (count == 0)
+            {
+                return null;
+            }
+
+            read += count;
+        }
+
+        return payload;
+    }
+
+    private static async Task WriteFrameAsync(Stream stream, ulong type, byte[] payload, CancellationToken cancellationToken)
+    {
+        byte[] frame = new byte[payload.Length + 16];
+        int written = Http3FrameCodec.Write(frame, type, payload);
+        await stream.WriteAsync(frame.AsMemory(0, written), cancellationToken);
     }
 
     private sealed class LoopbackServer : IAsyncDisposable

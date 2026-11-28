@@ -49,7 +49,7 @@ Exit: existing proxy tests stay green and unedited. A flag-off run does not cons
 
 ### P3.6 `TitaniumHttpHandler`
 
-`Titanium.Net.Http` contains `TitaniumHttpHandler`. HTTP/1.1 and HTTP/2 go through an inner handler whose connect callback owns the managed TLS stream. The handler rewrites `https` to `http` and keeps port 443, and the response points at the caller's request. HTTP/3 still throws `NotSupportedException` until the managed QUIC client is connected. The handler always uses the managed stack.
+`Titanium.Net.Http` contains `TitaniumHttpHandler`. HTTP/1.1 and HTTP/2 go through an inner handler whose connect callback owns the managed TLS stream. The handler rewrites `https` to `http` and keeps port 443, and the response points at the caller's request. HTTP/3 opens a managed QUIC connection, sends the control streams, and reads one response. The handler always uses the managed stack.
 
 ### P3.7 UDP injection
 

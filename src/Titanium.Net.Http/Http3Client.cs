@@ -1,0 +1,341 @@
+#pragma warning disable CA1416 // QuicException and QuicStreamType are the BCL names. This client does not start the platform QUIC stack.
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Quic;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
+using Titanium.Http3;
+using Titanium.Quic;
+
+namespace Titanium.Net.Http;
+
+/// <summary>One HTTP/3 request on a managed QUIC connection. The connection is not reused.</summary>
+internal static class Http3Client
+{
+    private static readonly SslApplicationProtocol H3 = new("h3");
+
+    internal static async Task<HttpResponseMessage> SendAsync(
+        TitaniumHttpHandler handler,
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        Uri uri = request.RequestUri ?? throw new InvalidOperationException("The request URI is required.");
+        ManagedQuicConnection connection;
+        try
+        {
+            connection = await ManagedQuicConnection.ConnectAsync(BuildOptions(handler, uri), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is QuicException or SocketException or IOException)
+        {
+            throw new Http3ConnectException("The HTTP/3 connection failed before the request was sent.", ex);
+        }
+
+        try
+        {
+            await WritePrefaceAsync(connection, cancellationToken).ConfigureAwait(false);
+            ManagedQuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false);
+            await WriteRequestAsync(stream, request, uri, cancellationToken).ConfigureAwait(false);
+            await stream.CompleteWritesAsync(cancellationToken).ConfigureAwait(false);
+            HttpResponseMessage response = await ReadResponseAsync(stream, cancellationToken).ConfigureAwait(false);
+            response.RequestMessage = request;
+            response.Version = HttpVersion.Version30;
+            return response;
+        }
+        finally
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private static ManagedQuicClientConnectionOptions BuildOptions(TitaniumHttpHandler handler, Uri uri)
+    {
+        IPEndPoint remote = new(Resolve(uri.IdnHost), uri.IsDefaultPort ? 443 : uri.Port);
+        ManagedQuicClientConnectionOptions source = handler.QuicOptions ?? new ManagedQuicClientConnectionOptions();
+        TimeSpan budget = handler.ConnectTimeout > TimeSpan.Zero && handler.ConnectTimeout != Timeout.InfiniteTimeSpan
+            ? handler.ConnectTimeout
+            : source.HandshakeTimeout;
+        return new ManagedQuicClientConnectionOptions
+        {
+            RemoteEndPoint = remote,
+            LocalEndPoint = source.LocalEndPoint,
+            HandshakeTimeout = budget <= TimeSpan.Zero ? TimeSpan.FromSeconds(10) : budget,
+            KeepAliveInterval = source.KeepAliveInterval,
+            IdleTimeout = source.IdleTimeout,
+            MaxInboundBidirectionalStreams = source.MaxInboundBidirectionalStreams,
+            MaxInboundUnidirectionalStreams = source.MaxInboundUnidirectionalStreams,
+            DefaultStreamErrorCode = source.DefaultStreamErrorCode,
+            AllowManagedStackUnderFips = handler.AllowManagedStackUnderFips || source.AllowManagedStackUnderFips,
+            ClientAuthenticationOptions = CopySsl(handler.SslOptions, uri.IdnHost),
+        };
+    }
+
+    private static SslClientAuthenticationOptions CopySsl(SslClientAuthenticationOptions source, string host)
+    {
+        string target = string.IsNullOrEmpty(source.TargetHost) ? host : source.TargetHost;
+        return new SslClientAuthenticationOptions
+        {
+            TargetHost = target,
+            ClientCertificates = source.ClientCertificates,
+            CertificateRevocationCheckMode = source.CertificateRevocationCheckMode,
+            CertificateChainPolicy = source.CertificateChainPolicy,
+            EncryptionPolicy = source.EncryptionPolicy,
+            EnabledSslProtocols = source.EnabledSslProtocols,
+            RemoteCertificateValidationCallback = source.RemoteCertificateValidationCallback,
+            LocalCertificateSelectionCallback = source.LocalCertificateSelectionCallback,
+            ClientCertificateContext = source.ClientCertificateContext,
+            CipherSuitesPolicy = source.CipherSuitesPolicy,
+            ApplicationProtocols = new List<SslApplicationProtocol> { H3 },
+        };
+    }
+
+    private static IPAddress Resolve(string host)
+    {
+        if (IPAddress.TryParse(host, out IPAddress? parsed))
+        {
+            return parsed;
+        }
+
+        IPAddress[] addresses = Dns.GetHostAddresses(host);
+        for (int i = 0; i < addresses.Length; i++)
+        {
+            if (addresses[i].AddressFamily == AddressFamily.InterNetwork)
+            {
+                return addresses[i];
+            }
+        }
+
+        if (addresses.Length == 0)
+        {
+            throw new Http3ConnectException("The HTTP/3 host did not resolve.", new SocketException((int)SocketError.HostNotFound));
+        }
+
+        return addresses[0];
+    }
+
+    private static async Task WritePrefaceAsync(ManagedQuicConnection connection, CancellationToken cancellationToken)
+    {
+        await WriteStreamTypeAsync(connection, Http3StreamType.Control, EmptySettings(), cancellationToken).ConfigureAwait(false);
+        await WriteStreamTypeAsync(connection, Http3StreamType.QpackEncoder, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
+        await WriteStreamTypeAsync(connection, Http3StreamType.QpackDecoder, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static ReadOnlyMemory<byte> EmptySettings()
+    {
+        byte[] payload = new Http3Settings().Serialize();
+        byte[] frame = new byte[payload.Length + 16];
+        int written = Http3FrameCodec.Write(frame, Http3FrameType.Settings, payload);
+        return frame.AsMemory(0, written);
+    }
+
+    private static async Task WriteStreamTypeAsync(
+        ManagedQuicConnection connection,
+        ulong streamType,
+        ReadOnlyMemory<byte> rest,
+        CancellationToken cancellationToken)
+    {
+        ManagedQuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken).ConfigureAwait(false);
+        byte[] prefix = new byte[8];
+        int length = Http3VarInt.Write(prefix, streamType);
+        await stream.WriteAsync(prefix.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
+        if (!rest.IsEmpty)
+        {
+            await stream.WriteAsync(rest, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task WriteRequestAsync(ManagedQuicStream stream, HttpRequestMessage request, Uri uri, CancellationToken cancellationToken)
+    {
+        var fields = new List<(string Name, string Value)>
+        {
+            (":method", request.Method.Method),
+            (":scheme", uri.Scheme),
+            (":authority", Authority(uri)),
+            (":path", uri.PathAndQuery.Length == 0 ? "/" : uri.PathAndQuery),
+        };
+        AddHeaders(fields, request.Headers);
+        if (request.Content is not null)
+        {
+            AddHeaders(fields, request.Content.Headers);
+        }
+
+        byte[] block = QpackEncoder.Encode(fields);
+        await WriteFrameAsync(stream, Http3FrameType.Headers, block, cancellationToken).ConfigureAwait(false);
+        if (request.Content is null)
+        {
+            return;
+        }
+
+        await using Stream input = await request.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        byte[] chunk = new byte[Http3FrameCodec.RelayUnitBytes];
+        while (true)
+        {
+            int count = await input.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
+            if (count == 0)
+            {
+                return;
+            }
+
+            await WriteFrameAsync(stream, Http3FrameType.Data, chunk.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<HttpResponseMessage> ReadResponseAsync(ManagedQuicStream stream, CancellationToken cancellationToken)
+    {
+        var response = new HttpResponseMessage();
+        var body = new MemoryStream();
+        List<(string Name, string Value)>? headers = null;
+        while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is Frame frame)
+        {
+            if (frame.Type == Http3FrameType.Headers)
+            {
+                List<(string Name, string Value)> fields = QpackDecoder.Decode(frame.Payload);
+                if (headers is null)
+                {
+                    headers = fields;
+                }
+                else
+                {
+                    AddFields(response.TrailingHeaders, null, fields);
+                }
+
+                continue;
+            }
+
+            if (frame.Type == Http3FrameType.Data)
+            {
+                body.Write(frame.Payload);
+            }
+        }
+
+        if (headers is null)
+        {
+            throw new HttpRequestException("The HTTP/3 response had no headers.");
+        }
+
+        body.Position = 0;
+        response.Content = new StreamContent(body);
+        foreach ((string name, string value) in headers)
+        {
+            if (string.Equals(name, ":status", StringComparison.Ordinal))
+            {
+                response.StatusCode = (HttpStatusCode)int.Parse(value, CultureInfo.InvariantCulture);
+            }
+        }
+
+        AddFields(response.Headers, response.Content.Headers, headers);
+        return response;
+    }
+
+    private static void AddFields(HttpHeaders target, HttpHeaders? contentHeaders, List<(string Name, string Value)> fields)
+    {
+        foreach ((string name, string value) in fields)
+        {
+            if (name.Length == 0 || name[0] == ':')
+            {
+                continue;
+            }
+
+            if (!target.TryAddWithoutValidation(name, value) && contentHeaders is not null)
+            {
+                contentHeaders.TryAddWithoutValidation(name, value);
+            }
+        }
+    }
+
+    private static async Task<Frame?> ReadFrameAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        ulong? type = await Http3VarInt.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+        if (type is null)
+        {
+            return null;
+        }
+
+        ulong? length = await Http3VarInt.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+        if (length is null || length.Value > (ulong)Http3FrameCodec.DefaultMaxPayloadBytes)
+        {
+            throw new HttpRequestException("The HTTP/3 frame ended early.");
+        }
+
+        byte[] payload = new byte[(int)length.Value];
+        int read = 0;
+        while (read < payload.Length)
+        {
+            int count = await stream.ReadAsync(payload.AsMemory(read), cancellationToken).ConfigureAwait(false);
+            if (count == 0)
+            {
+                throw new HttpRequestException("The HTTP/3 frame ended early.");
+            }
+
+            read += count;
+        }
+
+        return new Frame(type.Value, payload);
+    }
+
+    private static Task WriteFrameAsync(Stream stream, ulong type, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
+    {
+        byte[] frame = new byte[payload.Length + 16];
+        int written = Http3FrameCodec.Write(frame, type, payload.Span);
+        return stream.WriteAsync(frame.AsMemory(0, written), cancellationToken).AsTask();
+    }
+
+    private static void AddHeaders(List<(string Name, string Value)> fields, HttpHeaders headers)
+    {
+        foreach (KeyValuePair<string, IEnumerable<string>> header in headers)
+        {
+            if (IsConnectionHeader(header.Key))
+            {
+                continue;
+            }
+
+            foreach (string value in header.Value)
+            {
+                fields.Add((header.Key.ToLowerInvariant(), value));
+            }
+        }
+    }
+
+    private static bool IsConnectionHeader(string name) =>
+        name.Equals("Host", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Connection", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Upgrade", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Proxy-Connection", StringComparison.OrdinalIgnoreCase);
+
+    private static string Authority(Uri uri) =>
+        uri.IsDefaultPort ? uri.IdnHost : uri.IdnHost + ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
+
+    private readonly struct Frame
+    {
+        internal Frame(ulong type, byte[] payload)
+        {
+            Type = type;
+            Payload = payload;
+        }
+
+        internal ulong Type { get; }
+
+        internal byte[] Payload { get; }
+    }
+}
+
+/// <summary>An HTTP/3 connect failed before a request byte was written.</summary>
+internal sealed class Http3ConnectException : HttpRequestException
+{
+    internal Http3ConnectException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}

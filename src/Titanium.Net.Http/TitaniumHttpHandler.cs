@@ -18,7 +18,7 @@ namespace Titanium.Net.Http;
 /// <summary>
 /// HTTP client that always uses the managed TLS stack.
 /// HTTP/1.1 and HTTP/2 go through an inner handler whose connect callback owns the <see cref="TlsStream"/>.
-/// HTTP/3 is not connected on this handler yet.
+/// HTTP/3 opens a managed QUIC connection and uses the HTTP/3 codec.
 /// </summary>
 /// <remarks>
 /// The inner handler sees an <c>http</c> URI, so it does not open its own TLS stream.
@@ -28,6 +28,8 @@ namespace Titanium.Net.Http;
 /// A 400 or 421 on GET, HEAD, OPTIONS, or TRACE is retried once over HTTP/1.1 when the request allows a lower version.
 /// A server that selects HTTP/1.1 during ALPN is retried over HTTP/1.1 before any request bytes, for any method, when a lower version is allowed.
 /// The negotiated protocol is remembered per authority for ten minutes, up to 256 authorities.
+/// HTTP/3 sends <c>:scheme https</c>. The response body is collected before <see cref="SendAsync"/> returns.
+/// A failed HTTP/3 connect, before any request byte, falls back to HTTP/2 or HTTP/1.1 when the request allows a lower version.
 /// </remarks>
 public sealed class TitaniumHttpHandler : HttpMessageHandler
 {
@@ -62,10 +64,10 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
     /// <summary>Gets or sets the fingerprint profile passed to <see cref="TlsStream"/>. Null uses the built-in hello.</summary>
     public TlsFingerprintProfile? FingerprintProfile { get; set; }
 
-    /// <summary>Gets or sets the QUIC options stored for HTTP/3. HTTP/3 is not connected on this handler yet.</summary>
+    /// <summary>Gets or sets the QUIC options used for an HTTP/3 connection. Null uses the defaults.</summary>
     public ManagedQuicClientConnectionOptions? QuicOptions { get; set; }
 
-    /// <summary>Gets or sets whether a later HTTP/3 client may use Alt-Svc. This slice does not read Alt-Svc.</summary>
+    /// <summary>Gets or sets whether a later request may use Alt-Svc. This handler does not read Alt-Svc yet.</summary>
     public bool EnableAltSvc { get; set; }
 
     /// <summary>
@@ -204,7 +206,13 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         RequireFips();
         if (WantsHttp3(request))
         {
-            throw new NotSupportedException("HTTP/3 is not available on TitaniumHttpHandler yet.");
+            try
+            {
+                return await Http3Client.SendAsync(this, request, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Http3ConnectException) when (request.VersionPolicy == HttpVersionPolicy.RequestVersionOrLower)
+            {
+            }
         }
 
         VersionChoice choice = Choose(request);
@@ -301,15 +309,7 @@ public sealed class TitaniumHttpHandler : HttpMessageHandler
         throw new NotSupportedException(FipsRefusal);
     }
 
-    private static bool WantsHttp3(HttpRequestMessage request)
-    {
-        if (request.Version.Major != 3)
-        {
-            return false;
-        }
-
-        return request.VersionPolicy is HttpVersionPolicy.RequestVersionExact or HttpVersionPolicy.RequestVersionOrHigher;
-    }
+    private static bool WantsHttp3(HttpRequestMessage request) => request.Version.Major == 3;
 
     private async ValueTask<Stream> ConnectAsync(SocketsHttpConnectionContext context, CancellationToken cancellationToken)
     {
