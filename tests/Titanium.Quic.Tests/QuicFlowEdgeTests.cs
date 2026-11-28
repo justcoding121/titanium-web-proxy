@@ -215,6 +215,30 @@ public sealed class QuicFlowEdgeTests
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7 }, server.Received);
     }
 
+    [TestMethod]
+    public void EachStreamKeepsItsOwnBytesAndAFinEndsTheRead()
+    {
+        var flow = new QuicFlow();
+        flow.SetLocal(Parameters(100, 100, 100, 100, 4, 4), client: false);
+        flow.SetPeer(Parameters(100, 100, 100, 100, 4, 4));
+        Assert.IsTrue(flow.TryAllocateRemote(unidirectional: false, out ulong first));
+        Assert.IsTrue(flow.TryAllocateRemote(unidirectional: false, out ulong second));
+        Assert.AreEqual(0UL, first);
+        Assert.AreEqual(4UL, second);
+        Assert.IsTrue(flow.AcceptStream(0, 0, [1, 2], out _, fin: true));
+        Assert.IsTrue(flow.AcceptStream(4, 0, [3], out _));
+        byte[] one = new byte[2];
+        byte[] two = new byte[1];
+        Assert.AreEqual(2, flow.CopyDelivered(0, 0, one));
+        Assert.AreEqual(1, flow.CopyDelivered(4, 0, two));
+        Assert.AreEqual(1, one[0]);
+        Assert.AreEqual(3, two[0]);
+        Assert.IsTrue(flow.IsStreamReadClosed(0, 2));
+        Assert.IsFalse(flow.IsStreamReadClosed(4, 1));
+        Assert.IsTrue(flow.AcceptStream(4, 1, [], out _, fin: true));
+        Assert.IsTrue(flow.IsStreamReadClosed(4, 1));
+    }
+
     private static QuicTransportParameters Parameters(ulong maxData, ulong bidiLocal, ulong bidiRemote, ulong uni, ulong maxBidi, ulong maxUni)
     {
         return new QuicTransportParameters

@@ -66,6 +66,44 @@ public sealed class ManagedQuicTests
     }
 
     [TestMethod]
+    public async Task TwoStreamsKeepTheirBytesAndAFinEndsTheRead()
+    {
+        using X509Certificate2 certificate = Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions { ServerCertificate = certificate },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        await using ManagedQuicConnection client = await ManagedQuicConnection.ConnectAsync(new ManagedQuicClientConnectionOptions
+        {
+            RemoteEndPoint = listener.LocalEndPoint,
+            ClientAuthenticationOptions = new SslClientAuthenticationOptions { TargetHost = "localhost" },
+        }, cancel.Token);
+        await using ManagedQuicConnection server = await accepted;
+        ManagedQuicStream first = await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancel.Token);
+        ManagedQuicStream second = await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancel.Token);
+        ManagedQuicStream control = await client.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancel.Token);
+        await first.WriteAsync("one"u8.ToArray(), cancel.Token);
+        await first.CompleteWritesAsync(cancel.Token);
+        await second.WriteAsync("two"u8.ToArray(), cancel.Token);
+        await second.CompleteWritesAsync(cancel.Token);
+        await control.WriteAsync("uni"u8.ToArray(), cancel.Token);
+        await control.CompleteWritesAsync(cancel.Token);
+
+        ManagedQuicStream readFirst = await server.AcceptInboundStreamAsync(cancel.Token);
+        ManagedQuicStream readSecond = await server.AcceptInboundStreamAsync(cancel.Token);
+        ManagedQuicStream readUni = await server.AcceptInboundUnidirectionalStreamAsync(cancel.Token);
+        Assert.AreEqual("one", await ReadUntilEndAsync(readFirst, cancel.Token));
+        Assert.AreEqual("two", await ReadUntilEndAsync(readSecond, cancel.Token));
+        Assert.AreEqual("uni", await ReadUntilEndAsync(readUni, cancel.Token));
+    }
+
+    [TestMethod]
     public async Task AWriteLargerThanTheCongestionWindowIsDelivered()
     {
         using X509Certificate2 certificate = Certificate();
@@ -99,6 +137,24 @@ public sealed class ManagedQuicTests
         }
 
         Assert.IsTrue(SHA256.HashData(payload).AsSpan().SequenceEqual(SHA256.HashData(got)));
+    }
+
+    private static async Task<string> ReadUntilEndAsync(ManagedQuicStream stream, CancellationToken cancellationToken)
+    {
+        byte[] chunk = new byte[16];
+        int total = 0;
+        while (total < chunk.Length)
+        {
+            int count = await stream.ReadAsync(chunk.AsMemory(total), cancellationToken);
+            if (count == 0)
+            {
+                break;
+            }
+
+            total += count;
+        }
+
+        return System.Text.Encoding.UTF8.GetString(chunk, 0, total);
     }
 
     private static void AssertEphemeral(int port)

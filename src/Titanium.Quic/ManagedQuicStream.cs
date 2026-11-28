@@ -87,14 +87,14 @@ public sealed class ManagedQuicStream : Stream
                 wait = _signal.Task;
             }
 
-            int count = _session.CopyReceived(_offset, buffer.Span);
+            int count = _session.CopyDelivered((ulong)Id, _offset, buffer.Span);
             if (count > 0)
             {
                 _offset += count;
                 return count;
             }
 
-            if (_session.IsClosed)
+            if (_session.IsClosed || _session.IsStreamReadClosed((ulong)Id, _offset))
             {
                 return 0;
             }

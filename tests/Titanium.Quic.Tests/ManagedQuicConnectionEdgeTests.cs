@@ -27,7 +27,7 @@ public sealed class ManagedQuicConnectionEdgeTests
     }
 
     [TestMethod]
-    public async Task OneConnectionOpensAndAcceptsASingleBidirectionalStream()
+    public async Task OneConnectionOpensBidirectionalAndUnidirectionalStreams()
     {
         using X509Certificate2 certificate = Certificate();
         string? serverName = null;
@@ -62,16 +62,18 @@ public sealed class ManagedQuicConnectionEdgeTests
         stopOpen.Cancel();
         await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () => await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, stopOpen.Token));
         await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () => await server.AcceptInboundStreamAsync(stopOpen.Token));
-        QuicException unidirectional = await Assert.ThrowsExactlyAsync<QuicException>(async () => await client.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancel.Token));
-        Assert.AreEqual("Only a bidirectional stream can be opened.", unidirectional.Message);
+        ManagedQuicStream unidirectional = await client.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancel.Token);
         ManagedQuicStream outbound = await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancel.Token);
-        QuicException second = await Assert.ThrowsExactlyAsync<QuicException>(async () => await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancel.Token));
-        Assert.AreEqual("This connection opens one bidirectional stream.", second.Message);
+        ManagedQuicStream second = await client.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancel.Token);
         ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
-        QuicException secondAccept = await Assert.ThrowsExactlyAsync<QuicException>(async () => await server.AcceptInboundStreamAsync(cancel.Token));
-        Assert.AreEqual("This connection accepts one bidirectional stream.", secondAccept.Message);
+        ManagedQuicStream secondAccept = await server.AcceptInboundStreamAsync(cancel.Token);
+        ManagedQuicStream inboundUni = await server.AcceptInboundUnidirectionalStreamAsync(cancel.Token);
+        Assert.AreEqual(2L, unidirectional.Id);
         Assert.AreEqual(0L, outbound.Id);
+        Assert.AreEqual(4L, second.Id);
         Assert.AreEqual(0L, inbound.Id);
+        Assert.AreEqual(4L, secondAccept.Id);
+        Assert.AreEqual(2L, inboundUni.Id);
 
         using var closed = new CancellationTokenSource();
         closed.Cancel();

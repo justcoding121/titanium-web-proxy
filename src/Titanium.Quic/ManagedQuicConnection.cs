@@ -12,10 +12,6 @@ public sealed class ManagedQuicConnection : IAsyncDisposable
 {
     private readonly QuicConnectionSession _session;
 
-    private int _outboundStreams;
-
-    private int _inboundStreams;
-
     internal ManagedQuicConnection(QuicConnectionSession session) => _session = session;
 
     /// <summary>Gets the local UDP endpoint.</summary>
@@ -120,37 +116,41 @@ public sealed class ManagedQuicConnection : IAsyncDisposable
         }
     }
 
-    /// <summary>Opens a locally initiated bidirectional stream.</summary>
-    /// <param name="type">The stream type. Only <see cref="QuicStreamType.Bidirectional"/> is supported.</param>
+    /// <summary>Opens a locally initiated stream. Bidirectional ids are 0, 4, 8, and so on for a client. Unidirectional ids are 2, 6, 10, and so on.</summary>
+    /// <param name="type">The stream type.</param>
     /// <param name="cancellationToken">A token that cancels the open.</param>
     /// <returns>The new stream.</returns>
     public ValueTask<ManagedQuicStream> OpenOutboundStreamAsync(QuicStreamType type, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (type != QuicStreamType.Bidirectional)
-        {
-            throw new QuicException(QuicError.InternalError, null, "Only a bidirectional stream can be opened.");
-        }
-
         if (!HandshakeCompleted)
         {
             throw new QuicException(QuicError.InternalError, null, "The handshake is not complete.");
         }
 
-        if (Interlocked.Increment(ref _outboundStreams) != 1)
+        if (!_session.TryOpenLocal(type, out long id))
         {
-            throw new QuicException(QuicError.InternalError, null, "This connection opens one bidirectional stream.");
+            throw new QuicException(QuicError.InternalError, null, "The peer's stream limit is exhausted.");
         }
 
-        var stream = new ManagedQuicStream(_session, id: 0, type);
+        var stream = new ManagedQuicStream(_session, id, type);
         _session.AddStream(stream);
         return ValueTask.FromResult(stream);
     }
 
-    /// <summary>Accepts a remotely initiated bidirectional stream.</summary>
+    /// <summary>Accepts the next remotely initiated bidirectional stream.</summary>
     /// <param name="cancellationToken">A token that cancels the accept.</param>
     /// <returns>The accepted stream.</returns>
-    public ValueTask<ManagedQuicStream> AcceptInboundStreamAsync(CancellationToken cancellationToken = default)
+    public ValueTask<ManagedQuicStream> AcceptInboundStreamAsync(CancellationToken cancellationToken = default) =>
+        AcceptRemoteAsync(QuicStreamType.Bidirectional, cancellationToken);
+
+    /// <summary>Accepts the next remotely initiated unidirectional stream.</summary>
+    /// <param name="cancellationToken">A token that cancels the accept.</param>
+    /// <returns>The accepted stream.</returns>
+    public ValueTask<ManagedQuicStream> AcceptInboundUnidirectionalStreamAsync(CancellationToken cancellationToken = default) =>
+        AcceptRemoteAsync(QuicStreamType.Unidirectional, cancellationToken);
+
+    private ValueTask<ManagedQuicStream> AcceptRemoteAsync(QuicStreamType type, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!HandshakeCompleted)
@@ -158,12 +158,12 @@ public sealed class ManagedQuicConnection : IAsyncDisposable
             throw new QuicException(QuicError.InternalError, null, "The handshake is not complete.");
         }
 
-        if (Interlocked.Increment(ref _inboundStreams) != 1)
+        if (!_session.TryAcceptRemote(type, out long id))
         {
-            throw new QuicException(QuicError.InternalError, null, "This connection accepts one bidirectional stream.");
+            throw new QuicException(QuicError.InternalError, null, "The local stream limit is exhausted.");
         }
 
-        var stream = new ManagedQuicStream(_session, id: 0, QuicStreamType.Bidirectional);
+        var stream = new ManagedQuicStream(_session, id, type);
         _session.AddStream(stream);
         return ValueTask.FromResult(stream);
     }

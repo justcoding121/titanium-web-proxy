@@ -23,6 +23,7 @@ Titanium.Quic.ManagedQuicClientConnectionOptions.RemoteEndPoint.get -> System.Ne
 Titanium.Quic.ManagedQuicClientConnectionOptions.RemoteEndPoint.set -> void
 Titanium.Quic.ManagedQuicConnection
 Titanium.Quic.ManagedQuicConnection.AcceptInboundStreamAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Quic.ManagedQuicStream!>
+Titanium.Quic.ManagedQuicConnection.AcceptInboundUnidirectionalStreamAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Quic.ManagedQuicStream!>
 Titanium.Quic.ManagedQuicConnection.CloseAsync(long errorCode, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Titanium.Quic.ManagedQuicConnection.DisposeAsync() -> System.Threading.Tasks.ValueTask
 Titanium.Quic.ManagedQuicConnection.LocalEndPoint.get -> System.Net.IPEndPoint!

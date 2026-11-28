@@ -29,6 +29,14 @@ internal sealed class QuicFlow
 
     private readonly List<byte> _received = [];
 
+    private ulong _nextLocalBidi;
+
+    private ulong _nextLocalUni;
+
+    private ulong _nextRemoteBidi;
+
+    private ulong _nextRemoteUni;
+
     private bool _client;
 
     private ulong _peerMaxData;
@@ -160,7 +168,7 @@ internal sealed class QuicFlow
         return buffer.Push(offset, data, CryptoBufferExceeded, out ready, out error);
     }
 
-    internal bool AcceptStream(ulong streamId, ulong offset, ReadOnlySpan<byte> data, out ulong error)
+    internal bool AcceptStream(ulong streamId, ulong offset, ReadOnlySpan<byte> data, out ulong error, bool fin = false)
     {
         error = 0;
         if (SendOnly(streamId) || (LocallyInitiated(streamId) && !_streams.ContainsKey(streamId)))
@@ -183,6 +191,12 @@ internal sealed class QuicFlow
         }
 
         StreamFlow stream = Open(streamId);
+        if (fin && ((stream.PeerFinished && stream.FinalSize != end) || end < stream.ReceivedEnd))
+        {
+            error = FinalSizeError;
+            return false;
+        }
+
         if (end > stream.ReceiveLimit || _dataReceived - stream.ReceivedEnd + end > _localMaxData)
         {
             error = FlowControlError;
@@ -202,10 +216,54 @@ internal sealed class QuicFlow
 
         if (ready.Length > 0)
         {
+            stream.Delivered.AddRange(ready);
             _received.AddRange(ready);
         }
 
+        if (fin)
+        {
+            stream.PeerFinished = true;
+            stream.FinalSize = end;
+        }
+
         return true;
+    }
+
+    internal bool TryAllocateLocal(bool unidirectional, out ulong id) =>
+        TryAllocate(unidirectional, local: true, out id);
+
+    internal bool TryAllocateRemote(bool unidirectional, out ulong id) =>
+        TryAllocate(unidirectional, local: false, out id);
+
+    internal int CopyDelivered(ulong streamId, int offset, Span<byte> destination)
+    {
+        if (!_streams.TryGetValue(streamId, out StreamFlow? stream) || offset < 0 || offset >= stream.Delivered.Count || destination.IsEmpty)
+        {
+            return 0;
+        }
+
+        int count = Math.Min(destination.Length, stream.Delivered.Count - offset);
+        for (int i = 0; i < count; i++)
+        {
+            destination[i] = stream.Delivered[offset + i];
+        }
+
+        return count;
+    }
+
+    internal bool IsStreamReadClosed(ulong streamId, int offset)
+    {
+        if (!_streams.TryGetValue(streamId, out StreamFlow? stream) || offset < stream.Delivered.Count)
+        {
+            return false;
+        }
+
+        if (stream.Reset)
+        {
+            return true;
+        }
+
+        return stream.PeerFinished && (ulong)offset >= stream.FinalSize;
     }
 
     internal bool NoteReset(ulong streamId, ulong finalSize, out ulong error)
@@ -388,6 +446,48 @@ internal sealed class QuicFlow
         return _peerUni;
     }
 
+    private bool TryAllocate(bool unidirectional, bool local, out ulong id)
+    {
+        ulong next = unidirectional
+            ? (local ? _nextLocalUni : _nextRemoteUni)
+            : (local ? _nextLocalBidi : _nextRemoteBidi);
+        ulong limit = unidirectional
+            ? (local ? _peerMaxUni : _localMaxUni)
+            : (local ? _peerMaxBidi : _localMaxBidi);
+        if (next >= limit)
+        {
+            id = 0;
+            return false;
+        }
+
+        int low = unidirectional
+            ? (local ? (_client ? 2 : 3) : (_client ? 3 : 2))
+            : (local ? (_client ? 0 : 1) : (_client ? 1 : 0));
+        id = (next << 2) | (uint)low;
+        Open(id);
+        if (unidirectional)
+        {
+            if (local)
+            {
+                _nextLocalUni = next + 1;
+            }
+            else
+            {
+                _nextRemoteUni = next + 1;
+            }
+        }
+        else if (local)
+        {
+            _nextLocalBidi = next + 1;
+        }
+        else
+        {
+            _nextRemoteBidi = next + 1;
+        }
+
+        return true;
+    }
+
     private bool CanOpen(ulong streamId, bool peer)
     {
         int low = (int)(streamId & 3);
@@ -447,7 +547,11 @@ internal sealed class QuicFlow
 
         internal bool FinishRequested;
 
+        internal bool PeerFinished;
+
         internal List<byte> Pending { get; } = [];
+
+        internal List<byte> Delivered { get; } = [];
 
         internal List<byte> Ready { get; } = [];
 

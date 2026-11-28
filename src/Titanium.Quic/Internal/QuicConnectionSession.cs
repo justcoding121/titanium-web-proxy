@@ -139,6 +139,52 @@ internal sealed class QuicConnectionSession : IDisposable
         }
     }
 
+    internal bool TryOpenLocal(QuicStreamType type, out long id)
+    {
+        lock (_gate)
+        {
+            if (_core.TryAllocateLocal(type == QuicStreamType.Unidirectional, out ulong allocated))
+            {
+                id = (long)allocated;
+                return true;
+            }
+        }
+
+        id = 0;
+        return false;
+    }
+
+    internal bool TryAcceptRemote(QuicStreamType type, out long id)
+    {
+        lock (_gate)
+        {
+            if (_core.TryAllocateRemote(type == QuicStreamType.Unidirectional, out ulong allocated))
+            {
+                id = (long)allocated;
+                return true;
+            }
+        }
+
+        id = 0;
+        return false;
+    }
+
+    internal int CopyDelivered(ulong streamId, int offset, Span<byte> destination)
+    {
+        lock (_gate)
+        {
+            return _core.CopyDelivered(streamId, offset, destination);
+        }
+    }
+
+    internal bool IsStreamReadClosed(ulong streamId, int offset)
+    {
+        lock (_gate)
+        {
+            return _core.IsStreamReadClosed(streamId, offset);
+        }
+    }
+
     internal void Ping()
     {
         lock (_gate)

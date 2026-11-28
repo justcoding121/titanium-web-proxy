@@ -192,6 +192,14 @@ internal sealed partial class QuicConnectionCore : IDisposable
         return queued;
     }
 
+    internal bool TryAllocateLocal(bool unidirectional, out ulong id) => _flow.TryAllocateLocal(unidirectional, out id);
+
+    internal bool TryAllocateRemote(bool unidirectional, out ulong id) => _flow.TryAllocateRemote(unidirectional, out id);
+
+    internal int CopyDelivered(ulong streamId, int offset, Span<byte> destination) => _flow.CopyDelivered(streamId, offset, destination);
+
+    internal bool IsStreamReadClosed(ulong streamId, int offset) => _flow.IsStreamReadClosed(streamId, offset);
+
     internal void FinishStream(ulong streamId)
     {
         if (!HandshakeComplete || IsClosed || !_hasPath || _applicationSend is null || !_flow.TryFinishOffset(streamId, out ulong offset))
@@ -590,7 +598,7 @@ internal sealed partial class QuicConnectionCore : IDisposable
 
             if (frame.Kind == QuicFrameKind.Stream)
             {
-                if (!_flow.AcceptStream(frame.StreamId, frame.Offset, frame.Data, out ulong error))
+                if (!_flow.AcceptStream(frame.StreamId, frame.Offset, frame.Data, out ulong error, frame.Fin))
                 {
                     MarkClosed(error, send: true);
                     return false;
