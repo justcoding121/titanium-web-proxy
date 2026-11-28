@@ -469,6 +469,54 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3RedirectLimitStopsALongerChain()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/a";
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.MaxAutomaticRedirections = 1;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage limited = Request(address);
+        Task<HttpResponseMessage> pending = client.SendAsync(limited, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        await ServeRedirectChainAsync(server, finish: false, cancel.Token);
+        HttpRequestException ex = await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await pending);
+        Assert.AreEqual("The redirect limit was reached.", ex.Message);
+        await server.DisposeAsync();
+
+        accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler longer = Handler();
+        longer.MaxAutomaticRedirections = 2;
+        using HttpClient again = new(longer, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage allowed = Request(address);
+        pending = again.SendAsync(allowed, cancel.Token);
+        server = await accepted;
+        await ServeRedirectChainAsync(server, finish: true, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("landed", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual(new Version(3, 0), response.Version);
+        Assert.AreSame(allowed, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -2110,6 +2158,27 @@ public sealed class TitaniumHttpHandlerTests
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
         await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task ServeRedirectChainAsync(ManagedQuicConnection server, bool finish, CancellationToken cancellationToken)
+    {
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancellationToken);
+        string path = await ReadRequestPathAsync(hop, cancellationToken);
+        Assert.IsTrue(path.EndsWith("/a", StringComparison.Ordinal));
+        await WriteRedirectAsync(hop, "302", "/b", cancellationToken);
+        hop = await server.AcceptInboundStreamAsync(cancellationToken);
+        path = await ReadRequestPathAsync(hop, cancellationToken);
+        Assert.IsTrue(path.EndsWith("/b", StringComparison.Ordinal));
+        await WriteRedirectAsync(hop, "302", "/c", cancellationToken);
+        if (!finish)
+        {
+            return;
+        }
+
+        hop = await server.AcceptInboundStreamAsync(cancellationToken);
+        path = await ReadRequestPathAsync(hop, cancellationToken);
+        Assert.IsTrue(path.EndsWith("/c", StringComparison.Ordinal));
+        await ReplyTextAsync(hop, "landed", cancellationToken);
     }
 
     private static async Task<(string Method, string Path, string Body)> ReadPostedRequestAsync(
