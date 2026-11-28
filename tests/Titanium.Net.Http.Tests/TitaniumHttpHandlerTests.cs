@@ -546,6 +546,78 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3LargeUploadAndDownloadMatchTheirHashes()
+    {
+        byte[] upload = Pattern(1024 * 1024);
+        byte[] download = Pattern(1024 * 1024 + 17);
+        string uploadHash = Convert.ToHexString(SHA256.HashData(upload));
+        string downloadHash = Convert.ToHexString(SHA256.HashData(download));
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/blob")
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new ByteArrayContent(upload),
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream inbound = await server.AcceptInboundStreamAsync(cancel.Token);
+        using IncrementalHash received = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        while (await ReadTypedFrameAsync(inbound, cancel.Token) is (ulong type, byte[] payload))
+        {
+            if (type == Http3FrameType.Data)
+            {
+                received.AppendData(payload);
+            }
+        }
+
+        byte[] block = QpackEncoder.Encode([(":status", "200"), ("x-upload-sha256", Convert.ToHexString(received.GetHashAndReset()))]);
+        await WriteFrameAsync(inbound, Http3FrameType.Headers, block, cancel.Token);
+        Task writing = WriteDownloadAsync(inbound, download, cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(10), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(response.Headers.TryGetValues("x-upload-sha256", out IEnumerable<string>? hashes));
+        Assert.AreEqual(uploadHash, hashes!.Single());
+        await using Stream body = await response.Content.ReadAsStreamAsync(cancel.Token);
+        using IncrementalHash got = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        byte[] chunk = new byte[8192];
+        while (true)
+        {
+            int count = await body.ReadAsync(chunk, cancel.Token);
+            if (count == 0)
+            {
+                break;
+            }
+
+            got.AppendData(chunk.AsSpan(0, count));
+        }
+
+        Assert.AreEqual(downloadHash, Convert.ToHexString(got.GetHashAndReset()));
+        Assert.AreSame(request, response.RequestMessage);
+        await writing;
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11AgainstLoopbackReturnsTheBody()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
@@ -925,6 +997,51 @@ public sealed class TitaniumHttpHandlerTests
         await WriteFrameAsync(request, Http3FrameType.Headers, block, cancellationToken);
         await WriteFrameAsync(request, Http3FrameType.Data, "ok"u8.ToArray(), cancellationToken);
         await request.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task WriteDownloadAsync(ManagedQuicStream stream, byte[] download, CancellationToken cancellationToken)
+    {
+        int offset = 0;
+        while (offset < download.Length)
+        {
+            int count = Math.Min(16 * 1024, download.Length - offset);
+            byte[] slice = new byte[count];
+            download.AsSpan(offset, count).CopyTo(slice);
+            await WriteFrameAsync(stream, Http3FrameType.Data, slice, cancellationToken);
+            offset += count;
+        }
+
+        await stream.CompleteWritesAsync(cancellationToken);
+    }
+
+    private static async Task<(ulong Type, byte[] Payload)?> ReadTypedFrameAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        ulong? type = await Http3VarInt.ReadAsync(stream, cancellationToken);
+        if (type is null)
+        {
+            return null;
+        }
+
+        ulong? length = await Http3VarInt.ReadAsync(stream, cancellationToken);
+        if (length is null)
+        {
+            return null;
+        }
+
+        byte[] payload = new byte[(int)length.Value];
+        int read = 0;
+        while (read < payload.Length)
+        {
+            int count = await stream.ReadAsync(payload.AsMemory(read), cancellationToken);
+            if (count == 0)
+            {
+                return null;
+            }
+
+            read += count;
+        }
+
+        return (type.Value, payload);
     }
 
     private static async Task<byte[]?> ReadFrameAsync(Stream stream, CancellationToken cancellationToken)

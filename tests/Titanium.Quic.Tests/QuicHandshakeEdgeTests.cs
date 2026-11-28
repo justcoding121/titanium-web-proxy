@@ -29,7 +29,7 @@ public sealed class QuicHandshakeEdgeTests
         core.RetireConnectionId(1);
         core.SendKeepAlive();
         core.SendPathChallenge(path);
-        core.GrantStreamCredit(0, 100);
+        core.GrantStreamCredit(0, 100, 100);
         Assert.IsFalse(core.SendPathMtuProbe());
         Assert.IsFalse(core.SendPathMtuProbe(confirm: true));
         core.ReportTunnelMaximum(100);

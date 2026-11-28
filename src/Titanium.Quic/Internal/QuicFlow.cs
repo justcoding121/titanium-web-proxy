@@ -120,6 +120,52 @@ internal sealed class QuicFlow
         return before + data.Length - stream.Pending.Count;
     }
 
+    internal bool TryExtendReadWindow(ulong streamId, int consumed, out ulong streamLimit, out ulong connectionLimit)
+    {
+        streamLimit = 0;
+        connectionLimit = 0;
+        if (consumed <= 0 || !_streams.TryGetValue(streamId, out StreamFlow? stream))
+        {
+            return false;
+        }
+
+        ulong end = (ulong)consumed;
+        if (end <= stream.AppConsumed)
+        {
+            return false;
+        }
+
+        stream.AppConsumed = end;
+        const ulong window = 1UL << 20;
+        ulong half = window / 2;
+        bool streamTight = stream.ReceiveLimit <= end || stream.ReceiveLimit - end < half;
+        ulong consumedAll = 0;
+        foreach (StreamFlow item in _streams.Values)
+        {
+            consumedAll += item.AppConsumed;
+        }
+
+        bool connectionTight = _localMaxData <= consumedAll || _localMaxData - consumedAll < half;
+        if (!streamTight && !connectionTight)
+        {
+            return false;
+        }
+
+        streamLimit = end + window;
+        if (streamLimit < stream.ReceiveLimit)
+        {
+            streamLimit = stream.ReceiveLimit;
+        }
+
+        connectionLimit = consumedAll + window;
+        if (connectionLimit < _localMaxData)
+        {
+            connectionLimit = _localMaxData;
+        }
+
+        return streamLimit > stream.ReceiveLimit || connectionLimit > _localMaxData;
+    }
+
     internal bool RaiseSend(ulong? maxData, ulong? streamId, ulong? maxStreamData)
     {
         if (maxData is ulong data && data > _peerMaxData)
@@ -540,6 +586,8 @@ internal sealed class QuicFlow
         internal ulong ReceivedEnd;
 
         internal ulong FinalSize;
+
+        internal ulong AppConsumed;
 
         internal bool Reset;
 

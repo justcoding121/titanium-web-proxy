@@ -91,6 +91,8 @@ public sealed class ManagedQuicStream : Stream
             if (count > 0)
             {
                 _offset += count;
+                _session.ExtendReadWindow((ulong)Id, _offset);
+                await _session.FlushAsync().ConfigureAwait(false);
                 return count;
             }
 

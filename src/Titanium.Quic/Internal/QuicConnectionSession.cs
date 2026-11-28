@@ -76,6 +76,19 @@ internal sealed class QuicConnectionSession : IDisposable
         }
     }
 
+    internal void ExtendReadWindow(ulong streamId, int consumed)
+    {
+        lock (_gate)
+        {
+            if (!_core.TryExtendReadWindow(streamId, consumed, out ulong streamLimit, out ulong connectionLimit))
+            {
+                return;
+            }
+
+            _core.GrantStreamCredit(streamId, streamLimit, connectionLimit);
+        }
+    }
+
     internal bool TakePendingHello(out string serverName)
     {
         lock (_gate)
@@ -214,7 +227,7 @@ internal sealed class QuicConnectionSession : IDisposable
             }
 
             int queued = _core.SendStream(streamId, data);
-            if (queued != data.Length)
+            if (queued != data.Length && !_core.StreamSendBlocked)
             {
                 throw new QuicException(QuicError.InternalError, null, "The stream did not accept the write.");
             }

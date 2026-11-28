@@ -223,29 +223,32 @@ internal sealed partial class QuicConnectionCore : IDisposable
         }
     }
 
-    internal void GrantStreamCredit(ulong streamId, ulong limit)
+    internal void GrantStreamCredit(ulong streamId, ulong streamLimit, ulong connectionLimit)
     {
         if (_applicationSend is null)
         {
             return;
         }
 
-        _flow.Grant(streamId, limit, limit);
+        _flow.Grant(streamId, streamLimit, connectionLimit);
         Span<byte> frame = stackalloc byte[32];
-        var maxData = new QuicFrame { Kind = QuicFrameKind.MaxData, Limit = limit };
+        var maxData = new QuicFrame { Kind = QuicFrameKind.MaxData, Limit = connectionLimit };
         int count = QuicFrameWriter.Write(in maxData, default, frame);
         if (count > 0)
         {
             SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
         }
 
-        var maxStream = new QuicFrame { Kind = QuicFrameKind.MaxStreamData, StreamId = streamId, Limit = limit };
+        var maxStream = new QuicFrame { Kind = QuicFrameKind.MaxStreamData, StreamId = streamId, Limit = streamLimit };
         count = QuicFrameWriter.Write(in maxStream, default, frame);
         if (count > 0)
         {
             SealAndStage(QuicPacketKind.OneRtt, _applicationSend, frame[..count], 0);
         }
     }
+
+    internal bool TryExtendReadWindow(ulong streamId, int consumed, out ulong streamLimit, out ulong connectionLimit) =>
+        _flow.TryExtendReadWindow(streamId, consumed, out streamLimit, out connectionLimit);
 
     internal void InjectApplicationPayload(ReadOnlySpan<byte> payload) => TakePayload(QuicPacketKind.OneRtt, payload);
 

@@ -29,7 +29,7 @@ public sealed class QuicFlowTests
         Assert.IsTrue(client.StreamSendBlocked);
         Pump(client, server);
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4 }, server.ReceivedStream);
-        server.GrantStreamCredit(0, 8);
+        server.GrantStreamCredit(0, 8, 8);
         Pump(client, server);
         Assert.IsFalse(client.StreamSendBlocked);
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, server.ReceivedStream);
