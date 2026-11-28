@@ -330,17 +330,23 @@ internal static class Http3Client
             return;
         }
 
-        await using Stream input = await request.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        byte[] chunk = new byte[Http3FrameCodec.RelayUnitBytes];
-        while (true)
+        using var buffered = new MemoryStream();
+        await request.Content.CopyToAsync(buffered, cancellationToken).ConfigureAwait(false);
+        if (buffered.Length == 0)
         {
-            int count = await input.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
-            if (count == 0)
-            {
-                return;
-            }
+            return;
+        }
 
+        byte[] chunk = new byte[Http3FrameCodec.RelayUnitBytes];
+        int offset = 0;
+        int remaining = (int)buffered.Length;
+        while (remaining > 0)
+        {
+            int count = Math.Min(chunk.Length, remaining);
+            buffered.GetBuffer().AsSpan(offset, count).CopyTo(chunk);
             await WriteFrameAsync(stream, Http3FrameType.Data, chunk.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
+            offset += count;
+            remaining -= count;
         }
     }
 
