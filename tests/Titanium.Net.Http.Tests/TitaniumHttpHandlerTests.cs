@@ -2937,6 +2937,37 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http2PostIsRetriedWhenAlpnSelectsHttp11()
+    {
+        int connections = 0;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapPost("/hello", async (HttpRequest httpRequest) =>
+            {
+                using StreamReader reader = new(httpRequest.Body);
+                string body = await reader.ReadToEndAsync();
+                return Results.Text(httpRequest.Protocol + ":" + body);
+            }),
+            () => Interlocked.Increment(ref connections),
+            HttpProtocols.Http1);
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version20,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+            Content = new StringContent("payload"),
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("HTTP/1.1:payload", body);
+        Assert.AreEqual(2, connections);
+        Assert.AreSame(request, response.RequestMessage);
+        Assert.AreEqual("https", response.RequestMessage!.RequestUri!.Scheme);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http2OrLowerRetriesWhenTheServerRejectsTheScheme()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
@@ -3598,9 +3629,12 @@ public sealed class TitaniumHttpHandlerTests
         public int Port { get; }
 
         public static Task<LoopbackServer> StartAsync(Action<WebApplication> map) =>
-            StartAsync(map, null);
+            StartAsync(map, null, HttpProtocols.Http1AndHttp2);
 
-        public static async Task<LoopbackServer> StartAsync(Action<WebApplication> map, Action? onConnection)
+        public static Task<LoopbackServer> StartAsync(Action<WebApplication> map, Action? onConnection) =>
+            StartAsync(map, onConnection, HttpProtocols.Http1AndHttp2);
+
+        public static async Task<LoopbackServer> StartAsync(Action<WebApplication> map, Action? onConnection, HttpProtocols protocols)
         {
             X509Certificate2 certificate = CreateCertificate();
             try
@@ -3620,7 +3654,7 @@ public sealed class TitaniumHttpHandlerTests
                             });
                         }
 
-                        listen.Protocols = HttpProtocols.Http1AndHttp2;
+                        listen.Protocols = protocols;
                         listen.UseHttps(certificate);
                     });
                 });
