@@ -1443,6 +1443,48 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11RedirectCopiesACookieHeaderOnlyWhenCookiesAreOff()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
+        {
+            app.MapGet("/from", (HttpContext context) =>
+            {
+                context.Response.Redirect("/land");
+                return Task.CompletedTask;
+            });
+            app.MapGet("/land", (HttpRequest request) =>
+            {
+                string cookie = request.Headers.Cookie.ToString();
+                return cookie.Length == 0 ? "none" : cookie;
+            });
+        });
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/from";
+        using TitaniumHttpHandler manual = Handler();
+        manual.UseCookies = false;
+        using HttpClient manualClient = new(manual, disposeHandler: false);
+        using HttpRequestMessage manualRequest = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        manualRequest.Headers.TryAddWithoutValidation("Cookie", "sid=manual");
+        using HttpResponseMessage manualResponse = await manualClient.SendAsync(manualRequest);
+        Assert.AreEqual("sid=manual", await manualResponse.Content.ReadAsStringAsync());
+        using TitaniumHttpHandler stored = Handler();
+        stored.UseCookies = true;
+        using HttpClient storedClient = new(stored, disposeHandler: false);
+        using HttpRequestMessage storedRequest = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        storedRequest.Headers.TryAddWithoutValidation("Cookie", "sid=manual");
+        using HttpResponseMessage storedResponse = await storedClient.SendAsync(storedRequest);
+        Assert.AreEqual("none", await storedResponse.Content.ReadAsStringAsync());
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11LargeUploadAndDownloadMatchTheirHashes()
     {
         byte[] upload = Pattern(1024 * 1024);
