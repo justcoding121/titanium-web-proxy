@@ -22,10 +22,12 @@
   <ItemGroup>
     <!-- HTTP/3 origin (QuicListener) and the test certificate authority, shared with the Core integration tests. -->
     <Compile Include="..\Titanium.TestKit\QuicTestHelper.cs" Link="Shared\QuicTestHelper.cs" />
+    <Compile Include="..\Titanium.Web.Proxy.IntegrationTests\Http3CodecUsings.cs" Link="Shared\Http3CodecUsings.cs" />
     <Compile Include="..\Titanium.Web.Proxy.IntegrationTests\Helpers\QuicHttp3Helpers.cs" Link="Shared\QuicHttp3Helpers.cs" />
     <Compile Include="..\Titanium.Web.Proxy.IntegrationTests\Setup\TestCertificateAuthority.cs" Link="Shared\TestCertificateAuthority.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Inspector\Titanium.Inspector.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Http3\Titanium.Http3.csproj" />
   </ItemGroup>
 </Project>
