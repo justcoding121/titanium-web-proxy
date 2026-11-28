@@ -36,6 +36,7 @@ namespace Titanium.Net.Http;
 /// Cancelling that read stops it while it is waiting for the next frame.
 /// Cancelling an HTTP/1.1 body read stops it while the rest of the body is still waiting.
 /// An HTTP/1.1 connection is reused until <see cref="PooledConnectionLifetime"/> elapses. The next request opens another connection.
+/// While that connection is busy, <see cref="MaxConnectionsPerServer"/> of 1 keeps the next HTTP/1.1 request waiting.
 /// One connection is reused for an authority until 16 request streams, the idle timeout, or the connection lifetime.
 /// A further request opens another connection, up to <see cref="MaxConnectionsPerServer"/>.
 /// A GOAWAY on the peer's control stream stops new requests on that connection and closes it once nothing is in flight.

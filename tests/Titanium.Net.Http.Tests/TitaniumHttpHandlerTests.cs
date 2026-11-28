@@ -2054,6 +2054,50 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11WaitsInsteadOfPassingMaxConnectionsPerServer()
+    {
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int connections = 0;
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            app => app.MapGet("/hold", async () =>
+            {
+                started.TrySetResult();
+                await release.Task;
+                return Results.Text("done");
+            }),
+            () => Interlocked.Increment(ref connections));
+        using TitaniumHttpHandler handler = Handler();
+        handler.MaxConnectionsPerServer = 1;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        string address = "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/hold";
+        using HttpRequestMessage first = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> firstPending = client.SendAsync(first);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.AreEqual(1, connections);
+        using HttpRequestMessage second = new(HttpMethod.Get, address)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> secondPending = client.SendAsync(second);
+        await Task.Delay(TimeSpan.FromMilliseconds(400));
+        Assert.AreEqual(1, connections);
+        Assert.IsFalse(secondPending.IsCompleted);
+        release.SetResult();
+        using HttpResponseMessage firstResponse = await firstPending.WaitAsync(TimeSpan.FromSeconds(5));
+        using HttpResponseMessage secondResponse = await secondPending.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.AreEqual("done", await firstResponse.Content.ReadAsStringAsync());
+        Assert.AreEqual("done", await secondResponse.Content.ReadAsStringAsync());
+        Assert.AreEqual(1, connections);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11RequestIsCleartext()
     {
         using var tcp = new TcpListener(IPAddress.Loopback, 0);
