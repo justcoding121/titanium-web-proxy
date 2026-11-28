@@ -931,6 +931,63 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3CleartextHopStoresASetCookie()
+    {
+        using var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        int clearPort = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        string clearHost = "http://127.0.0.1:" + clearPort.ToString(CultureInfo.InvariantCulture);
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<TcpClient> clearAccepted = tcp.AcceptTcpClientAsync(cancel.Token).AsTask();
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.UseProxy = false;
+        handler.UseCookies = true;
+        CookieContainer cookies = new();
+        handler.CookieContainer = cookies;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = Request("https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/from");
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        string path = await ReadRequestPathAsync(hop, cancel.Token);
+        Assert.IsTrue(path.EndsWith("/from", StringComparison.Ordinal));
+        await WriteRedirectAsync(hop, "302", clearHost + "/land", cancel.Token);
+        using (TcpClient clear = await clearAccepted)
+        await using (NetworkStream stream = clear.GetStream())
+        {
+            string headers = await ReadHttpHeadersAsync(stream, cancel.Token);
+            Assert.IsTrue(headers.StartsWith("GET /land HTTP/1.1\r\n", StringComparison.Ordinal), headers);
+            await stream.WriteAsync("HTTP/1.1 200 OK\r\nSet-Cookie: sid=fromhop; Path=/\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"u8.ToArray(), cancel.Token);
+        }
+
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("ok", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual("fromhop", cookies.GetCookies(new Uri(clearHost + "/")).FirstOrDefault(static cookie => cookie.Name == "sid")?.Value);
+        await server.DisposeAsync();
+
+        Task<TcpClient> againAccepted = tcp.AcceptTcpClientAsync(cancel.Token).AsTask();
+        using HttpRequestMessage again = new(HttpMethod.Get, clearHost + "/again")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> second = client.SendAsync(again, cancel.Token);
+        using TcpClient next = await againAccepted;
+        await using NetworkStream nextStream = next.GetStream();
+        string nextHeaders = await ReadHttpHeadersAsync(nextStream, cancel.Token);
+        Assert.IsTrue(nextHeaders.StartsWith("GET /again HTTP/1.1\r\n", StringComparison.Ordinal), nextHeaders);
+        Assert.IsTrue(nextHeaders.Contains("Cookie: sid=fromhop", StringComparison.Ordinal), nextHeaders);
+        await nextStream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nagain"u8.ToArray(), cancel.Token);
+        using HttpResponseMessage secondResponse = await second.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("again", await secondResponse.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(again, secondResponse.RequestMessage);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3RedirectStopsWhenTheRequestIsCancelled()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
