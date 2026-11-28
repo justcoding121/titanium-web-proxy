@@ -1977,6 +1977,36 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http11RequestIsCleartext()
+    {
+        using var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        int port = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task<TcpClient> accepted = tcp.AcceptTcpClientAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        handler.UseProxy = false;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Get, "http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + "/hello")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        using TcpClient clear = await accepted;
+        await using NetworkStream stream = clear.GetStream();
+        string headers = await ReadHttpHeadersAsync(stream, cancel.Token);
+        Assert.IsTrue(headers.StartsWith("GET /hello HTTP/1.1\r\n", StringComparison.Ordinal), headers);
+        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nplain"u8.ToArray(), cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("plain", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreSame(request, response.RequestMessage);
+        Assert.AreEqual("http", response.RequestMessage!.RequestUri!.Scheme);
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http11RedirectsAcrossSchemesAndKeepsTheCookie()
     {
         await using LoopbackServer server = await LoopbackServer.StartAsync(static app =>
