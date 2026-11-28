@@ -36,20 +36,23 @@ internal sealed class Http3Pool : IDisposable
             Entry entry = await RentAsync(handler, uri, authority, cancellationToken).ConfigureAwait(false);
             try
             {
-                return await Http3Client.ExchangeAsync(entry.Connection, request, uri, cancellationToken).ConfigureAwait(false);
+                return await Http3Client.ExchangeAsync(
+                    entry.Connection,
+                    request,
+                    uri,
+                    () => ReleaseAsync(entry),
+                    cancellationToken).ConfigureAwait(false);
             }
             catch (QuicException ex) when (IsStreamLimit(ex) && retries++ < 1)
             {
                 await RetireAsync(entry).ConfigureAwait(false);
+                await ReleaseAsync(entry).ConfigureAwait(false);
             }
             catch
             {
                 await RetireAsync(entry).ConfigureAwait(false);
-                throw;
-            }
-            finally
-            {
                 await ReleaseAsync(entry).ConfigureAwait(false);
+                throw;
             }
         }
     }
@@ -260,9 +263,14 @@ internal sealed class Http3Pool : IDisposable
         }
     }
 
-    private async Task ReleaseAsync(Entry entry)
-    {
-        bool dispose = false;
+        private async Task ReleaseAsync(Entry entry)
+        {
+            if (Interlocked.Exchange(ref entry.Released, 1) != 0)
+            {
+                return;
+            }
+
+            bool dispose = false;
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -320,6 +328,8 @@ internal sealed class Http3Pool : IDisposable
         internal DateTimeOffset LastUsed { get; set; }
 
         internal bool Retired { get; set; }
+
+        internal int Released;
 
         internal bool TryMarkDisposed() => Interlocked.Exchange(ref _disposed, 1) == 0;
     }

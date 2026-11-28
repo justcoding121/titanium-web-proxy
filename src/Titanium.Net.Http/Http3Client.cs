@@ -75,12 +75,13 @@ internal static class Http3Client
         ManagedQuicConnection connection,
         HttpRequestMessage request,
         Uri uri,
+        Func<Task> release,
         CancellationToken cancellationToken)
     {
         ManagedQuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false);
         await WriteRequestAsync(stream, request, uri, cancellationToken).ConfigureAwait(false);
         await stream.CompleteWritesAsync(cancellationToken).ConfigureAwait(false);
-        HttpResponseMessage response = await ReadResponseAsync(stream, cancellationToken).ConfigureAwait(false);
+        HttpResponseMessage response = await ReadResponseAsync(stream, release, cancellationToken).ConfigureAwait(false);
         response.RequestMessage = request;
         response.Version = HttpVersion.Version30;
         return response;
@@ -221,51 +222,39 @@ internal static class Http3Client
         }
     }
 
-    private static async Task<HttpResponseMessage> ReadResponseAsync(ManagedQuicStream stream, CancellationToken cancellationToken)
+    private static async Task<HttpResponseMessage> ReadResponseAsync(
+        ManagedQuicStream stream,
+        Func<Task> release,
+        CancellationToken cancellationToken)
     {
         var response = new HttpResponseMessage();
-        var body = new MemoryStream();
-        List<(string Name, string Value)>? headers = null;
         while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is Frame frame)
         {
-            if (frame.Type == Http3FrameType.Headers)
+            if (frame.Type == Http3FrameType.Data)
             {
-                List<(string Name, string Value)> fields = QpackDecoder.Decode(frame.Payload);
-                if (headers is null)
-                {
-                    headers = fields;
-                }
-                else
-                {
-                    AddFields(response.TrailingHeaders, null, fields);
-                }
+                throw new HttpRequestException("The HTTP/3 response sent a body before headers.");
+            }
 
+            if (frame.Type != Http3FrameType.Headers)
+            {
                 continue;
             }
 
-            if (frame.Type == Http3FrameType.Data)
+            List<(string Name, string Value)> fields = QpackDecoder.Decode(frame.Payload);
+            response.Content = new StreamContent(new Http3ResponseBody(stream, response, release));
+            foreach ((string name, string value) in fields)
             {
-                body.Write(frame.Payload);
+                if (string.Equals(name, ":status", StringComparison.Ordinal))
+                {
+                    response.StatusCode = (HttpStatusCode)int.Parse(value, CultureInfo.InvariantCulture);
+                }
             }
+
+            AddFields(response.Headers, response.Content.Headers, fields);
+            return response;
         }
 
-        if (headers is null)
-        {
-            throw new HttpRequestException("The HTTP/3 response had no headers.");
-        }
-
-        body.Position = 0;
-        response.Content = new StreamContent(body);
-        foreach ((string name, string value) in headers)
-        {
-            if (string.Equals(name, ":status", StringComparison.Ordinal))
-            {
-                response.StatusCode = (HttpStatusCode)int.Parse(value, CultureInfo.InvariantCulture);
-            }
-        }
-
-        AddFields(response.Headers, response.Content.Headers, headers);
-        return response;
+        throw new HttpRequestException("The HTTP/3 response had no headers.");
     }
 
     private static void AddFields(HttpHeaders target, HttpHeaders? contentHeaders, List<(string Name, string Value)> fields)
@@ -356,6 +345,108 @@ internal static class Http3Client
         internal ulong Type { get; }
 
         internal byte[] Payload { get; }
+    }
+
+    private sealed class Http3ResponseBody : Stream
+    {
+        private readonly ManagedQuicStream _stream;
+        private readonly HttpResponseMessage _response;
+        private readonly Func<Task> _release;
+        private byte[]? _pending;
+        private int _offset;
+        private int _finished;
+
+        internal Http3ResponseBody(ManagedQuicStream stream, HttpResponseMessage response, Func<Task> release)
+        {
+            _stream = stream;
+            _response = response;
+            _release = release;
+        }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count), CancellationToken.None).AsTask().GetAwaiter().GetResult();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            while (true)
+            {
+                if (_pending is not null && _offset < _pending.Length)
+                {
+                    int count = Math.Min(buffer.Length, _pending.Length - _offset);
+                    _pending.AsSpan(_offset, count).CopyTo(buffer.Span);
+                    _offset += count;
+                    return count;
+                }
+
+                if (_finished != 0)
+                {
+                    return 0;
+                }
+
+                Frame? frame = await ReadFrameAsync(_stream, cancellationToken).ConfigureAwait(false);
+                if (frame is null)
+                {
+                    await FinishAsync().ConfigureAwait(false);
+                    return 0;
+                }
+
+                if (frame.Value.Type == Http3FrameType.Headers)
+                {
+                    AddFields(_response.TrailingHeaders, null, QpackDecoder.Decode(frame.Value.Payload));
+                    continue;
+                }
+
+                if (frame.Value.Type == Http3FrameType.Data && frame.Value.Payload.Length > 0)
+                {
+                    _pending = frame.Value.Payload;
+                    _offset = 0;
+                }
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                FinishAsync().GetAwaiter().GetResult();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        private Task FinishAsync()
+        {
+            if (Interlocked.Exchange(ref _finished, 1) != 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            return _release();
+        }
     }
 }
 
