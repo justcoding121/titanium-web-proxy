@@ -3100,10 +3100,44 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreSame(request, response.RequestMessage);
     }
 
-    private static X509Certificate2 CreateClientCertificate()
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11SelectionCallbackChoosesTheClientCertificate()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/who", (HttpContext context) =>
+            {
+                string subject = context.Connection.ClientCertificate?.Subject ?? "none";
+                return Results.Text(subject);
+            }),
+            null,
+            HttpProtocols.Http1,
+            requestClientCertificate: true);
+        using X509Certificate2 first = CreateClientCertificate("first");
+        using X509Certificate2 second = CreateClientCertificate("second");
+        using TitaniumHttpHandler handler = Handler();
+        handler.SslOptions.ClientCertificates = new X509CertificateCollection { first, second };
+        handler.SslOptions.LocalCertificateSelectionCallback = static (_, _, localCertificates, _, _) => localCertificates[1];
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/who")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.IsTrue(body.Contains("CN=second", StringComparison.Ordinal), body);
+        Assert.IsFalse(body.Contains("CN=first", StringComparison.Ordinal), body);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
+    private static X509Certificate2 CreateClientCertificate() => CreateClientCertificate("client");
+
+    private static X509Certificate2 CreateClientCertificate(string commonName)
     {
         using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        CertificateRequest request = new("CN=client", key, HashAlgorithmName.SHA256);
+        CertificateRequest request = new("CN=" + commonName, key, HashAlgorithmName.SHA256);
         using X509Certificate2 created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
         return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pfx), password: null, X509KeyStorageFlags.Exportable);
     }
