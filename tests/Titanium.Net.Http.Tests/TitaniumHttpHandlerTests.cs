@@ -3132,6 +3132,38 @@ public sealed class TitaniumHttpHandlerTests
         Assert.AreSame(request, response.RequestMessage);
     }
 
+    [TestMethod]
+    [Timeout(60000)]
+    public async Task Http11SkipsAClientCertificateWithoutAPrivateKey()
+    {
+        await using LoopbackServer server = await LoopbackServer.StartAsync(
+            static app => app.MapGet("/who", (HttpContext context) =>
+            {
+                string subject = context.Connection.ClientCertificate?.Subject ?? "none";
+                return Results.Text(subject);
+            }),
+            null,
+            HttpProtocols.Http1,
+            requestClientCertificate: true);
+        using X509Certificate2 source = CreateClientCertificate("bare");
+        using X509Certificate2 bare = X509CertificateLoader.LoadCertificate(source.Export(X509ContentType.Cert));
+        using X509Certificate2 kept = CreateClientCertificate("kept");
+        using TitaniumHttpHandler handler = Handler();
+        handler.SslOptions.ClientCertificates = new X509CertificateCollection { bare, kept };
+        using HttpClient client = new(handler, disposeHandler: false);
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://127.0.0.1:" + server.Port.ToString(CultureInfo.InvariantCulture) + "/who")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.IsTrue(body.Contains("CN=kept", StringComparison.Ordinal), body);
+        Assert.IsFalse(body.Contains("CN=bare", StringComparison.Ordinal), body);
+        Assert.AreSame(request, response.RequestMessage);
+    }
+
     private static X509Certificate2 CreateClientCertificate() => CreateClientCertificate("client");
 
     private static X509Certificate2 CreateClientCertificate(string commonName)
