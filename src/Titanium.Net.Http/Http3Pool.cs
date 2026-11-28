@@ -50,13 +50,14 @@ internal sealed class Http3Pool : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
             Entry entry = await RentAsync(handler, uri, authority, port, cancellationToken).ConfigureAwait(false);
+            Flight flight = new();
             try
             {
                 return await Http3Client.ExchangeAsync(
                     entry.Connection,
                     request,
                     uri,
-                    () => ReleaseAsync(entry),
+                    () => ReleaseAsync(entry, flight),
                     entry.Qpack,
                     entry.Encoder,
                     cancellationToken).ConfigureAwait(false);
@@ -64,12 +65,12 @@ internal sealed class Http3Pool : IDisposable
             catch (QuicException ex) when (IsStreamLimit(ex) && retries++ < 1)
             {
                 await RetireAsync(entry).ConfigureAwait(false);
-                await ReleaseAsync(entry).ConfigureAwait(false);
+                await ReleaseAsync(entry, flight).ConfigureAwait(false);
             }
             catch
             {
                 await RetireAsync(entry).ConfigureAwait(false);
-                await ReleaseAsync(entry).ConfigureAwait(false);
+                await ReleaseAsync(entry, flight).ConfigureAwait(false);
                 throw;
             }
         }
@@ -319,14 +320,14 @@ internal sealed class Http3Pool : IDisposable
         }
     }
 
-        private async Task ReleaseAsync(Entry entry)
+    private async Task ReleaseAsync(Entry entry, Flight flight)
+    {
+        if (!flight.TryClaim())
         {
-            if (Interlocked.Exchange(ref entry.Released, 1) != 0)
-            {
-                return;
-            }
+            return;
+        }
 
-            bool dispose = false;
+        bool dispose = false;
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -363,6 +364,13 @@ internal sealed class Http3Pool : IDisposable
     private static bool IsStreamLimit(QuicException exception) =>
         string.Equals(exception.Message, "The peer's stream limit is exhausted.", StringComparison.Ordinal);
 
+    private sealed class Flight
+    {
+        private int _released;
+
+        internal bool TryClaim() => Interlocked.Exchange(ref _released, 1) == 0;
+    }
+
     private sealed class Entry
     {
         private int _disposed;
@@ -394,8 +402,6 @@ internal sealed class Http3Pool : IDisposable
         internal DateTimeOffset LastUsed { get; set; }
 
         internal bool Retired { get; set; }
-
-        internal int Released;
 
         internal bool TryMarkDisposed()
         {

@@ -625,6 +625,75 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3WaitsInsteadOfPassingMaxConnectionsPerServer()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ManagedQuicListener.ListenAsync(new ManagedQuicListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Loopback, 0),
+            AllowManagedStackUnderFips = true,
+            ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new ManagedQuicServerConnectionOptions
+            {
+                AllowManagedStackUnderFips = true,
+                ServerAuthenticationOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ApplicationProtocols = new List<SslApplicationProtocol> { new("h3") },
+                },
+            }),
+        });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/hello";
+        using TitaniumHttpHandler handler = Handler();
+        handler.MaxConnectionsPerServer = 1;
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        Task<ManagedQuicConnection> firstAccepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        ManagedQuicConnection firstServer = null!;
+        for (int i = 0; i < Http3Pool.StreamCap - 1; i++)
+        {
+            using HttpRequestMessage request = Request(address);
+            Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+            if (i == 0)
+            {
+                firstServer = await firstAccepted;
+            }
+
+            await ReplyAsync(firstServer, cancel.Token);
+            using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        using HttpRequestMessage heldRequest = Request(address);
+        Task<HttpResponseMessage> heldPending = client.SendAsync(heldRequest, cancel.Token);
+        ManagedQuicStream held = await firstServer.AcceptInboundStreamAsync(cancel.Token);
+        using var probe = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
+        Task<ManagedQuicConnection> refused = listener.AcceptConnectionAsync(probe.Token).AsTask();
+        using HttpRequestMessage extra = Request(address);
+        Task<HttpResponseMessage> extraPending = client.SendAsync(extra, cancel.Token);
+        try
+        {
+            ManagedQuicConnection unexpected = await refused;
+            await unexpected.DisposeAsync();
+            Assert.Fail("A second HTTP/3 connection was opened while the first was busy.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        Task<ManagedQuicConnection> replacement = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        await ReplyOnAcceptedAsync(held, cancel.Token);
+        using HttpResponseMessage heldResponse = await heldPending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, heldResponse.StatusCode);
+        ManagedQuicConnection secondServer = await replacement.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        await ReplyAsync(secondServer, cancel.Token);
+        using HttpResponseMessage extraResponse = await extraPending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual(HttpStatusCode.OK, extraResponse.StatusCode);
+        await firstServer.DisposeAsync();
+        await secondServer.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3BodyReadStopsWhenCancelled()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
@@ -1110,6 +1179,11 @@ public sealed class TitaniumHttpHandlerTests
     private static async Task ReplyAsync(ManagedQuicConnection server, CancellationToken cancellationToken)
     {
         ManagedQuicStream request = await server.AcceptInboundStreamAsync(cancellationToken);
+        await ReplyOnAcceptedAsync(request, cancellationToken);
+    }
+
+    private static async Task ReplyOnAcceptedAsync(ManagedQuicStream request, CancellationToken cancellationToken)
+    {
         while (await ReadFrameAsync(request, cancellationToken) is not null)
         {
         }
