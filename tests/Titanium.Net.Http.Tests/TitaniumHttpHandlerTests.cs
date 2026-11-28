@@ -667,6 +667,44 @@ public sealed class TitaniumHttpHandlerTests
 
     [TestMethod]
     [Timeout(60000)]
+    public async Task Http3MultipleChoicesTurnsPostIntoGet()
+    {
+        using X509Certificate2 certificate = CreateHttp3Certificate();
+        await using ManagedQuicListener listener = await ListenHttp3Async(certificate);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        string address = "https://127.0.0.1:" + listener.LocalEndPoint.Port.ToString(CultureInfo.InvariantCulture) + "/choice";
+        Task<ManagedQuicConnection> accepted = listener.AcceptConnectionAsync(cancel.Token).AsTask();
+        using TitaniumHttpHandler handler = Handler();
+        using HttpClient client = new(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(20) };
+        using HttpRequestMessage request = new(HttpMethod.Post, address)
+        {
+            Version = HttpVersion.Version30,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new StringContent("payload"),
+        };
+        Task<HttpResponseMessage> pending = client.SendAsync(request, cancel.Token);
+        ManagedQuicConnection server = await accepted;
+        ManagedQuicStream hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        (string method, string path, string body) = await ReadPostedRequestAsync(hop, cancel.Token);
+        Assert.AreEqual("POST", method);
+        Assert.IsTrue(path.EndsWith("/choice", StringComparison.Ordinal));
+        Assert.AreEqual("payload", body);
+        await WriteRedirectAsync(hop, "300", "/land", cancel.Token);
+        hop = await server.AcceptInboundStreamAsync(cancel.Token);
+        (method, path, body) = await ReadPostedRequestAsync(hop, cancel.Token);
+        Assert.AreEqual("GET", method);
+        Assert.IsTrue(path.EndsWith("/land", StringComparison.Ordinal));
+        Assert.AreEqual(string.Empty, body);
+        await ReplyTextAsync(hop, "GET:", cancel.Token);
+        using HttpResponseMessage response = await pending.WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
+        Assert.AreEqual("GET:", await response.Content.ReadAsStringAsync(cancel.Token));
+        Assert.AreEqual(new Version(3, 0), response.Version);
+        Assert.AreSame(request, response.RequestMessage);
+        await server.DisposeAsync();
+    }
+
+    [TestMethod]
+    [Timeout(60000)]
     public async Task Http3ReusesOneConnectionForTheSameAuthority()
     {
         using X509Certificate2 certificate = CreateHttp3Certificate();
