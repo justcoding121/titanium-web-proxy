@@ -339,7 +339,7 @@ internal static class QpackDecoder
     private static string HuffmanDecode(ReadOnlySpan<byte> data)
     {
         // QPACK uses the same Huffman table as HPACK (RFC 7541 Appendix B, referenced by RFC 9204).
-        var decoded = Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Instance.Decode(data.ToArray());
+        var decoded = Titanium.Http3.HuffmanDecoder.Instance.Decode(data.ToArray());
         return Encoding.Latin1.GetString(decoded.Span);
     }
 }

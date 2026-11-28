@@ -1,0 +1,194 @@
+﻿/*
+ * Copyright 2014 Twitter, Inc
+ * This file is a derivative work modified by Ringo Leese
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+using System;
+using System.IO;
+
+namespace Titanium.Http3;
+
+/// <summary>HPACK and QPACK Huffman decoder (RFC 7541 Appendix B).</summary>
+public sealed class HuffmanDecoder
+{
+    /// <summary>
+    ///     Huffman Decoder
+    /// </summary>
+    public static readonly HuffmanDecoder Instance = new();
+
+    private readonly Node root;
+
+    /// <summary>
+    ///     Creates a new Huffman decoder with the specified Huffman coding.
+    /// </summary>
+    private HuffmanDecoder()
+    {
+        // the Huffman codes indexed by symbol
+        var codes = HuffmanTable.Codes;
+
+        // the length of each Huffman code
+        var lengths = HuffmanTable.Lengths;
+        if (codes.Length != 257 || codes.Length != lengths.Length)
+            throw new ArgumentException("invalid Huffman coding");
+
+        root = BuildTree(codes, lengths);
+    }
+
+    /// <summary>
+    ///     Decompresses the given Huffman coded string literal.
+    /// </summary>
+    /// <param name="buf">the string literal to be decoded</param>
+    /// <returns>the output stream for the compressed data</returns>
+    /// <exception cref="IOException">
+    ///     throws IOException if an I/O error occurs. In particular, an <code>IOException</code> may
+    ///     be thrown if the output stream has been closed.
+    /// </exception>
+    public ReadOnlyMemory<byte> Decode(byte[] buf)
+    {
+        var resultBuf = new byte[buf.Length * 2];
+        var resultSize = 0;
+        var node = root;
+        var current = 0;
+        var bits = 0;
+        for (var i = 0; i < buf.Length; i++)
+        {
+            int b = buf[i];
+            current = (current << 8) | b;
+            bits += 8;
+            DecodeCompleteBytes(current, ref bits, ref node, resultBuf, ref resultSize);
+        }
+
+        DecodeTrailingBits(current, ref bits, ref node, resultBuf, ref resultSize);
+
+        var mask = (1 << bits) - 1;
+        if ((current & mask) != mask) throw new IOException("Invalid Padding");
+
+        return resultBuf.AsMemory(0, resultSize);
+    }
+
+    private void DecodeCompleteBytes(int current, ref int bits, ref Node node, byte[] result,
+        ref int resultSize)
+    {
+        while (bits >= 8)
+        {
+            var c = (current >> (bits - 8)) & 0xFF;
+            node = GetChild(node, c);
+            bits -= node.Bits;
+            if (!node.IsTerminal) continue;
+
+            if (node.Symbol == HuffmanTable.Eos) throw new IOException("EOS Decoded");
+
+            result[resultSize++] = (byte)node.Symbol;
+            node = root;
+        }
+    }
+
+    private void DecodeTrailingBits(int current, ref int bits, ref Node node, byte[] result,
+        ref int resultSize)
+    {
+        while (bits > 0)
+        {
+            var c = (current << (8 - bits)) & 0xFF;
+            node = GetChild(node, c);
+            if (node.IsTerminal && node.Bits <= bits)
+            {
+                bits -= node.Bits;
+                result[resultSize++] = (byte)node.Symbol;
+                node = root;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    private static Node GetChild(Node node, int index)
+    {
+        var children = node.Children ??
+                       throw new IOException("Invalid Huffman code: terminal node has trailing bits.");
+        return children[index] ?? throw new IOException("Invalid Huffman code.");
+    }
+
+    private static Node BuildTree(int[] codes, byte[] lengths)
+    {
+        var root = new Node();
+        for (var i = 0; i < codes.Length; i++) Insert(root, i, codes[i], lengths[i]);
+
+        return root;
+    }
+
+    private static void Insert(Node root, int symbol, int code, byte length)
+    {
+        // traverse tree using the most significant bytes of code
+        var current = root;
+        while (length > 8)
+        {
+            if (current.IsTerminal) throw new InvalidDataException("invalid Huffman code: prefix not unique");
+
+            length -= 8;
+            var i = (code >> length) & 0xFF;
+            var children = current.Children ??
+                           throw new InvalidDataException("invalid Huffman code: terminal node has trailing bits");
+            children[i] ??= new Node();
+
+            current = children[i]!;
+        }
+
+        var terminal = new Node(symbol, length);
+        var shift = 8 - length;
+        var start = (code << shift) & 0xFF;
+        var end = 1 << shift;
+        var currentChildren = current.Children ??
+                              throw new InvalidDataException("invalid Huffman code: prefix not unique");
+        for (var i = start; i < start + end; i++) currentChildren[i] = terminal;
+    }
+
+    private sealed class Node
+    {
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="HuffmanDecoder" /> class.
+        /// </summary>
+        public Node()
+        {
+            Symbol = 0;
+            Bits = 8;
+            Children = new Node?[256];
+        }
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="HuffmanDecoder" /> class.
+        /// </summary>
+        /// <param name="symbol">the symbol the node represents</param>
+        /// <param name="bits">the number of bits matched by this node</param>
+        public Node(int symbol, int bits)
+        {
+            Symbol = symbol;
+            Bits = bits;
+            Children = null;
+        }
+
+        // terminal nodes have a symbol
+        public int Symbol { get; }
+
+        // number of bits matched by the node
+        public int Bits { get; }
+
+        // internal nodes have children
+        public Node?[]? Children { get; }
+
+        public bool IsTerminal => Children == null;
+    }
+}

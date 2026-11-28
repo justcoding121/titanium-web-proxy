@@ -78,3 +78,10 @@ const Titanium.Http3.Http3SettingsId.MaxFieldSectionSize = 6 -> ulong
 const Titanium.Http3.Http3SettingsId.MaxFrameSize = 5 -> ulong
 const Titanium.Http3.Http3SettingsId.QpackBlockedStreams = 7 -> ulong
 const Titanium.Http3.Http3SettingsId.QpackMaxTableCapacity = 1 -> ulong
+Titanium.Http3.HuffmanDecoder
+static readonly Titanium.Http3.HuffmanDecoder.Instance -> Titanium.Http3.HuffmanDecoder!
+Titanium.Http3.HuffmanDecoder.Decode(byte[]! buf) -> System.ReadOnlyMemory<byte>
+Titanium.Http3.HuffmanEncoder
+static readonly Titanium.Http3.HuffmanEncoder.Instance -> Titanium.Http3.HuffmanEncoder!
+Titanium.Http3.HuffmanEncoder.Encode(System.IO.BinaryWriter! output, System.ReadOnlySpan<byte> data) -> void
+Titanium.Http3.HuffmanEncoder.GetEncodedLength(System.ReadOnlySpan<byte> data) -> int

@@ -183,7 +183,7 @@ internal static class QpackEncoderStreamReader
         consumed = total;
         var strData = data.Slice(headerLen, (int)length);
         result = huffman
-            ? Encoding.Latin1.GetString(Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Instance.Decode(strData.ToArray()).Span)
+            ? Encoding.Latin1.GetString(Titanium.Http3.HuffmanDecoder.Instance.Decode(strData.ToArray()).Span)
             : Encoding.Latin1.GetString(strData);
         return true;
     }
